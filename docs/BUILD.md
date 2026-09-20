@@ -313,6 +313,17 @@ sudo apt install libfuse2
 | 安装后 `pot` 启动 | ✅ 正常（加载配置、创建窗口、托盘、本地 HTTP 服务） |
 | `pnpm tauri build --bundles appimage` | ✅ 生成 175MB `.AppImage`（需 `libfuse2` 运行） |
 
+### 6.5 尚未验证的部分
+
+为避免误导，以下内容**未在本项目实测过**，不要当作已完成：
+
+| 项目 | 状态 |
+|---|---|
+| RPM 系（Fedora/RHEL）打包与依赖 | ❌ `bundle.rpm.depends` 仍是上游原值（Debian 风格包名），多半不正确 |
+| CI 流水线 | ❌ 已收敛为仅 `v*` tag 触发，但从未打 tag，**从未真正运行过** |
+| Windows / macOS 构建与打包 | ❌ 仅在 Ubuntu 24.04 上验证过 |
+| 自动化测试 | ❌ 项目当前**零测试**（见 `CLAUDE.md` §6） |
+
 ---
 
 ## 7. 常见问题速查

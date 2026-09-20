@@ -84,6 +84,14 @@ sudo apt install ./src-tauri/target/release/bundle/deb/pot_*.deb
 **AppImage 需要 `libfuse2`**（24.04 默认未装）：`sudo apt install libfuse2`。
 未装时可用 `--appimage-extract` 解压运行。
 
+### 2.3 已知未验证项（不要当成已完成）
+
+- **RPM 依赖未验证**：`tauri.conf.json` 的 `bundle.rpm.depends` 仍是上游原值
+  （含 `libxdo-dev`、`libxcb1` 等 **Debian 风格包名**），在 Fedora/RHEL 上大概率不正确。
+  **尚未在 RPM 系发行版上实测过**，修之前请在真实 Fedora 环境验证包名。
+- **CI 未验证**：`package.yml` 已收敛为仅 `v*` tag 触发，但**从未打过 tag，因此从未真正跑通**。
+- **Windows / macOS 打包未验证**：当前仅在 Ubuntu 24.04 上实测过。
+
 ---
 
 ## 3. 品牌迁移状态（重要：当前**未完成**，别被误导）
