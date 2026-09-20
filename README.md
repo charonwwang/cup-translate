@@ -52,20 +52,22 @@
 目前**尚未发布预编译产物**，需自行构建：
 
 ```bash
-# 1) 构建
-pnpm install --frozen-lockfile && pnpm build
-pnpm tauri build --bundles deb        # 或 appimage
+# 1) 构建 + 打包（脚本会自动修正 .deb 的幽灵依赖）
+bash packaging/build-linux.sh deb        # 或：bash packaging/build-linux.sh appimage
 
-# 2) Ubuntu 24.04 需先装 WebKitGTK 兼容包（否则依赖报错）
-bash packaging/build-webkit-compat-deb.sh
-sudo dpkg -i packaging/out/libwebkit2gtk-4.0-37_*_amd64.deb
+# 2) 安装（无需任何额外包）
+sudo apt install ./src-tauri/target/release/bundle/deb/cup-translate_*.deb
+```
 
-# 3) 安装
-sudo apt install ./src-tauri/target/release/bundle/deb/pot_*.deb
+安装后：
+
+```bash
+which cup-translate                          # /usr/bin/cup-translate
+cup-translate                                # 启动
 ```
 
 > AppImage 用户需先 `sudo apt install libfuse2`，或解压运行：
-> `./pot_*.AppImage --appimage-extract && ./squashfs-root/AppRun`
+> `./cup-translate_*.AppImage --appimage-extract && ./squashfs-root/AppRun`
 
 ### 方式二：源码运行（开发）
 

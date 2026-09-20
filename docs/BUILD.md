@@ -19,9 +19,9 @@
 | 前端依赖 | `pnpm install --frozen-lockfile` | ✅ |
 | 前端构建 | `pnpm build` | ✅ |
 | Rust 构建 | `cargo build --release` | ✅ |
-| 产物 | `src-tauri/target/release/pot`（约 60MB） | ✅ |
-| 打包 .deb | `pnpm tauri build --bundles deb` | ✅ 36MB |
-| 安装 .deb | 需先装兼容包（§6.2） | ✅ 实测可安装启动 |
+| 产物 | `src-tauri/target/release/cup-translate`（约 60MB） | ✅ |
+| 打包 .deb | `bash packaging/build-linux.sh deb` | ✅ 32MB |
+| 安装 .deb | 用 `packaging/build-linux.sh` 后**零额外依赖**（§6.2） | ✅ 实测可安装启动 |
 | 打包 AppImage | `pnpm tauri build --bundles appimage` | ✅ 175MB（运行需 `libfuse2`） |
 
 > ⚠️ **重要**：Ubuntu 24.04 上，**§3 与 §5.2 任一缺失都会导致 Rust 构建失败**。
@@ -194,7 +194,7 @@ cd src-tauri
 cargo build --release       # 首次约 900 个 crate，耗时较长
 ```
 
-产物：`src-tauri/target/release/pot`
+产物：`src-tauri/target/release/cup-translate`
 
 ### 5.1 开发模式 / 打包
 
@@ -230,58 +230,62 @@ cargo update -p wry --precise 0.24.12
 ### 5.3 验证构建产物
 
 ```bash
-file target/release/pot            # ELF 64-bit LSB pie executable
-ldd  target/release/pot | grep -i "not found"   # 应无输出
-./target/release/pot               # 应打印 "============== Start App =============="
+file target/release/cup-translate       # ELF 64-bit LSB pie executable
+ldd  target/release/cup-translate | grep -i "not found"   # 应无输出
+./target/release/cup-translate          # 应打印 "============== Start App =============="
 ```
 
 ---
 
 ## 6. 打包与安装（.deb / AppImage）
 
-### 6.1 打包
+### 6.1 打包（**请用封装脚本**）
 
 ```bash
-pnpm tauri build --bundles deb        # src-tauri/target/release/bundle/deb/
-pnpm tauri build --bundles appimage   # src-tauri/target/release/bundle/appimage/
-pnpm tauri build                      # 全部（targets: "all"）
+bash packaging/build-linux.sh deb        # 只构建 deb（推荐）
+bash packaging/build-linux.sh            # 默认 deb
+bash packaging/build-linux.sh appimage   # AppImage
 ```
 
-### 6.2 ⚠️ .deb 在 Ubuntu 24.04 上**无法直接安装**
+该脚本在 `pnpm tauri build` 之后会**自动修掉 .deb 的幽灵依赖**（见 §6.2），
+并清理历史品牌的旧产物。若直接用 `pnpm tauri build --bundles deb`，
+产出的 .deb 在 Ubuntu 24.04 上**装不上**。
 
-Tauri v1 打包时**硬编码**加入依赖 `libwebkit2gtk-4.0-37`。该包在 24.04 不存在，
-因此直接安装会失败：
+### 6.2 为什么需要封装脚本：`libwebkit2gtk-4.0-37` 是幽灵依赖
+
+Tauri v1 的 CLI 二进制内**硬编码**会把 `libwebkit2gtk-4.0-37` 写入 .deb 的 `Depends`，
+**无法通过 `tauri.conf.json` 去掉**（实测：显式列正确依赖后仍被追加）。
+而 Ubuntu 24.04 起不再提供该包，于是：
 
 ```
-$ sudo apt install ./pot_3.0.7_amd64.deb
+$ sudo apt install ./cup-translate_3.0.7_amd64.deb
 下列软件包有未满足的依赖关系：
- pot : 依赖: libwebkit2gtk-4.0-37 但无法安装它
+ cup-translate : 依赖: libwebkit2gtk-4.0-37 但无法安装它
 ```
 
-**实测确认**：即使已在 `tauri.conf.json` 的 `bundle.deb.depends` 中显式列出正确依赖，
-Tauri v1 仍会**追加**该默认依赖，无法通过配置去掉（24.04 实测）。
-
-**解决方案**：构建并安装一个"空壳兼容包"，它只做两件事——
-声明 `Provides: libwebkit2gtk-4.0-37`，并放入指向 4.1 实库的 `4.0` 名字软链。
+**但这是"幽灵依赖"——运行期根本不需要它**。实测证据：
 
 ```bash
-# 1) 生成兼容包（脚本会自动探测系统 4.1 库的实际版本号）
-bash packaging/build-webkit-compat-deb.sh
-
-# 2) 安装兼容包（满足依赖声明）
-sudo dpkg -i packaging/out/libwebkit2gtk-4.0-37_*_amd64.deb
-
-# 3) 现在可以正常安装
-sudo apt install ./src-tauri/target/release/bundle/deb/pot_*.deb
+# 二进制的 DT_NEEDED 只有 4.1，没有任何 4.0 引用
+$ readelf -d src-tauri/target/release/cup-translate | grep -iE 'NEEDED.*(webkit|javascript)'
+ (NEEDED)  Shared library: [libjavascriptcoregtk-4.1.so.0]
+ (NEEDED)  Shared library: [libwebkit2gtk-4.1.so.0]
 ```
 
-安装后：
+4.0 这个名字只在**编译链接期**用到（§3 的 `.pc` shim 与 `-l` 软链），
+运行期完全走 4.1。
+
+**因此正确做法是把该依赖从 .deb 中剔除**（`packaging/build-linux.sh` 已自动完成），
+而不是让用户额外装一个兼容包。修正后：
 
 ```bash
-which pot                                   # /usr/bin/pot
-ls /usr/share/applications/pot.desktop      # 桌面项已就绪
-pot                                         # 启动
+$ sudo apt install ./src-tauri/target/release/bundle/deb/cup-translate_*.deb   # 零额外依赖
+$ which cup-translate
+/usr/bin/cup-translate
 ```
+
+> ⚠️ 注意区分：**构建者**仍需要 §3 的 `.so` 软链（链接期），
+> 但**使用者**不需要装任何额外包。
 
 ### 6.3 AppImage 需要 libfuse2
 
@@ -297,10 +301,10 @@ AppImages require FUSE to run.
 ```bash
 # 办法一：装 FUSE
 sudo apt install libfuse2
-./pot_3.0.7_amd64.AppImage
+./cup-translate_3.0.7_amd64.AppImage
 
 # 办法二：不装 FUSE，解压运行
-./pot_3.0.7_amd64.AppImage --appimage-extract
+./cup-translate_3.0.7_amd64.AppImage --appimage-extract
 ./squashfs-root/AppRun
 ```
 
@@ -309,7 +313,7 @@ sudo apt install libfuse2
 | 项目 | 结果 |
 |---|---|
 | `pnpm tauri build --bundles deb` | ✅ 生成 36MB `.deb` |
-| `dpkg -i` 兼容包 + `apt install` 主包 | ✅ 安装成功 |
+| `apt install` 主包（幽灵依赖已剔除） | ✅ 安装成功，无需额外包 |
 | 安装后 `pot` 启动 | ✅ 正常（加载配置、创建窗口、托盘、本地 HTTP 服务） |
 | `pnpm tauri build --bundles appimage` | ✅ 生成 175MB `.AppImage`（需 `libfuse2` 运行） |
 

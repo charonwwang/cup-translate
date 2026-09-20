@@ -74,11 +74,44 @@ else
 fi
 
 echo
+echo "== 6. 品牌与上游隔离（CLAUDE.md §1/§3）=="
+if [ -f src-tauri/tauri.conf.json ]; then
+  ident=$(python3 -c "
+import json
+try: print(json.load(open('src-tauri/tauri.conf.json'))['tauri']['bundle']['identifier'])
+except Exception: print('')
+" 2>/dev/null)
+  case "$ident" in
+    com.pot-app.*) bad "identifier 仍是上游的 $ident（会造成品牌混淆与配置串用）" ;;
+    "")            warn "无法读取 identifier" ;;
+    *)             ok "identifier: $ident" ;;
+  esac
+
+  # 更新器不得指向上游发布源
+  if grep -q "pot-app.com\|pot-app/pot-desktop" src-tauri/tauri.conf.json 2>/dev/null; then
+    bad "tauri.conf.json 仍引用上游更新源（可能覆盖安装他人签名产物）"
+  else
+    ok "updater 未指向上游发布源"
+  fi
+else
+  warn "未找到 src-tauri/tauri.conf.json"
+fi
+
+# 禁用中的上游身份 CI 不应被误开
+if [ -f .github/workflows/package.yml ]; then
+  if grep -qE 'if: false' .github/workflows/package.yml 2>/dev/null; then
+    ok "上游身份发布 job 处于禁用状态"
+  else
+    warn "package.yml 中未见 disabled 的上游身份 job，请确认 homebrew/winget 已禁用"
+  fi
+fi
+
+echo
 echo "----------------------------------------"
 if [ "$fail" -eq 0 ]; then
   printf '\033[32m全部 %d 项通过，可以开始构建：\033[0m\n' "$pass"
   echo "  pnpm install --frozen-lockfile && pnpm build"
-  echo "  cd src-tauri && cargo build --release"
+  echo "  bash packaging/build-linux.sh deb        # 打包（含幽灵依赖修正）"
   exit 0
 else
   printf '\033[31m%d 项通过，%d 项失败。\033[0m 请对照 docs/BUILD.md 修复。\n' "$pass" "$fail"

@@ -7,7 +7,7 @@
         "withGlobalTauri": false
     },
     "package": {
-        "productName": "pot",
+        "productName": "cup-translate",
         "version": "3.0.7"
     },
     "tauri": {
@@ -67,9 +67,9 @@
             "category": "Utility",
             "copyright": "GPLv3",
             "targets": "all",
-            "identifier": "com.pot-app.desktop",
-            "longDescription": "A cross-platform text translation and ocr software",
-            "shortDescription": "Pot App",
+            "identifier": "com.cup-translate.app",
+            "longDescription": "cup-translate - a lightweight, selection-first translation tool. Community fork of pot-desktop, with first-class Linux/Wayland support.",
+            "shortDescription": "cup-translate",
             "externalBin": [],
             "resources": [],
             "icon": [
@@ -127,11 +127,8 @@
         "updater": {
             "active": true,
             "dialog": false,
-            "endpoints": [
-                "https://dl.pot-app.com/https://github.com/pot-app/pot-desktop/releases/download/updater/update.json",
-                "https://github.com/pot-app/pot-desktop/releases/download/updater/update.json"
-            ],
-            "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVBRTQxQTNDQjM5QzQzM0EKUldRNlE1eXpQQnJrV21mM1Bram5LRlF6UDA3K0Jab2FYL2lZSWhXTE5McWs2NUdJS0dtYkd5VGMK"
+            "endpoints": [],
+            "pubkey": ""
         }
     }
 }

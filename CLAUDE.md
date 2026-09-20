@@ -46,7 +46,7 @@
 | # | 坑 | 现状 | 回退会怎样 |
 |---|---|---|---|
 | 1 | **wry 必须 ≥ 0.24.12** | `Cargo.lock` 锁定 0.24.12 | 降回 0.24.11 → `E0599` 7 个错误（trait not in scope） |
-| 2 | **WebKitGTK 4.0→4.1 兼容层** | pkg-config shim + `.so` 软链 | 编译期 `webkit2gtk-4.0 not found`，或链接期 `-lwebkit2gtk-4.0` 找不到 |
+| 2 | **WebKitGTK 4.0→4.1 兼容层** | pkg-config shim + `.so` 软链（**仅构建期**） | 编译期 `webkit2gtk-4.0 not found`，或链接期 `-lwebkit2gtk-4.0` 找不到 |
 | 3 | **pnpm 12 拦截构建脚本** | `pnpm-workspace.yaml` 的 `allowBuilds` | `ERR_PNPM_IGNORED_BUILDS`，vite 构建失败 |
 
 **关键约束**：
@@ -61,25 +61,31 @@
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm build                          # 前端，产物 dist/
-cd src-tauri && cargo build --release   # 产物 target/release/pot
+pnpm build                                   # 前端，产物 dist/
+cd src-tauri && cargo build --release        # 产物 target/release/cup-translate
 ```
 
 ### 2.2 打包（.deb / AppImage）
 
-```bash
-pnpm tauri build --bundles deb        # 产物在 src-tauri/target/release/bundle/deb/
-pnpm tauri build --bundles appimage
-```
-
-**⚠️ .deb 无法直接安装的坑**：Tauri v1 会**硬编码**声明依赖 `libwebkit2gtk-4.0-37`
-（Ubuntu 24.04 无此包，且**无法通过 tauri.conf.json 去掉**）。安装前需先装兼容包：
+**必须用封装脚本**，它会自动剔除 .deb 的幽灵依赖并清理旧品牌产物：
 
 ```bash
-bash packaging/build-webkit-compat-deb.sh
-sudo dpkg -i packaging/out/libwebkit2gtk-4.0-37_*_amd64.deb
-sudo apt install ./src-tauri/target/release/bundle/deb/pot_*.deb
+bash packaging/build-linux.sh deb        # 推荐
+bash packaging/build-linux.sh appimage
 ```
+
+**⚠️ 不要直接用 `pnpm tauri build --bundles deb`**：Tauri v1 的 CLI 二进制内
+**硬编码**会把 `libwebkit2gtk-4.0-37` 写进 `Depends`，而 Ubuntu 24.04 无此包，
+**且无法通过 tauri.conf.json 去掉**，导致 .deb 装不上。
+
+但实测证明这是**幽灵依赖**——二进制的 ELF `DT_NEEDED` 只有 4.1，运行期根本不需要它：
+
+```bash
+readelf -d src-tauri/target/release/cup-translate | grep NEEDED   # 只有 4.1
+```
+
+**因此正确做法是把该依赖剔除，用户零额外安装**（脚本已自动完成）。
+注意区分：**构建者**需要 §3.3 的 `.so` 软链，**使用者**不需要任何额外包。
 
 **AppImage 需要 `libfuse2`**（24.04 默认未装）：`sudo apt install libfuse2`。
 未装时可用 `--appimage-extract` 解压运行。
@@ -94,20 +100,50 @@ sudo apt install ./src-tauri/target/release/bundle/deb/pot_*.deb
 
 ---
 
-## 3. 品牌迁移状态（重要：当前**未完成**，别被误导）
+## 3. 品牌状态（已完成，附迁移约束）
 
-| 位置 | 当前值 | 目标 |
-|---|---|---|
-| 前端包名 | `pot` (`package.json`) | cup-translate |
-| Rust crate 名 | `pot` (`Cargo.toml`) | cup-translate |
-| 二进制名 | `pot` | cup-translate |
-| app identifier | `com.pot-app.desktop` | 自有 id |
-| 配置文件路径 | `~/.config/com.pot-app.desktop/` | 随 identifier 变更 |
-| .deb 包名 | `pot` | cup-translate |
-| 托盘名 / 窗口标题 | `pot` | cup-translate |
+品牌已从上游 `pot` 迁移到 `cup-translate`：
 
-**改动 identifier 会导致用户配置丢失**（配置路径随 identifier 变化）。
-若要做，需**同时**提供配置迁移逻辑，不要只改 JSON。
+| 位置 | 当前值 |
+|---|---|
+| 前端包名 | `cup-translate` (`package.json`) |
+| Rust crate 名 | `cup-translate` (`Cargo.toml`) |
+| 二进制名 | `cup-translate` |
+| app identifier | `com.cup-translate.app` |
+| 配置文件路径 | `~/.config/com.cup-translate.app/` |
+| .deb 包名 | `cup-translate` |
+| 托盘名 / 窗口标题 | `cup-translate` |
+
+**已实现配置自动迁移**（`src-tauri/src/config.rs`）：
+启动时若新配置不存在、而旧路径 `~/.config/com.pot-app.desktop/` 存在，
+会**递归复制**旧配置到新位置，老用户升级不丢设置。**不要删除这段逻辑。**
+
+> 若将来再改 `identifier`，必须同步更新 `LEGACY_IDENTIFIER` 常量，
+> 否则用户配置会静默丢失。
+
+### 3.1 仍指向上游的部分（**有意保留，勿改**）
+
+以下 URL 是**功能性后端服务**，由上游运营，改掉会导致功能失效：
+
+| 位置 | 用途 |
+|---|---|
+| `src/services/translate/ecdict/index.jsx` | ECDICT 离线词典 API（`pot-app.com/api/dict`） |
+| `src/services/translate/lingva/index.jsx` | Lingva 翻译实例（`lingva.pot-app.com`） |
+| `src/window/Config/pages/Backup/utils/aliyun.jsx` | 阿里云盘 token 代理 |
+| 各 `services/translate/*/Config.jsx` | 申请 API key 的文档链接 |
+
+这些属于**依赖上游基础设施**，属于已知技术债（见 `docs/MAINTENANCE.md`）。
+若要自建，需先有对应服务，不能只改 URL。
+
+### 3.2 更新器（updater）已停用
+
+`tauri.conf.json` 的 `updater.endpoints` 已清空、`pubkey` 置空——
+原值指向上游的发布源与签名公钥，保持启用会去检查**别人的**仓库且签名不匹配。
+
+- 代码层面仍保留 `tauri::updater`（故 `Cargo.toml` **必须**显式声明 `updater` feature，
+  否则 `src-tauri/src/updater.rs` 编译失败：`cannot find updater in tauri`）
+- 运行时表现为安全失败：`Failed to check update: url is required`
+- **待自建 update.json 与 minisign 密钥后再启用**
 
 ---
 
@@ -163,7 +199,8 @@ npx prettier --write <files>
 
 ### 5.2 Rust
 - 遵循 `cargo fmt` / `cargo clippy`
-- `src-tauri/Cargo.toml` 中 `[package] name = "pot"`，改动会影响二进制名与打包
+- `src-tauri/Cargo.toml` 中 `[package] name = "cup-translate"`，改动会影响二进制名与打包
+- `tauri` 依赖的 features **必须包含 `updater`**（源码 `updater.rs` 需要）；删掉会导致 `cannot find updater in tauri`
 
 ### 5.3 提交信息
 使用**中文**、带类型前缀，例如：
@@ -190,7 +227,7 @@ ci: 收敛上游发布流水线，避免误用上游身份发布
   pnpm build                                  # 前端能否构建
   cd src-tauri && cargo build --release       # 后端能否编译
   bash scripts/check-linux-build-env.sh       # 构建环境
-  ./src-tauri/target/release/pot              # 能否启动（GUI 常驻，需 Ctrl-C）
+  ./src-tauri/target/release/cup-translate    # 能否启动（GUI 常驻，需 Ctrl-C）
   ```
 - 引入测试框架是**待办**，不是既成事实
 
@@ -230,7 +267,7 @@ Xvfb/无头环境下 GUI 行为不可信。
 1. `bash scripts/check-linux-build-env.sh` — 确认环境可用
 2. 读相关源码（见 §4 地图），**不要凭猜测改**
 3. 改动 → `pnpm build` + `cargo build --release` 确认通过
-4. 若涉及运行行为 → 实际跑 `./src-tauri/target/release/pot` 验证
+4. 若涉及运行行为 → 实际跑 `./src-tauri/target/release/cup-translate` 验证
 5. 按 §5.3 规范提交，按 §8 同步文档
 
 **红线**：不要删版权头、不要改协议、不要启用上游身份 CI、不要声称有测试、不要编造验证结果。

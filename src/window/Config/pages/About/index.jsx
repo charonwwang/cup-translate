@@ -30,7 +30,7 @@ export default function About() {
                         className='my-[5px]'
                         size='sm'
                         onPress={() => {
-                            open('https://pot-app.com');
+                            open('https://github.com/charonwwang/cup-translate');
                         }}
                     >
                         {t('config.about.website')}
@@ -40,7 +40,7 @@ export default function About() {
                         className='my-[5px]'
                         size='sm'
                         onPress={() => {
-                            open('https://github.com/pot-app/pot-desktop');
+                            open('https://github.com/charonwwang/cup-translate');
                         }}
                     >
                         {t('config.about.github')}
@@ -65,7 +65,7 @@ export default function About() {
                                     className='my-[5px]'
                                     size='sm'
                                     onPress={() => {
-                                        open('https://github.com/pot-app/pot-desktop/issues');
+                                        open('https://github.com/charonwwang/cup-translate/issues');
                                     }}
                                 >
                                     {t('config.about.issue')}
@@ -75,7 +75,7 @@ export default function About() {
                                     className='my-[5px]'
                                     size='sm'
                                     onPress={() => {
-                                        open('mailto:support@pot-app.com');
+                                        open('https://github.com/charonwwang/cup-translate/issues');
                                     }}
                                 >
                                     {t('config.about.email')}
@@ -106,7 +106,7 @@ export default function About() {
                                         className='my-[5px]'
                                         size='lg'
                                         onPress={() => {
-                                            open('https://pd.qq.com/s/akns94e1r');
+                                            open('https://github.com/charonwwang/cup-translate/issues');
                                         }}
                                     >
                                         <BsTencentQq />
@@ -119,7 +119,7 @@ export default function About() {
                                         className='my-[5px]'
                                         size='lg'
                                         onPress={() => {
-                                            open('https://pot-app.com/img/qq_group.png');
+                                            open('https://github.com/charonwwang/cup-translate/issues');
                                         }}
                                     >
                                         <BsTencentQq />
@@ -132,7 +132,7 @@ export default function About() {
                                         className='my-[5px]'
                                         size='lg'
                                         onPress={() => {
-                                            open('https://t.me/pot_app');
+                                            open('https://github.com/charonwwang/cup-translate/issues');
                                         }}
                                     >
                                         <BsTelegram />
@@ -145,7 +145,7 @@ export default function About() {
                                         className='my-[5px]'
                                         size='lg'
                                         onPress={() => {
-                                            open('https://github.com/pot-app/pot-desktop/discussions');
+                                            open('https://github.com/charonwwang/cup-translate/discussions');
                                         }}
                                     >
                                         <BsGithub />

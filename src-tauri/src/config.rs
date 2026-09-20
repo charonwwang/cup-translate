@@ -8,10 +8,39 @@ use tauri_plugin_store::{Store, StoreBuilder};
 
 pub struct StoreWrapper(pub Mutex<Store<Wry>>);
 
+/// 上游（pot-desktop）使用的旧配置目录名。
+/// 品牌迁移后 identifier 变为 `com.cup-translate.app`，这里用于**一次性迁移**旧配置，
+/// 避免老用户升级后设置丢失（服务配置、密钥、快捷键等）。
+const LEGACY_IDENTIFIER: &str = "com.pot-app.desktop";
+
 pub fn init_config(app: &mut tauri::App) {
+    let identifier = app.config().tauri.bundle.identifier.clone();
+
     let config_path = config_dir().unwrap();
-    let config_path = config_path.join(app.config().tauri.bundle.identifier.clone());
-    let config_path = config_path.join("config.json");
+    let config_dir_path = config_path.join(&identifier);
+    let config_path = config_dir_path.join("config.json");
+
+    // 一次性迁移：新配置不存在、但旧配置存在时，把旧目录复制过来
+    if !config_path.exists() {
+        let legacy_dir = config_path
+            .parent()
+            .and_then(|p| p.parent())
+            .map(|p| p.join(LEGACY_IDENTIFIER));
+        if let Some(legacy_dir) = legacy_dir {
+            if legacy_dir.join("config.json").exists() {
+                info!(
+                    "Migrating config from legacy location {:?} -> {:?}",
+                    legacy_dir, config_dir_path
+                );
+                if let Err(e) = copy_dir_all(&legacy_dir, &config_dir_path) {
+                    warn!("Config migration failed: {:?}", e);
+                } else {
+                    info!("Config migration done");
+                }
+            }
+        }
+    }
+
     info!("Load config from: {:?}", config_path);
     let mut store = StoreBuilder::new(app.handle(), config_path).build();
 
@@ -24,6 +53,22 @@ pub fn init_config(app: &mut tauri::App) {
     }
     app.manage(StoreWrapper(Mutex::new(store)));
     let _ = check_service_available();
+}
+
+/// 递归复制目录（用于旧配置迁移，不依赖额外 crate）
+fn copy_dir_all(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        let to = dst.join(entry.file_name());
+        if ty.is_dir() {
+            copy_dir_all(&entry.path(), &to)?;
+        } else {
+            std::fs::copy(entry.path(), &to)?;
+        }
+    }
+    Ok(())
 }
 
 fn check_available(list: Vec<String>, builtin: Vec<&str>, plugin: Vec<String>, key: &str) {
