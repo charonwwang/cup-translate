@@ -45,9 +45,29 @@
 
 ---
 
-## 安装（源码构建）
+## 安装
 
-> 当前为**源码构建**指引。社区将逐步提供打包产物（.deb / AUR / Flatpak / AppImage）。
+### 方式一：包管理器（推荐，需先构建）
+
+目前**尚未发布预编译产物**，需自行构建：
+
+```bash
+# 1) 构建
+pnpm install --frozen-lockfile && pnpm build
+pnpm tauri build --bundles deb        # 或 appimage
+
+# 2) Ubuntu 24.04 需先装 WebKitGTK 兼容包（否则依赖报错）
+bash packaging/build-webkit-compat-deb.sh
+sudo dpkg -i packaging/out/libwebkit2gtk-4.0-37_*_amd64.deb
+
+# 3) 安装
+sudo apt install ./src-tauri/target/release/bundle/deb/pot_*.deb
+```
+
+> AppImage 用户需先 `sudo apt install libfuse2`，或解压运行：
+> `./pot_*.AppImage --appimage-extract && ./squashfs-root/AppRun`
+
+### 方式二：源码运行（开发）
 
 > 📖 **Ubuntu 24.04 / Linux 用户请先看 [`docs/BUILD.md`](docs/BUILD.md)。**
 > 新版系统上 WebKitGTK 4.0 已被 4.1 取代，直接构建会失败；该文档给出实测通过的
@@ -61,8 +81,6 @@
 - Node.js + pnpm（前端）
 - Rust toolchain（Tauri 后端）
 - Linux: WebKit2GTK、GTK-3；Windows: WebView2；macOS: 系统 WebKit
-
-### 从源码运行
 
 ```bash
 # 1. 安装前端依赖（pnpm 12 需放行 esbuild，仓库已配置）
@@ -106,4 +124,5 @@ pot 品牌痕迹，可替换以下位置（暂不作为默认改动）：
 - 上游原始说明（历史保留）：`UPSTREAM_README.md`、`README_EN.md`、`README_KR.md`
 - 维护路线与定位：`docs/MAINTENANCE.md`
 - **Linux 构建指南（含 Ubuntu 24.04 兼容修复）：`docs/BUILD.md`**
+- **协作硬约束（AI 助手/新贡献者必读）：`CLAUDE.md`**
 - 贡献指南：`CONTRIBUTING.md`

@@ -20,6 +20,9 @@
 | 前端构建 | `pnpm build` | ✅ |
 | Rust 构建 | `cargo build --release` | ✅ |
 | 产物 | `src-tauri/target/release/pot`（约 60MB） | ✅ |
+| 打包 .deb | `pnpm tauri build --bundles deb` | ✅ 36MB |
+| 安装 .deb | 需先装兼容包（§6.2） | ✅ 实测可安装启动 |
+| 打包 AppImage | `pnpm tauri build --bundles appimage` | ✅ 175MB（运行需 `libfuse2`） |
 
 > ⚠️ **重要**：Ubuntu 24.04 上，**§3 与 §5.2 任一缺失都会导致 Rust 构建失败**。
 > 这是上游归档后最常见的构建障碍，下文给出根因与修复。
@@ -234,7 +237,85 @@ ldd  target/release/pot | grep -i "not found"   # 应无输出
 
 ---
 
-## 6. 常见问题速查
+## 6. 打包与安装（.deb / AppImage）
+
+### 6.1 打包
+
+```bash
+pnpm tauri build --bundles deb        # src-tauri/target/release/bundle/deb/
+pnpm tauri build --bundles appimage   # src-tauri/target/release/bundle/appimage/
+pnpm tauri build                      # 全部（targets: "all"）
+```
+
+### 6.2 ⚠️ .deb 在 Ubuntu 24.04 上**无法直接安装**
+
+Tauri v1 打包时**硬编码**加入依赖 `libwebkit2gtk-4.0-37`。该包在 24.04 不存在，
+因此直接安装会失败：
+
+```
+$ sudo apt install ./pot_3.0.7_amd64.deb
+下列软件包有未满足的依赖关系：
+ pot : 依赖: libwebkit2gtk-4.0-37 但无法安装它
+```
+
+**实测确认**：即使已在 `tauri.conf.json` 的 `bundle.deb.depends` 中显式列出正确依赖，
+Tauri v1 仍会**追加**该默认依赖，无法通过配置去掉（24.04 实测）。
+
+**解决方案**：构建并安装一个"空壳兼容包"，它只做两件事——
+声明 `Provides: libwebkit2gtk-4.0-37`，并放入指向 4.1 实库的 `4.0` 名字软链。
+
+```bash
+# 1) 生成兼容包（脚本会自动探测系统 4.1 库的实际版本号）
+bash packaging/build-webkit-compat-deb.sh
+
+# 2) 安装兼容包（满足依赖声明）
+sudo dpkg -i packaging/out/libwebkit2gtk-4.0-37_*_amd64.deb
+
+# 3) 现在可以正常安装
+sudo apt install ./src-tauri/target/release/bundle/deb/pot_*.deb
+```
+
+安装后：
+
+```bash
+which pot                                   # /usr/bin/pot
+ls /usr/share/applications/pot.desktop      # 桌面项已就绪
+pot                                         # 启动
+```
+
+### 6.3 AppImage 需要 libfuse2
+
+24.04 默认未装 `libfuse2`，直接运行会报：
+
+```
+dlopen(): error loading libfuse.so.2
+AppImages require FUSE to run.
+```
+
+两种办法：
+
+```bash
+# 办法一：装 FUSE
+sudo apt install libfuse2
+./pot_3.0.7_amd64.AppImage
+
+# 办法二：不装 FUSE，解压运行
+./pot_3.0.7_amd64.AppImage --appimage-extract
+./squashfs-root/AppRun
+```
+
+### 6.4 实测结论（Ubuntu 24.04, 2025）
+
+| 项目 | 结果 |
+|---|---|
+| `pnpm tauri build --bundles deb` | ✅ 生成 36MB `.deb` |
+| `dpkg -i` 兼容包 + `apt install` 主包 | ✅ 安装成功 |
+| 安装后 `pot` 启动 | ✅ 正常（加载配置、创建窗口、托盘、本地 HTTP 服务） |
+| `pnpm tauri build --bundles appimage` | ✅ 生成 175MB `.AppImage`（需 `libfuse2` 运行） |
+
+---
+
+## 7. 常见问题速查
 
 | 现象 | 原因 | 解决 |
 |---|---|---|
@@ -244,6 +325,8 @@ ldd  target/release/pot | grep -i "not found"   # 应无输出
 | `E0599 no method named set_enable_webgl` | wry 0.24.11 的 traits 导入失效 | §5.2 |
 | `ERR_PNPM_IGNORED_BUILDS` | pnpm 12 拦截脚本 | §4.1 |
 | `libsoup-2.4` 缺失 | 未装 dev 包 | `apt install libsoup2.4-dev` |
+| `apt install` 报 `libwebkit2gtk-4.0-37` 无法安装 | Tauri v1 硬编码依赖 | §6.2 |
+| AppImage 报 `libfuse.so.2` 加载失败 | 未装 FUSE | §6.3 |
 | cargo 拉取超时 / 404 | 镜像索引问题 | 附录 A |
 
 ---

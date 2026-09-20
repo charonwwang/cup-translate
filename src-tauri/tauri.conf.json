@@ -81,10 +81,14 @@
             ],
             "deb": {
                 "depends": [
-                    "libxdo-dev",
+                    "libxdo3",
                     "libxcb1",
                     "libxrandr2",
-                    "tesseract-ocr"
+                    "tesseract-ocr",
+                    "libwebkit2gtk-4.1-0",
+                    "libjavascriptcoregtk-4.1-0",
+                    "libgtk-3-0",
+                    "libayatana-appindicator3-1"
                 ]
             },
             "rpm": {

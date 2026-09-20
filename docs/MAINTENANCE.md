@@ -54,7 +54,9 @@
   - 详见 `docs/BUILD.md`，环境自检脚本 `scripts/check-linux-build-env.sh`
   - 关键修复：WebKitGTK 4.0→4.1 兼容层（pkg-config shim + 链接软链）、wry 升级 0.24.12
 - [x] 收敛上游 CI：仅在 `v*` tag 触发；禁用上游身份的 homebrew/winget 发布
-- [ ] GitHub Actions CI / Release 初版（本仓库自有）
+- [x] **打包链路打通**：`.deb`（36MB）+ `.AppImage`（175MB）均可生成
+  - 实测在 Ubuntu 24.04 上可安装并启动（需配套 webkit 兼容包，见 `packaging/`）
+- [ ] GitHub Actions CI / Release 初版（本仓库自有，含构建验证）
 - [ ] 仓库公开
 
 ### 阶段 M1（近期）
@@ -62,6 +64,8 @@
 - [ ] WebKit2GTK 2.42 Nvidia 崩溃规避
 - [ ] 发布 alpha 打包（.deb / AppImage for Linux）
 - [ ] 品牌收尾：二进制名 `pot` → `cup-translate`、app id、图标
+  - ⚠️ 改 `identifier` 会导致配置路径变化，需同时做配置迁移
+- [ ] 引入最小测试（当前**零测试**，见 `CLAUDE.md` §6）
 
 ### 阶段 M2（中期）
 - [ ] 专注"划词→弹窗"响应优化（内存/耗时）
