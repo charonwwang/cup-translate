@@ -69,7 +69,7 @@
   - 图标仍是上游素材，待替换为自有设计
 - [ ] **替换图标**（当前图标是上游 pot 的素材）
 - [ ] 引入最小测试（当前**零测试**，见 `CLAUDE.md` §6）
-- [ ] 自建更新源（updater 当前已停用，见 `CLAUDE.md` §3.2）
+- [ ] 自建更新源 —— **代码侧已完成，待发版验证**，见下方「更新器（updater）启用状态」
 - [ ] 脱离上游基础设施依赖（ECDICT / Lingva / 阿里云盘代理，见 `CLAUDE.md` §3.1）
 
 ### 阶段 M2（中期）
@@ -82,12 +82,50 @@
 - [ ] 本地词典（ECDICT 离线）深度整合
 - [ ] 多语言原生 SDK、插件生态逐步开放
 
-## 7. 权限与分工
+## 7. 更新器（updater）启用状态
+
+更新器已从"停用"推进到"代码侧就绪"，**但从未真正跑通过**（仓库从未打过 tag），
+因此下面的链路属于**未验证**状态，首次发版时必须逐项确认。
+
+### 已完成（代码侧）
+
+| 项 | 位置 | 说明 |
+|---|---|---|
+| 更新源 | `src-tauri/tauri.conf.json` → `updater.endpoints` | 指向 `releases/download/updater/update.json` |
+| 验签公钥 | `src-tauri/tauri.conf.json` → `updater.pubkey` | 自有 minisign 公钥（key id `DB420303520E0CB5`） |
+| 清单生成 | `updater/updater.mjs`、`updater-for-fix-runtime.mjs` | 已改为 `charonwwang/cup-translate` + `cup-translate_*` 产物名 |
+| 产物重命名 | `.github/workflows/package.yml` | macOS / Windows 的 `Rename-Item` 源名已从 `pot_` 改为 `cup-translate_`（原先会因找不到文件而失败） |
+
+同时**删除了** `linux-i686 / linux-aarch64 / linux-armv7` 三个平台条目：
+上游原版将这三项错误地指向 macOS 产物，会导致用户下载到无法安装的包。
+CI 也只为 x86_64 构建 AppImage，且 Tauri 更新器在 Linux 上仅支持 AppImage 自替换。
+
+### 发版前必须完成（人工，无法由代码代做）
+
+1. **配置 GitHub Secrets**（Settings → Secrets and variables → Actions）：
+   - `TAURI_PRIVATE_KEY` = `~/.tauri/cup-translate.key` 的全部内容
+   - `TAURI_KEY_PASSWORD` = 生成密钥时设置的密码
+2. **备份私钥到仓库之外的安全位置**。私钥丢失＝**更新器永久失效**：
+   已安装用户的二进制里烧死了旧公钥，换新密钥对将无法推送更新，只能让用户手动重装。
+3. **打 tag 触发流水线**（`v*` 形式，如 `v3.1.0`），并确认：
+   - 各平台 job 产出的 `.sig` 与安装包一并上传到了 release
+   - `release-update` job 成功生成并上传 `update.json` 到 `updater` tag release
+   - tag 名（可能带 `v`）与产物名中的版本号（不带 `v`）差异已被 `updater.mjs` 的 `assetVersion` 处理
+4. **实测一次升级**：装旧版 → 启动 → 确认能检测到新版、下载、验签通过、安装成功。
+
+### 注意
+
+- `updater.mjs` 中的产物名依赖 `tauri.conf.json` 的 `package.productName`（当前 `cup-translate`）。
+  **改 productName 必须同步改这两个 mjs 和 CI 里的重命名步骤。**
+- 签名抓取失败时脚本会打印 `WARNING` 并返回空签名；空签名会让用户端安装阶段中止。
+  若 CI 日志出现该 WARNING，说明 `.sig` 文件未上传，需先修流水线。
+
+## 8. 权限与分工
 - **维护者（现状负责人）**：审 PR、合并、规划、发版
 - **贡献者**：按 CONTRIBUTING 提 PR/Issue
 - 初期单人可速跑，达到握手需至少 2 名活跃维护者再正式化
 
-## 8. 风险
+## 9. 风险
 | 风险 | 缓解 |
 |---|---|
 | Wayland 上游协议限制（划词）| 预留 XWayland + curl 外部调用兜底 |

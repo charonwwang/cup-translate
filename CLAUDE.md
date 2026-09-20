@@ -135,15 +135,20 @@ readelf -d src-tauri/target/release/cup-translate | grep NEEDED   # 只有 4.1
 这些属于**依赖上游基础设施**，属于已知技术债（见 `docs/MAINTENANCE.md`）。
 若要自建，需先有对应服务，不能只改 URL。
 
-### 3.2 更新器（updater）已停用
+### 3.2 更新器（updater）已接自建更新源
 
-`tauri.conf.json` 的 `updater.endpoints` 已清空、`pubkey` 置空——
-原值指向上游的发布源与签名公钥，保持启用会去检查**别人的**仓库且签名不匹配。
+`tauri.conf.json` 的 `updater.endpoints` 指向 **cup-translate 自己的** `update.json`，
+`pubkey` 为自有 minisign 公钥（key id `DB420303520E0CB5`）。
+产物名与仓库地址已在 `updater/*.mjs` 与 CI 中统一为 `cup-translate`。
 
-- 代码层面仍保留 `tauri::updater`（故 `Cargo.toml` **必须**显式声明 `updater` feature，
+- 代码层面保留 `tauri::updater`（故 `Cargo.toml` **必须**显式声明 `updater` feature，
   否则 `src-tauri/src/updater.rs` 编译失败：`cannot find updater in tauri`）
-- 运行时表现为安全失败：`Failed to check update: url is required`
-- **待自建 update.json 与 minisign 密钥后再启用**
+- **⚠️ 私钥不在仓库中**，必须存在于 GitHub Secrets（`TAURI_PRIVATE_KEY` / `TAURI_KEY_PASSWORD`）。
+  私钥丢失＝更新器永久失效：已安装用户的二进制里烧死了旧公钥，换密钥对无法推送更新。
+- **⚠️ 整条链路从未跑通**（仓库从未打过 tag），首次发版前请按
+  `docs/MAINTENANCE.md` §7 的清单逐项确认。
+- 改 `package.productName` 时**必须同步**改 `updater/*.mjs` 的产物名与
+  `.github/workflows/package.yml` 的重命名步骤，否则更新检查会 404。
 
 ---
 
