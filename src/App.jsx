@@ -27,7 +27,7 @@ const windowMap = {
 export default function App() {
     const [devMode] = useConfig('dev_mode', false);
     const [appTheme] = useConfig('app_theme', 'system');
-    const [appLanguage] = useConfig('app_language', 'en');
+    const [appLanguage] = useConfig('app_language', 'zh_cn');
     const [appFont] = useConfig('app_font', 'default');
     const [appFallbackFont] = useConfig('app_fallback_font', 'default');
     const [appFontSize] = useConfig('app_font_size', 16);

@@ -28,7 +28,7 @@ export default function General() {
     const [fontList, setFontList] = useState(null);
     const [checkUpdate, setCheckUpdate] = useConfig('check_update', true);
     const [serverPort, setServerPort] = useConfig('server_port', 60828);
-    const [appLanguage, setAppLanguage] = useConfig('app_language', 'en');
+    const [appLanguage, setAppLanguage] = useConfig('app_language', 'zh_cn');
     const [appTheme, setAppTheme] = useConfig('app_theme', 'system');
     const [appFont, setAppFont] = useConfig('app_font', 'default');
     const [appFallbackFont, setAppFallbackFont] = useConfig('app_fallback_font', 'default');
