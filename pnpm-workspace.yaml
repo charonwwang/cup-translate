@@ -1,0 +1,7 @@
+# pnpm 12+ blocks dependency postinstall scripts by default.
+# These are required for the build to work:
+#   - esbuild: links its platform binary (required by vite)
+#   - tesseract.js: fetches its core WASM assets (OCR feature)
+allowBuilds:
+  esbuild: true
+  tesseract.js: true
