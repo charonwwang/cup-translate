@@ -63,9 +63,14 @@
 - [ ] 修复上游遗留的高频 issue（尤其 Linux 划词、Wayland 热键）
 - [ ] WebKit2GTK 2.42 Nvidia 崩溃规避
 - [ ] 发布 alpha 打包（.deb / AppImage for Linux）
-- [ ] 品牌收尾：二进制名 `pot` → `cup-translate`、app id、图标
-  - ⚠️ 改 `identifier` 会导致配置路径变化，需同时做配置迁移
+- [x] **品牌迁移完成**：二进制名 / 包名 / app id / 桌面项统一为 `cup-translate`
+  - identifier: `com.pot-app.desktop` → `com.cup-translate.app`
+  - 已实现旧配置**自动迁移**，老用户升级不丢设置（`config.rs`）
+  - 图标仍是上游素材，待替换为自有设计
+- [ ] **替换图标**（当前图标是上游 pot 的素材）
 - [ ] 引入最小测试（当前**零测试**，见 `CLAUDE.md` §6）
+- [ ] 自建更新源（updater 当前已停用，见 `CLAUDE.md` §3.2）
+- [ ] 脱离上游基础设施依赖（ECDICT / Lingva / 阿里云盘代理，见 `CLAUDE.md` §3.1）
 
 ### 阶段 M2（中期）
 - [ ] 专注"划词→弹窗"响应优化（内存/耗时）
