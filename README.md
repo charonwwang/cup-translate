@@ -49,6 +49,14 @@
 
 > 当前为**源码构建**指引。社区将逐步提供打包产物（.deb / AUR / Flatpak / AppImage）。
 
+> 📖 **Ubuntu 24.04 / Linux 用户请先看 [`docs/BUILD.md`](docs/BUILD.md)。**
+> 新版系统上 WebKitGTK 4.0 已被 4.1 取代，直接构建会失败；该文档给出实测通过的
+> 完整修复步骤。可先运行环境自检：
+>
+> ```bash
+> bash scripts/check-linux-build-env.sh
+> ```
+
 ### 依赖
 - Node.js + pnpm（前端）
 - Rust toolchain（Tauri 后端）
@@ -57,8 +65,8 @@
 ### 从源码运行
 
 ```bash
-# 1. 安装前端依赖
-pnpm install
+# 1. 安装前端依赖（pnpm 12 需放行 esbuild，仓库已配置）
+pnpm install --frozen-lockfile
 
 # 2. 开发模式运行（自动拉起 Tauri）
 pnpm tauri dev
@@ -97,4 +105,5 @@ pot 品牌痕迹，可替换以下位置（暂不作为默认改动）：
 
 - 上游原始说明（历史保留）：`UPSTREAM_README.md`、`README_EN.md`、`README_KR.md`
 - 维护路线与定位：`docs/MAINTENANCE.md`
+- **Linux 构建指南（含 Ubuntu 24.04 兼容修复）：`docs/BUILD.md`**
 - 贡献指南：`CONTRIBUTING.md`

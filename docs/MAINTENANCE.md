@@ -50,13 +50,18 @@
 ### 阶段 M0（本月内，已起步）
 - [x] 从已归档上游（pot-desktop）fork 续版仓库
 - [x] 品牌改名 cup-translate，README/CONTRIBUTING 完善
-- [ ] 构建链路验证（pnpm + cargo build 通过）
-- [ ] GitHub Actions CI / Release 初版
+- [x] **构建链路验证（Ubuntu 24.04 上 pnpm + cargo build 全流程通过）**
+  - 详见 `docs/BUILD.md`，环境自检脚本 `scripts/check-linux-build-env.sh`
+  - 关键修复：WebKitGTK 4.0→4.1 兼容层（pkg-config shim + 链接软链）、wry 升级 0.24.12
+- [x] 收敛上游 CI：仅在 `v*` tag 触发；禁用上游身份的 homebrew/winget 发布
+- [ ] GitHub Actions CI / Release 初版（本仓库自有）
+- [ ] 仓库公开
 
 ### 阶段 M1（近期）
 - [ ] 修复上游遗留的高频 issue（尤其 Linux 划词、Wayland 热键）
 - [ ] WebKit2GTK 2.42 Nvidia 崩溃规避
 - [ ] 发布 alpha 打包（.deb / AppImage for Linux）
+- [ ] 品牌收尾：二进制名 `pot` → `cup-translate`、app id、图标
 
 ### 阶段 M2（中期）
 - [ ] 专注"划词→弹窗"响应优化（内存/耗时）
