@@ -121,7 +121,24 @@ readelf -d src-tauri/target/release/cup-translate | grep NEEDED   # 只有 4.1
 > 若将来再改 `identifier`，必须同步更新 `LEGACY_IDENTIFIER` 常量，
 > 否则用户配置会静默丢失。
 
-### 3.1 仍指向上游的部分（**有意保留，勿改**）
+### 3.1 图标（已替换为原创设计）
+
+**全部图标已不含上游 pot 的图形元素**，为 cup-translate 原创设计：
+暖橙→焦糖渐变底 + 白色咖啡杯 + 杯身「笔画块 + 字母 A」（表示语言转换）。
+
+| 文件 | 说明 |
+|---|---|
+| `app-icon.png`（仓库根） | **母版**，1024×1024 RGBA，所有派生图标的唯一来源 |
+| `packaging/gen-icon.py` | 用 Pillow 生成母版（含配色常量） |
+| `src-tauri/icons/*` | 由 `pnpm tauri icon` 生成（PNG/ICO/ICNS/Appx） |
+| `public/icon.png` | 前端 favicon **兼 About 页 logo**（`<img src='icon.png'>`） |
+
+**约束**：
+- 改图标**必须改母版** `app-icon.png` 后重新生成，**不要只改派生文件**（会被覆盖）。
+- `pnpm tauri icon` **不会**生成 `public/icon.png` 与 `icon_mac.ico`，需手动补齐。
+- 完整流程与验证清单见 **`packaging/ICONS.md`**。
+
+### 3.2 仍指向上游的部分（**有意保留，勿改**）
 
 以下 URL 是**功能性后端服务**，由上游运营，改掉会导致功能失效：
 
@@ -135,7 +152,7 @@ readelf -d src-tauri/target/release/cup-translate | grep NEEDED   # 只有 4.1
 这些属于**依赖上游基础设施**，属于已知技术债（见 `docs/MAINTENANCE.md`）。
 若要自建，需先有对应服务，不能只改 URL。
 
-### 3.2 更新器（updater）已接自建更新源
+### 3.3 更新器（updater）已接自建更新源
 
 `tauri.conf.json` 的 `updater.endpoints` 指向 **cup-translate 自己的** `update.json`，
 `pubkey` 为自有 minisign 公钥（key id `DB420303520E0CB5`）。
@@ -260,6 +277,7 @@ Xvfb/无头环境下 GUI 行为不可信。
 | 构建步骤 / 依赖 / 版本坑 | `docs/BUILD.md` |
 | 新增环境自检项 | `scripts/check-linux-build-env.sh` |
 | 打包方式 | `docs/BUILD.md` §6 + `packaging/` |
+| **图标/品牌视觉** | `packaging/ICONS.md` + 本文件 §3.1 |
 | 路线/定位变化 | `docs/MAINTENANCE.md` |
 | 协作硬约束 | 本文件 `CLAUDE.md` |
 

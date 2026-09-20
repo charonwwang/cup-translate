@@ -66,8 +66,10 @@
 - [x] **品牌迁移完成**：二进制名 / 包名 / app id / 桌面项统一为 `cup-translate`
   - identifier: `com.pot-app.desktop` → `com.cup-translate.app`
   - 已实现旧配置**自动迁移**，老用户升级不丢设置（`config.rs`）
-  - 图标仍是上游素材，待替换为自有设计
-- [ ] **替换图标**（当前图标是上游 pot 的素材）
+- [x] **图标替换完成**：全部图标改为 cup-translate 原创设计
+  - 母版 `app-icon.png` + 生成脚本 `packaging/gen-icon.py`，说明见 `packaging/ICONS.md`
+  - 覆盖 PNG/ICO/ICNS/Appx 全平台，含托盘图标与前端 favicon
+  - 顺带修复：`/icon.png` favicon 长期 404（上游遗留，仓库无 `public/`）
 - [ ] 引入最小测试（当前**零测试**，见 `CLAUDE.md` §6）
 - [ ] 自建更新源 —— **代码侧已完成，待发版验证**，见下方「更新器（updater）启用状态」
 - [ ] 脱离上游基础设施依赖（ECDICT / Lingva / 阿里云盘代理，见 `CLAUDE.md` §3.1）
