@@ -47,7 +47,7 @@ fn main() {
             Notification::new(&app.config().tauri.bundle.identifier)
                 .title("The program is already running. Please do not start it again!")
                 .body(cwd)
-                .icon("pot")
+                .icon("cup-translate")
                 .show()
                 .unwrap();
         }))
@@ -95,7 +95,7 @@ fn main() {
                 Err(e) => Notification::new(app.config().tauri.bundle.identifier.clone())
                     .title("Failed to register global shortcut")
                     .body(&e)
-                    .icon("pot")
+                    .icon("cup-translate")
                     .show()
                     .unwrap(),
             }

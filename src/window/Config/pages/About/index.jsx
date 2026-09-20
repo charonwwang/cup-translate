@@ -21,7 +21,7 @@ export default function About() {
                 draggable={false}
             />
             <div className='content-center'>
-                <h1 className='font-bold text-2xl text-center'>Pot</h1>
+                <h1 className='font-bold text-2xl text-center'>cup-translate</h1>
                 <p className='text-center text-sm text-gray-500 mb-[5px]'>{appVersion}</p>
                 <Divider />
                 <div className='flex justify-between'>
