@@ -22,8 +22,11 @@ pub fn update_tray(app_handle: tauri::AppHandle, mut language: String, mut copy_
         language = match get("app_language") {
             Some(v) => v.as_str().unwrap().to_string(),
             None => {
-                set("app_language", "en");
-                "en".to_string()
+                // 必须与前端默认值 (src/App.jsx / General/index.jsx) 保持一致。
+                // 托盘初始化早于前端加载：此处若写入 'en'，前端 useConfig 的默认值
+                // 'zh_cn' 会因配置项已存在而失效，导致全新安装时界面为英文。
+                set("app_language", "zh_cn");
+                "zh_cn".to_string()
             }
         };
     }

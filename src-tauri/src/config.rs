@@ -53,6 +53,7 @@ pub fn init_config(app: &mut tauri::App) {
     }
     app.manage(StoreWrapper(Mutex::new(store)));
     let _ = check_service_available();
+    prune_unconfigured_dead_services();
 }
 
 /// 递归复制目录（用于旧配置迁移，不依赖额外 crate）
@@ -92,6 +93,45 @@ fn check_available(list: Vec<String>, builtin: Vec<&str>, plugin: Vec<String>, k
     }
     if new_list.len() != origin_length {
         set(key, new_list);
+    }
+}
+
+/// 上游已停服、或缺少配置就必然失败的内置翻译服务（裸实例名，2026 实测）：
+/// - `deepl`：必须填 API key，空配置必然报错
+/// - `bing`：取 token 的 `edge.microsoft.com/translate/auth` 返回 404
+/// - `lingva`：`lingva.pot-app.com` 域名已不存在（NXDOMAIN）
+/// - `ecdict`：上游 `pot-app.com/api/dict` 返回 404/405
+/// 对这些「从未配置过」的旧版默认实例做一次性清理，让升级用户也开箱即用。
+/// 用户显式创建的 `name@id` 实例、以及已填写配置的实例一律保留。
+const UNUSABLE_TRANSLATE_BUILTIN: &[&str] = &["deepl", "bing", "lingva", "ecdict"];
+
+fn prune_unconfigured_dead_services() {
+    let Some(value) = get("translate_service_list") else {
+        return;
+    };
+    let Ok(list) = serde_json::from_value::<Vec<String>>(value) else {
+        return;
+    };
+    let new_list: Vec<String> = list
+        .iter()
+        .filter(|instance| {
+            if instance.contains('@') || !UNUSABLE_TRANSLATE_BUILTIN.contains(&instance.as_str()) {
+                return true;
+            }
+            // 配置对象非空说明用户配置过（例如填了 DeepL 密钥），保留
+            match get(instance) {
+                Some(config) => config.as_object().map_or(true, |obj| !obj.is_empty()),
+                None => false,
+            }
+        })
+        .cloned()
+        .collect();
+    if new_list.len() != list.len() {
+        info!(
+            "Prune unusable translate services: {:?} -> {:?}",
+            list, new_list
+        );
+        set("translate_service_list", new_list);
     }
 }
 

@@ -89,6 +89,8 @@ export default function TargetArea(props) {
     useEffect(() => {
         if (error) {
             logError(`[${currentTranslateServiceInstanceKey}]happened error: ` + error);
+            // 出错时自动展开卡片，避免失败被静默折叠、用户看不到任何反馈
+            setHide(false);
         }
     }, [error]);
 
@@ -614,16 +616,22 @@ export default function TargetArea(props) {
                             </div>
                         )}
                         {error !== '' ? (
-                            error.split('\n').map((v) => {
-                                return (
-                                    <p
-                                        key={v}
-                                        className={`text-[${appFontSize}px] text-red-500`}
-                                    >
-                                        {v}
-                                    </p>
-                                );
-                            })
+                            // 只显示前 3 行、每行至多 100 字：完整错误（含重复堆栈）写入日志，
+                            // 避免超长错误信息刷屏；key 用索引，防止重复行导致 React key 冲突
+                            error
+                                .split('\n')
+                                .filter((v) => v.trim() !== '')
+                                .slice(0, 3)
+                                .map((v, index) => {
+                                    return (
+                                        <p
+                                            key={index}
+                                            className={`text-[${appFontSize}px] text-red-500`}
+                                        >
+                                            {v.length > 100 ? v.slice(0, 100) + '…' : v}
+                                        </p>
+                                    );
+                                })
                         ) : (
                             <></>
                         )}

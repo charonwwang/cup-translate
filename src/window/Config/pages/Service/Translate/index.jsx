@@ -23,13 +23,12 @@ export default function Translate(props) {
     const { isOpen: isConfigOpen, onOpen: onConfigOpen, onOpenChange: onConfigOpenChange } = useDisclosure();
     const [currentConfigKey, setCurrentConfigKey] = useState('deepl');
     // now it's service instance list
+    // 默认只启用「开箱即用」的免费引擎（无需 API key、上游可用）：
+    // yandex —— 实测可用；google —— 主流兜底（支持 custom_url 镜像）。
+    // deepl 需 API key；lingva / ecdict 上游已停服（2026 实测），均不再默认启用。
     const [translateServiceInstanceList, setTranslateServiceInstanceList] = useConfig('translate_service_list', [
-        'deepl',
-        'bing',
-        'lingva',
         'yandex',
         'google',
-        'ecdict',
     ]);
 
     const { t } = useTranslation();

@@ -61,9 +61,14 @@
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm build                                   # 前端，产物 dist/
-cd src-tauri && cargo build --release        # 产物 target/release/cup-translate
+pnpm build                                                             # 前端，产物 dist/
+cd src-tauri && cargo build --release --features custom-protocol # 产物 target/release/cup-translate
 ```
+
+> **⚠️ 第四个坑（2026-09-23 实测）：裸 `cargo build --release` 缺 `--features custom-protocol`。**
+> 该 feature 只有 `pnpm tauri build` 会自动启用。缺了它，二进制**能启动但前端永不加载**
+> （webview 空白、无 JS 执行、日志永远没有 `resolve`），症状与「前端代码坏了」完全一致。
+> 跑 GUI 验证必须带 `--features custom-protocol`（详见 `docs/BUILD.md` §5）。
 
 ### 2.2 打包（.deb / AppImage）
 
@@ -138,19 +143,27 @@ readelf -d src-tauri/target/release/cup-translate | grep NEEDED   # 只有 4.1
 - `pnpm tauri icon` **不会**生成 `public/icon.png` 与 `icon_mac.ico`，需手动补齐。
 - 完整流程与验证清单见 **`packaging/ICONS.md`**。
 
-### 3.2 仍指向上游的部分（**有意保留，勿改**）
+### 3.2 仍指向上游的部分
 
-以下 URL 是**功能性后端服务**，由上游运营，改掉会导致功能失效：
+以下 URL 仍指向上游域名，状态分两类（**实测于 2026，证据见 `docs/research/`**）：
 
-| 位置 | 用途 |
-|---|---|
-| `src/services/translate/ecdict/index.jsx` | ECDICT 离线词典 API（`pot-app.com/api/dict`） |
-| `src/services/translate/lingva/index.jsx` | Lingva 翻译实例（`lingva.pot-app.com`） |
-| `src/window/Config/pages/Backup/utils/aliyun.jsx` | 阿里云盘 token 代理 |
-| 各 `services/translate/*/Config.jsx` | 申请 API key 的文档链接 |
+| 位置 | 用途 | 状态 |
+|---|---|---|
+| `src/services/translate/ecdict/index.jsx` | ECDICT 离线词典 API（`pot-app.com/api/dict`） | ❌ **上游已停服**（GET 404 / POST 405），已移出默认引擎 |
+| `src/services/translate/lingva/index.jsx` | Lingva 翻译实例（`lingva.pot-app.com`） | ❌ **域名已消失**（NXDOMAIN），已移出默认引擎 |
+| `src/services/translate/bing/index.jsx` | Bing 取 token（`edge.microsoft.com/translate/auth`） | ❌ **返回 404**，已移出默认引擎 |
+| `src/window/Config/pages/Backup/utils/aliyun.jsx` | 阿里云盘 token 代理 | ⚠️ 依赖上游，暂可用 |
+| 各 `services/translate/*/Config.jsx` | 申请 API key 的文档链接 | ⚠️ 仅文档链接 |
 
-这些属于**依赖上游基础设施**，属于已知技术债（见 `docs/MAINTENANCE.md`）。
-若要自建，需先有对应服务，不能只改 URL。
+**默认翻译引擎策略（开箱即用）**：默认 `translate_service_list` 只含 `yandex` + `google`
+（免 API key、上游可用，`google` 支持 `custom_url` 镜像）。启动时
+`src-tauri/src/config.rs::prune_unconfigured_dead_services()` 会清理**从未配置过**的
+`deepl`/`bing`/`lingva`/`ecdict` 裸实例，让升级用户同样开箱即用；
+用户显式创建的 `name@id` 实例、已填配置（如 DeepL 密钥）的实例一律保留。
+
+上述失效引擎的**代码暂不删除**（部分支持自建实例/镜像配置）。
+不要把 URL 改成来路不明的第三方镜像；若要自建，需先有对应服务。
+依赖上游基础设施仍属已知技术债（见 `docs/MAINTENANCE.md`）。
 
 ### 3.3 更新器（updater）已接自建更新源
 
@@ -246,10 +259,10 @@ ci: 收敛上游发布流水线，避免误用上游身份发布
 - 改动后**必须手工验证**，并在提交信息里写清验证方式
 - **不要假装**存在测试命令（如编造 `pnpm test`）；若需验证，用真实可跑的命令：
   ```bash
-  pnpm build                                  # 前端能否构建
-  cd src-tauri && cargo build --release       # 后端能否编译
-  bash scripts/check-linux-build-env.sh       # 构建环境
-  ./src-tauri/target/release/cup-translate    # 能否启动（GUI 常驻，需 Ctrl-C）
+  pnpm build                                                             # 前端能否构建
+  cd src-tauri && cargo build --release --features custom-protocol # 后端能否编译（跑 GUI 必须带 custom-protocol，见 §2.1）
+  bash scripts/check-linux-build-env.sh                                  # 构建环境
+  ./src-tauri/target/release/cup-translate                               # 能否启动（GUI 常驻，需 Ctrl-C）
   ```
 - 引入测试框架是**待办**，不是既成事实
 

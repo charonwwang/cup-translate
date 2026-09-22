@@ -70,9 +70,18 @@
   - 母版 `app-icon.png` + 生成脚本 `packaging/gen-icon.py`，说明见 `packaging/ICONS.md`
   - 覆盖 PNG/ICO/ICNS/Appx 全平台，含托盘图标与前端 favicon
   - 顺带修复：`/icon.png` favicon 长期 404（上游遗留，仓库无 `public/`）
+- [x] **开箱即用改造**：翻译「零配置可用」，默认引擎收敛为 `yandex` + `google`
+  - 修复全新安装界面默认为英文的 bug（`tray.rs` 抢在前端前写入 `app_language=en`，毒化 zh_cn 默认值）
+  - 语种检测默认 `baidu` → `local`（lingua 本地检测，零网络、零隐私风险）；存量用户设置不动
+  - 启动时清理从未配置过的 `deepl`/`bing`/`lingva`/`ecdict` 裸实例（升级用户同样开箱即用，`config.rs`）
+  - 翻译失败**自动展开**错误卡片并截断显示（此前失败被静默折叠，6 个默认引擎 4 个失效用户也看不见）
+  - 实测报告：`docs/research/translation-engine-benchmark-2026.md`、`docs/research/gui-integration-test-2026.md`
+- [ ] 本地离线翻译模式（CTranslate2 + OPUS-MT：79MB / 158MB 内存 / 106ms，BLEU 53.8）——
+      调研与基准测试已完成，见 `docs/research/on-device-mt-models-2026.md`，待实现
 - [ ] 引入最小测试（当前**零测试**，见 `CLAUDE.md` §6）
 - [ ] 自建更新源 —— **代码侧已完成，待发版验证**，见下方「更新器（updater）启用状态」
-- [ ] 脱离上游基础设施依赖（ECDICT / Lingva / 阿里云盘代理，见 `CLAUDE.md` §3.1）
+- [ ] 脱离上游基础设施依赖：ECDICT / Lingva / Bing token **上游已死**（已移出默认引擎，见 `CLAUDE.md` §3.2）；
+      阿里云盘代理与 TTS（`lingva_tts`，同样依赖已死的 lingva 实例）待替换
 
 ### 阶段 M2（中期）
 - [ ] 专注"划词→弹窗"响应优化（内存/耗时）

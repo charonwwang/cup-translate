@@ -191,10 +191,21 @@ allowBuilds:
 
 ```bash
 cd src-tauri
-cargo build --release       # 首次约 900 个 crate，耗时较长
+cargo build --release --features custom-protocol    # 首次约 900 个 crate，耗时较长
 ```
 
 产物：`src-tauri/target/release/cup-translate`
+
+> **⚠️ `--features custom-protocol` 不能省（2026-09-23 实测踩坑，耗时数小时）**
+> `Cargo.toml` 的 `[features] custom-protocol = ["tauri/custom-protocol"]` 只有
+> `pnpm tauri build` / `pnpm tauri dev` 会按需启用，裸 `cargo build --release` **不会**。
+> 缺该 feature 的二进制：Rust 侧一切正常（托盘 / 本地 HTTP / 日志都好），但 webview 加载的
+> 是 `devPath`（开发服务器，未运行）——**前端永不执行**：界面空白、`appWindow.show()` 无人调用
+> （窗口连 X toplevel 都不显示）、useConfig 默认值不落盘、日志里永远没有 `resolve/reject`。
+> 编译期**无任何报错**，症状与「前端代码坏了」完全一致，极难定位。
+> 快速自检：启动后触发一次翻译，`grep resolve ~/.config/com.cup-translate.app/logs/cup-translate.log`
+> 有输出，才算二进制真正可用。对照数据：缺 feature 时 0 条 JS 日志、配置仅 Rust 写入的十余个键；
+> 带 feature 时 `[yandex]resolve:...` 正常出现、前端默认值全部落盘。
 
 ### 5.1 开发模式 / 打包
 

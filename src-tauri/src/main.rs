@@ -109,10 +109,17 @@ fn main() {
             }
             // Check Update
             check_update(app.handle());
-            if let Some(engine) = get("translate_detect_engine") {
-                if engine.as_str().unwrap() == "local" {
-                    init_lang_detect();
+            // 语言检测默认走本地（lingua），与前端默认值保持一致：
+            // 键缺失时写入默认值并初始化，切换到 local 时同样需要初始化
+            let detect_engine = match get("translate_detect_engine") {
+                Some(engine) => engine.as_str().unwrap_or("local").to_string(),
+                None => {
+                    set("translate_detect_engine", "local");
+                    "local".to_string()
                 }
+            };
+            if detect_engine == "local" {
+                init_lang_detect();
             }
             let clipboard_monitor = match get("clipboard_monitor") {
                 Some(v) => v.as_bool().unwrap(),
