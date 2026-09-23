@@ -16,7 +16,7 @@ bad()  { printf '  \033[31m✗\033[0m %s\n' "$1"; fail=$((fail+1)); }
 warn() { printf '  \033[33m!\033[0m %s\n' "$1"; }
 
 echo "== 1. 基础工具 =="
-for c in cargo rustc node pnpm pkg-config cc; do
+for c in cargo rustc node pnpm pkg-config cc cmake; do
   if command -v "$c" >/dev/null 2>&1; then
     ok "$c: $($c --version 2>&1 | head -1)"
   else

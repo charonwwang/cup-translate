@@ -39,7 +39,7 @@
 
 ---
 
-## 2. 构建：三个必踩的坑（已修复，勿回退）
+## 2. 构建：四个必踩的坑（已修复，勿回退）
 
 > 详见 `docs/BUILD.md`。这里只列**结论**，改动相关文件前务必确认不会破坏它们。
 
@@ -48,13 +48,15 @@
 | 1 | **wry 必须 ≥ 0.24.12** | `Cargo.lock` 锁定 0.24.12 | 降回 0.24.11 → `E0599` 7 个错误（trait not in scope） |
 | 2 | **WebKitGTK 4.0→4.1 兼容层** | pkg-config shim + `.so` 软链（**仅构建期**） | 编译期 `webkit2gtk-4.0 not found`，或链接期 `-lwebkit2gtk-4.0` 找不到 |
 | 3 | **pnpm 12 拦截构建脚本** | `pnpm-workspace.yaml` 的 `allowBuilds` | `ERR_PNPM_IGNORED_BUILDS`，vite 构建失败 |
+| 4 | **cargo build 缺 `--features custom-protocol`** | 构建命令统一带该 feature（§2.1） | 二进制能启动但**前端永不加载**（webview 空白、无 JS） |
 
 **关键约束**：
 - 不要"顺手"把 `wry` 降级或跑 `cargo update` 全量刷新——可能把 wry 拉回有问题的版本。
 - `pnpm-workspace.yaml` 的 `allowBuilds` 是 pnpm 12 的**原生格式**，不要改成 `onlyBuiltDependencies`（实测无效）。
+- 本地离线翻译（ct2rs/CTranslate2）需要 `cmake` + C++ 工具链（§2 的系统依赖已含）。
 - 改动构建相关文件后，跑自检确认没破坏环境：
   ```bash
-  bash scripts/check-linux-build-env.sh   # 20 项，应全部通过
+  bash scripts/check-linux-build-env.sh   # 24 项，应全部通过
   ```
 
 ### 2.1 标准构建命令
@@ -69,6 +71,9 @@ cd src-tauri && cargo build --release --features custom-protocol # 产物 target
 > 该 feature 只有 `pnpm tauri build` 会自动启用。缺了它，二进制**能启动但前端永不加载**
 > （webview 空白、无 JS 执行、日志永远没有 `resolve`），症状与「前端代码坏了」完全一致。
 > 跑 GUI 验证必须带 `--features custom-protocol`（详见 `docs/BUILD.md` §5）。
+> **且该 feature 在 cargo build 时把 `dist/` 嵌进二进制**：改前端后必须
+> **先 `pnpm build` 再 `cargo build --features custom-protocol` 重编**，否则跑的是旧前端
+> （日志 `assets/index-<hash>.js` 与 `dist/assets/` 文件名对不上即为此坑）。
 
 ### 2.2 打包（.deb / AppImage）
 
@@ -149,21 +154,28 @@ readelf -d src-tauri/target/release/cup-translate | grep NEEDED   # 只有 4.1
 
 | 位置 | 用途 | 状态 |
 |---|---|---|
-| `src/services/translate/ecdict/index.jsx` | ECDICT 离线词典 API（`pot-app.com/api/dict`） | ❌ **上游已停服**（GET 404 / POST 405），已移出默认引擎 |
-| `src/services/translate/lingva/index.jsx` | Lingva 翻译实例（`lingva.pot-app.com`） | ❌ **域名已消失**（NXDOMAIN），已移出默认引擎 |
-| `src/services/translate/bing/index.jsx` | Bing 取 token（`edge.microsoft.com/translate/auth`） | ❌ **返回 404**，已移出默认引擎 |
+| `src/services/tts/lingva/index.jsx` | Lingva TTS 实例（默认地址已死） | ⚠️ 代码保留**仅供自建**（`requestPath` 可配），默认已换 `local_tts` |
 | `src/window/Config/pages/Backup/utils/aliyun.jsx` | 阿里云盘 token 代理 | ⚠️ 依赖上游，暂可用 |
 | 各 `services/translate/*/Config.jsx` | 申请 API key 的文档链接 | ⚠️ 仅文档链接 |
 
-**默认翻译引擎策略（开箱即用）**：默认 `translate_service_list` 只含 `yandex` + `google`
-（免 API key、上游可用，`google` 支持 `custom_url` 镜像）。启动时
-`src-tauri/src/config.rs::prune_unconfigured_dead_services()` 会清理**从未配置过**的
-`deepl`/`bing`/`lingva`/`ecdict` 裸实例，让升级用户同样开箱即用；
-用户显式创建的 `name@id` 实例、已填配置（如 DeepL 密钥）的实例一律保留。
+**已删除（2026 实测上游全死且无自建入口）**：`src/services/translate/{bing,ecdict,lingva}`——
+ECDict（`pot-app.com/api/dict` 404/405）、Lingva 翻译（NXDOMAIN）、Bing 取 token（404）。
+如需恢复请以 pot 插件形式自行接入，勿在核心里复活死端点。
 
-上述失效引擎的**代码暂不删除**（部分支持自建实例/镜像配置）。
+**默认引擎策略（开箱即用）**：默认 `translate_service_list` 只含 `yandex` + `google`
+（免 API key、上游可用，`google` 支持 `custom_url` 镜像）；TTS 默认 `local_tts`
+（本地 espeak-ng / spd-say 合成，零配置、离线）；本地离线翻译 `local_mt` 为**可选插件式**
+（默认不启用，模型在设置页按需下载，见 `src-tauri/src/local_mt.rs`）。启动时
+`src-tauri/src/config.rs::prune_unconfigured_dead_services()` 会清理**从未配置过**的
+`deepl`/`bing`/`lingva`/`ecdict`（翻译）与 `lingva_tts`（TTS）裸实例，让升级用户同样开箱即用；
+用户显式创建的 `name@id` 实例、已填配置（如 DeepL 密钥 / 自建地址）的实例一律保留。
+
+`deepl` 代码保留（需 API key，翻译前会跳过未配置实例、不发请求）。
 不要把 URL 改成来路不明的第三方镜像；若要自建，需先有对应服务。
 依赖上游基础设施仍属已知技术债（见 `docs/MAINTENANCE.md`）。
+另：`check_service_available()` 启动时按 `builtin_translate_list`/`builtin_tts_list` 白名单
+清理服务列表（见 §4.1 第 5 步）——已删除服务（bing/ecdict/lingva）的**所有**实例
+（含 `name@id`）都会被清掉，因为前端已无对应实现、留着必崩服务列表 UI。
 
 ### 3.3 更新器（updater）已接自建更新源
 
@@ -193,14 +205,14 @@ src/                       前端 (React 18, JSX)
 │   ├── Screenshot/        截图
 │   └── Updater/           更新
 ├── services/
-│   ├── translate/         22 个翻译引擎（每个一个目录 + index.jsx 注册）
+│   ├── translate/         19 个翻译引擎（每个一个目录 + index.jsx 注册）+ required_config.js 配置检查
 │   ├── recognize/         OCR
 │   ├── tts/               语音合成
 │   └── collection/        生词本
 ├── utils/                 invoke_plugin.js / store.js 等
 └── i18n/locales/          21 个语言 JSON
 
-src-tauri/src/             Rust 后端（15 个模块）
+src-tauri/src/             Rust 后端（17 个模块）
 ├── main.rs                入口
 ├── window.rs              窗口管理（划词弹窗定位关键）
 ├── hotkey.rs              全局快捷键
@@ -208,7 +220,7 @@ src-tauri/src/             Rust 后端（15 个模块）
 ├── server.rs              本地 HTTP 服务（127.0.0.1:随机端口）
 ├── config.rs              配置读写
 ├── tray.rs                系统托盘
-└── screenshot.rs / system_ocr.rs / lang_detect.rs / updater.rs / backup.rs
+└── screenshot.rs / system_ocr.rs / lang_detect.rs / updater.rs / backup.rs / local_mt.rs / tts.rs
 ```
 
 ### 4.1 新增翻译引擎的约定
@@ -216,6 +228,11 @@ src-tauri/src/             Rust 后端（15 个模块）
 2. 在 `src/services/translate/index.jsx` 中 **import + export**（两步都要，缺一不生效）
 3. 在 `src/i18n/locales/*.json` 补引擎显示名（**21 个语言文件**，至少补 `en_US` 和 `zh_CN`）
 4. 引擎配置项在 `src/window/Config/` 对应页面注册
+5. **同步 `src-tauri/src/config.rs` 的 `builtin_translate_list`**（TTS 对应 `builtin_tts_list`）——
+   每次启动 `check_service_available()` 都按该白名单校验服务列表，
+   **不在名单里的服务会被静默清出 `translate_service_list`**（2026-09-23 实测：`local_mt`
+   加了前端忘了加 Rust，用户配置活不过一次重启）。反之，代码已删除的服务要从名单移除，
+   让残留配置项被自动清掉。
 
 ---
 
@@ -226,6 +243,7 @@ src-tauri/src/             Rust 后端（15 个模块）
 - JSX 属性**每行一个**（`singleAttributePerLine: true`）
 - 换行符 `lf`
 - 文件是 **`.jsx` / `.js`**，**不是 TypeScript**（虽然 devDeps 有 `typescript`，但无 `tsconfig.json`，请勿擅自引入 TS）
+  - 唯一例外：`src/services/**/info.ts`（上游既有约定，仅 `info` + `Language` 枚举）
 
 改动后格式化：
 ```bash
@@ -302,7 +320,7 @@ Xvfb/无头环境下 GUI 行为不可信。
 
 1. `bash scripts/check-linux-build-env.sh` — 确认环境可用
 2. 读相关源码（见 §4 地图），**不要凭猜测改**
-3. 改动 → `pnpm build` + `cargo build --release` 确认通过
+3. 改动 → `pnpm build` + `cargo build --release --features custom-protocol` 确认通过
 4. 若涉及运行行为 → 实际跑 `./src-tauri/target/release/cup-translate` 验证
 5. 按 §5.3 规范提交，按 §8 同步文档
 

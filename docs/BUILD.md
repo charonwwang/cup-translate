@@ -46,13 +46,17 @@ sudo apt-get update
 sudo apt-get install -y --no-install-recommends \
   libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev \
   libgtk-3-dev libxdo-dev libayatana-appindicator3-dev librsvg2-dev \
-  libssl-dev libsoup2.4-dev pkg-config build-essential file libglib2.0-dev
+  libssl-dev libsoup2.4-dev pkg-config build-essential cmake file libglib2.0-dev
 ```
 
 > **包名是 `4.1`，不是 `4.0`**。Ubuntu 24.04 **不再提供** `libwebkit2gtk-4.0-dev`
 > （`apt-cache policy libwebkit2gtk-4.0-dev` 无候选版本），只有 4.1 系列。
 > 而 Tauri v1.8 依赖的 `webkit2gtk-sys 0.18` 在编译期硬性探测 `webkit2gtk-4.0`
 > 和 `-lwebkit2gtk-4.0`，于是产生 §3 的两层冲突。
+
+> **`cmake` 是本地离线翻译（ct2rs / CTranslate2）的构建依赖**：ct2rs 的 build.rs
+> 用 cmake + cxx 静态编译内嵌的 CTranslate2 源码。首次构建约 5–15 分钟
+> （可设 `CMAKE_PARALLEL=-j <N>` 并行），之后增量构建不受影响。
 
 ---
 
@@ -206,6 +210,13 @@ cargo build --release --features custom-protocol    # 首次约 900 个 crate，
 > 快速自检：启动后触发一次翻译，`grep resolve ~/.config/com.cup-translate.app/logs/cup-translate.log`
 > 有输出，才算二进制真正可用。对照数据：缺 feature 时 0 条 JS 日志、配置仅 Rust 写入的十余个键；
 > 带 feature 时 `[yandex]resolve:...` 正常出现、前端默认值全部落盘。
+
+> **⚠️ 同一个坑的第二面（2026-09-23 实测）：`custom-protocol` 在 cargo build 时把 `dist/`
+> 整个嵌进二进制**。先 `cargo build` 后 `pnpm build` 的话，运行的仍是**旧前端**
+> （实测二进制里是 `index-ZZ7ZGZre.js`，而 `dist/` 已是 `index-qjMwQcBN.js`），
+> 且**没有任何报错**。改前端后必须**先 `pnpm build` 再 `cargo build --features custom-protocol`
+> 重编**，顺序不能反。日志里的 `assets/index-<hash>.js` 与 `dist/assets/` 下的文件名对不上，
+> 就说明二进制嵌的是旧产物。
 
 ### 5.1 开发模式 / 打包
 

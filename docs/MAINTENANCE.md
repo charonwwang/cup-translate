@@ -75,13 +75,20 @@
   - 语种检测默认 `baidu` → `local`（lingua 本地检测，零网络、零隐私风险）；存量用户设置不动
   - 启动时清理从未配置过的 `deepl`/`bing`/`lingva`/`ecdict` 裸实例（升级用户同样开箱即用，`config.rs`）
   - 翻译失败**自动展开**错误卡片并截断显示（此前失败被静默折叠，6 个默认引擎 4 个失效用户也看不见）
+  - 启动失败 / 配置初始化失败时渲染**兜底错误面板**（含日志路径提示，不再白屏）
+  - 未配置的引擎翻译时**直接跳过**（不发请求，卡片显示「未配置，已跳过」）
   - 实测报告：`docs/research/translation-engine-benchmark-2026.md`、`docs/research/gui-integration-test-2026.md`
-- [ ] 本地离线翻译模式（CTranslate2 + OPUS-MT：79MB / 158MB 内存 / 106ms，BLEU 53.8）——
-      调研与基准测试已完成，见 `docs/research/on-device-mt-models-2026.md`，待实现
+- [x] **本地离线翻译模式（可选插件式）**：CTranslate2（`ct2rs`）+ OPUS-MT en↔zh CT2 int8
+  - 每方向 79MB / 158MB 内存 / 106ms@4 线程 / BLEU 53.8，仅中英互译；zh→en 模型 CC-BY-4.0，UI 已标注署名
+  - 默认**不启用**，在 设置 → 翻译服务 → 本地离线翻译 中按需下载模型（huggingface.co 失败自动换 hf-mirror.com）
+  - 实现：`src-tauri/src/local_mt.rs`（`local_mt_*` 命令）+ `src/services/translate/local_mt/`；调研见 `docs/research/on-device-mt-models-2026.md`
+- [x] **死服务清理 + 本地 TTS**：翻译侧 `bing`/`ecdict`/`lingva` 代码删除（上游全死且无自建入口）
+  - TTS 默认 `lingva_tts` → `local_tts`（espeak-ng / espeak / spd-say 本地合成：离线、零配置、GPL-3.0 兼容）
+  - `lingva_tts` 代码保留仅供自建实例（`requestPath` 可配）；高质量本地 TTS（Piper + sherpa-onnx，Apache-2.0）为后续升级项
 - [ ] 引入最小测试（当前**零测试**，见 `CLAUDE.md` §6）
 - [ ] 自建更新源 —— **代码侧已完成，待发版验证**，见下方「更新器（updater）启用状态」
-- [ ] 脱离上游基础设施依赖：ECDICT / Lingva / Bing token **上游已死**（已移出默认引擎，见 `CLAUDE.md` §3.2）；
-      阿里云盘代理与 TTS（`lingva_tts`，同样依赖已死的 lingva 实例）待替换
+- [ ] 脱离上游基础设施依赖：ECDICT / Lingva / Bing token **已删除**，TTS **已本地化**；
+      仍剩阿里云盘备份代理（依赖上游，暂可用）待替换
 
 ### 阶段 M2（中期）
 - [ ] 专注"划词→弹窗"响应优化（内存/耗时）
