@@ -8,10 +8,12 @@ mod config;
 mod error;
 mod hotkey;
 mod lang_detect;
+mod local_mt;
 mod screenshot;
 mod server;
 mod system_ocr;
 mod tray;
+mod tts;
 mod updater;
 mod window;
 
@@ -21,6 +23,7 @@ use cmd::*;
 use config::*;
 use hotkey::*;
 use lang_detect::*;
+use local_mt::*;
 use log::info;
 use once_cell::sync::OnceCell;
 use screenshot::screenshot;
@@ -31,6 +34,7 @@ use tauri::api::notification::Notification;
 use tauri::Manager;
 use tauri_plugin_log::LogTarget;
 use tray::*;
+use tts::*;
 use updater::check_update;
 use window::config_window;
 use window::updater_window;
@@ -154,7 +158,12 @@ fn main() {
             local,
             install_plugin,
             font_list,
-            aliyun
+            aliyun,
+            local_mt_model_status,
+            local_mt_download_model,
+            local_mt_delete_model,
+            local_mt_translate,
+            tts_speak
         ])
         .on_system_tray_event(tray_event_handler)
         .build(tauri::generate_context!())

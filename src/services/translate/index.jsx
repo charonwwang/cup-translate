@@ -1,5 +1,4 @@
 import * as _deepl from './deepl';
-import * as _bing from './bing';
 import * as _yandex from './yandex';
 import * as _openai from './openai';
 import * as _google from './google';
@@ -17,11 +16,9 @@ import * as _caiyun from './caiyun';
 import * as _chatglm from './chatglm';
 import * as _geminipro from './geminipro';
 import * as _ollama from './ollama';
-import * as _ecdict from './ecdict';
-import * as _lingva from './lingva';
+import * as _local_mt from './local_mt';
 
 export const deepl = _deepl;
-export const bing = _bing;
 export const yandex = _yandex;
 export const openai = _openai;
 export const google = _google;
@@ -39,5 +36,4 @@ export const caiyun = _caiyun;
 export const chatglm = _chatglm;
 export const geminipro = _geminipro;
 export const ollama = _ollama;
-export const ecdict = _ecdict;
-export const lingva = _lingva;
+export const local_mt = _local_mt;
