@@ -32,6 +32,7 @@ import { useSpring, animated } from '@react-spring/web';
 import useMeasure from 'react-use-measure';
 
 import * as builtinCollectionServices from '../../../../services/collection';
+import { isServiceConfigured } from '../../../../services/translate/required_config';
 import { sourceLanguageAtom, targetLanguageAtom } from '../LanguageArea';
 import { useConfig, useToastStyle, useVoice } from '../../../../hooks';
 import { sourceTextAtom, detectLanguageAtom } from '../SourceArea';
@@ -62,7 +63,7 @@ export default function TargetArea(props) {
 
     const [appFontSize] = useConfig('app_font_size', 16);
     const [collectionServiceList] = useConfig('collection_service_list', []);
-    const [ttsServiceList] = useConfig('tts_service_list', ['lingva_tts']);
+    const [ttsServiceList] = useConfig('tts_service_list', ['local_tts']);
     const [translateSecondLanguage] = useConfig('translate_second_language', 'en');
     const [historyDisable] = useConfig('history_disable', false);
     const [isLoading, setIsLoading] = useState(false);
@@ -70,6 +71,7 @@ export default function TargetArea(props) {
 
     const [result, setResult] = useState('');
     const [error, setError] = useState('');
+    const [skipped, setSkipped] = useState(false);
 
     const sourceText = useAtomValue(sourceTextAtom);
     const sourceLanguage = useAtomValue(sourceLanguageAtom);
@@ -98,6 +100,7 @@ export default function TargetArea(props) {
     useEffect(() => {
         setResult('');
         setError('');
+        setSkipped(false);
         if (
             sourceText.trim() !== '' &&
             sourceLanguage &&
@@ -167,6 +170,20 @@ export default function TargetArea(props) {
         translateID[index] = id;
 
         const translateServiceName = getServiceName(currentTranslateServiceInstanceKey);
+
+        // 未配置的内置引擎直接跳过、不发无效请求（配置要求见 services/translate 的 isServiceConfigured）
+        if (!whetherPluginService(currentTranslateServiceInstanceKey)) {
+            const skipCheckConfig = serviceInstanceConfigMap
+                ? serviceInstanceConfigMap[currentTranslateServiceInstanceKey]
+                : null;
+            if (!isServiceConfigured(translateServiceName, skipCheckConfig)) {
+                info(`[${currentTranslateServiceInstanceKey}]skipped: unconfigured, request not sent`);
+                setIsLoading(false);
+                setSkipped(true);
+                setHide(false);
+                return;
+            }
+        }
 
         if (whetherPluginService(currentTranslateServiceInstanceKey)) {
             const pluginInfo = pluginList['translate'][translateServiceName];
@@ -615,6 +632,14 @@ export default function TargetArea(props) {
                                     })}
                             </div>
                         )}
+                        {skipped ? (
+                            // 未配置引擎：不发请求，只留一行灰字提示（比错误卡片轻，但绝不静默）
+                            <p className={`text-[${appFontSize - 2}px] text-default-500`}>
+                                {t('translate.unconfigured_skip')}
+                            </p>
+                        ) : (
+                            <></>
+                        )}
                         {error !== '' ? (
                             // 只显示前 3 行、每行至多 100 字：完整错误（含重复堆栈）写入日志，
                             // 避免超长错误信息刷屏；key 用索引，防止重复行导致 React key 冲突
@@ -802,6 +827,7 @@ export default function TargetArea(props) {
                                     onPress={() => {
                                         setError('');
                                         setResult('');
+                                        setSkipped(false);
                                         translate();
                                     }}
                                 >
