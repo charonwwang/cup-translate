@@ -96,17 +96,26 @@ fn check_available(list: Vec<String>, builtin: Vec<&str>, plugin: Vec<String>, k
     }
 }
 
-/// 上游已停服、或缺少配置就必然失败的内置翻译服务（裸实例名，2026 实测）：
-/// - `deepl`：必须填 API key，空配置必然报错
-/// - `bing`：取 token 的 `edge.microsoft.com/translate/auth` 返回 404
-/// - `lingva`：`lingva.pot-app.com` 域名已不存在（NXDOMAIN）
-/// - `ecdict`：上游 `pot-app.com/api/dict` 返回 404/405
+/// 上游已停服、或缺少配置就必然失败的内置服务（裸实例名，2026 实测）：
+/// - `deepl`：必须填 API key，空配置必然失败（免 key 端点已 429 封禁）
+/// - `bing`：取 token 的 `edge.microsoft.com/translate/auth` 返回 404（代码已删除）
+/// - `lingva`：`lingva.pot-app.com` 域名已不存在 NXDOMAIN（代码已删除）
+/// - `ecdict`：上游 `pot-app.com/api/dict` 返回 404/405（代码已删除）
+/// - TTS `lingva_tts`：默认地址同上已死（代码保留给自建实例，但未配置的裸实例清理）
 /// 对这些「从未配置过」的旧版默认实例做一次性清理，让升级用户也开箱即用。
 /// 用户显式创建的 `name@id` 实例、以及已填写配置的实例一律保留。
+/// 注意：代码已删除的服务（bing/ecdict/lingva）不受此保留规则保护——
+/// `check_service_available()` 会把它们的**所有**实例直接清掉（前端已无对应实现，留着必崩 UI）。
 const UNUSABLE_TRANSLATE_BUILTIN: &[&str] = &["deepl", "bing", "lingva", "ecdict"];
+const UNUSABLE_TTS_BUILTIN: &[&str] = &["lingva_tts"];
 
 fn prune_unconfigured_dead_services() {
-    let Some(value) = get("translate_service_list") else {
+    prune_service_list("translate_service_list", UNUSABLE_TRANSLATE_BUILTIN);
+    prune_service_list("tts_service_list", UNUSABLE_TTS_BUILTIN);
+}
+
+fn prune_service_list(config_key: &str, unusable_builtin: &[&str]) {
+    let Some(value) = get(config_key) else {
         return;
     };
     let Ok(list) = serde_json::from_value::<Vec<String>>(value) else {
@@ -115,10 +124,10 @@ fn prune_unconfigured_dead_services() {
     let new_list: Vec<String> = list
         .iter()
         .filter(|instance| {
-            if instance.contains('@') || !UNUSABLE_TRANSLATE_BUILTIN.contains(&instance.as_str()) {
+            if instance.contains('@') || !unusable_builtin.contains(&instance.as_str()) {
                 return true;
             }
-            // 配置对象非空说明用户配置过（例如填了 DeepL 密钥），保留
+            // 配置对象非空说明用户配置过（例如填了 DeepL 密钥 / 自建实例地址），保留
             match get(instance) {
                 Some(config) => config.as_object().map_or(true, |obj| !obj.is_empty()),
                 None => false,
@@ -128,10 +137,10 @@ fn prune_unconfigured_dead_services() {
         .collect();
     if new_list.len() != list.len() {
         info!(
-            "Prune unusable translate services: {:?} -> {:?}",
-            list, new_list
+            "Prune unusable services in {}: {:?} -> {:?}",
+            config_key, list, new_list
         );
-        set("translate_service_list", new_list);
+        set(config_key, new_list);
     }
 }
 
@@ -153,30 +162,32 @@ pub fn check_service_available() -> Result<(), Error> {
         "volcengine_ocr",
         "volcengine_multi_lang_ocr",
     ];
+    // ⚠️ 必须与前端注册表保持一致，否则用户添加的服务会在下次启动时被静默清掉：
+    //   src/services/translate/index.jsx（builtinServices）/ src/services/tts/index.jsx
+    // 新增引擎时同步补这里（CLAUDE.md §4.1 约定）。代码已删除的服务
+    // （bing/ecdict/lingva）**不要**加回来——保留名单会让残留配置项撑崩服务列表 UI。
     let builtin_translate_list: Vec<&str> = vec![
         "alibaba",
         "baidu",
         "baidu_field",
-        "bing",
         "bing_dict",
         "caiyun",
         "cambridge_dict",
         "chatglm",
         "deepl",
-        "ecdict",
-        "lingva",
         "geminipro",
+        "google",
+        "local_mt",
         "niutrans",
         "ollama",
         "openai",
-        "google",
         "tencent",
         "transmart",
         "volcengine",
         "yandex",
         "youdao",
     ];
-    let builtin_tts_list: Vec<&str> = vec!["lingva_tts"];
+    let builtin_tts_list: Vec<&str> = vec!["lingva_tts", "local_tts"];
     let builtin_collection_list: Vec<&str> = vec!["anki", "eudic"];
 
     let plugin_recognize_list: Vec<String> = get_plugin_list("recognize").unwrap_or_default();
