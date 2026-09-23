@@ -296,6 +296,18 @@
                 "yandex": {
                     "title": "Yandex"
                 },
+                "local_mt": {
+                    "title": "Local Offline Translate",
+                    "threads": "Threads",
+                    "license_en-zh": "EN→ZH · Apache-2.0 · Helsinki-NLP",
+                    "license_zh-en": "ZH→EN · CC-BY-4.0 · attribution: Helsinki-NLP / OPUS-MT",
+                    "checking": "Checking…",
+                    "installed": "Downloaded",
+                    "not_installed": "Not downloaded",
+                    "download_model": "Download model",
+                    "delete_model": "Delete model",
+                    "download_done": "Model downloaded"
+                },
                 "ecdict": {
                     "title": "ECDict(Online)"
                 },
@@ -436,6 +448,10 @@
                 "lingva_tts": {
                     "title": "Lingva",
                     "request_path": "Request Path"
+                },
+                "local_tts": {
+                    "title": "Local TTS",
+                    "help": "Uses the system-installed espeak-ng / espeak / speech-dispatcher to synthesize speech: fully offline, zero configuration. If no engine is found, install espeak-ng (sudo apt install espeak-ng)."
                 }
             },
             "collection": {
@@ -457,6 +473,7 @@
             "speak": "Speak",
             "copy": "Copy",
             "retry": "Try again",
+            "unconfigured_skip": "Not configured, skipped (no request sent)",
             "delete_newline": "Delete Newline",
             "translate_back": "Translation back to the original"
         },

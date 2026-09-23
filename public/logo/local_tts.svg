@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+    <!-- cup-translate 原创图标：本地语音合成（喇叭 + 声波） -->
+    <path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1z" fill="#e8833a" />
+    <path d="M15 9.2a4 4 0 0 1 0 5.6" stroke="#e8833a" stroke-width="1.6" stroke-linecap="round" fill="none" />
+    <path d="M17.6 6.8a7.5 7.5 0 0 1 0 10.4" stroke="#e8833a" stroke-width="1.6" stroke-linecap="round" fill="none" />
+</svg>

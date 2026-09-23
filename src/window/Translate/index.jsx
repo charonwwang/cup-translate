@@ -70,13 +70,13 @@ export default function Translate() {
     const [rememberWindowSize] = useConfig('translate_remember_window_size', false);
     // 默认只启用「开箱即用」的免费引擎（无需 API key、上游可用）：
     // yandex —— 实测可用；google —— 主流兜底（支持 custom_url 镜像）。
-    // deepl 需 API key；lingva / ecdict 上游已停服（2026 实测），均不再默认启用。
+    // deepl 需 API key；lingva / bing / ecdict 上游已停服且无自建入口，代码已删除（2026 实测）。
     const [translateServiceInstanceList, setTranslateServiceInstanceList] = useConfig('translate_service_list', [
         'yandex',
         'google',
     ]);
     const [recognizeServiceInstanceList] = useConfig('recognize_service_list', ['system', 'tesseract']);
-    const [ttsServiceInstanceList] = useConfig('tts_service_list', ['lingva_tts']);
+    const [ttsServiceInstanceList] = useConfig('tts_service_list', ['local_tts']);
     const [collectionServiceInstanceList] = useConfig('collection_service_list', []);
     const [hideLanguage] = useConfig('hide_language', false);
     const [pined, setPined] = useState(false);

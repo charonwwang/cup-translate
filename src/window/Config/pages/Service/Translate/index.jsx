@@ -25,7 +25,7 @@ export default function Translate(props) {
     // now it's service instance list
     // 默认只启用「开箱即用」的免费引擎（无需 API key、上游可用）：
     // yandex —— 实测可用；google —— 主流兜底（支持 custom_url 镜像）。
-    // deepl 需 API key；lingva / ecdict 上游已停服（2026 实测），均不再默认启用。
+    // deepl 需 API key；lingva / bing / ecdict 上游已停服且无自建入口，代码已删除（2026 实测）。
     const [translateServiceInstanceList, setTranslateServiceInstanceList] = useConfig('translate_service_list', [
         'yandex',
         'google',

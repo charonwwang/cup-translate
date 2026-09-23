@@ -296,6 +296,18 @@
                 "yandex": {
                     "title": "Yandex"
                 },
+                "local_mt": {
+                    "title": "本地离线翻译",
+                    "threads": "推理线程数",
+                    "license_en-zh": "英译中 · Apache-2.0 · Helsinki-NLP",
+                    "license_zh-en": "中译英 · CC-BY-4.0 · 译文需署名 Helsinki-NLP / OPUS-MT",
+                    "checking": "检查中…",
+                    "installed": "已下载",
+                    "not_installed": "未下载",
+                    "download_model": "下载模型",
+                    "delete_model": "删除模型",
+                    "download_done": "模型下载完成"
+                },
                 "ecdict": {
                     "title": "ECDict(在线)"
                 },
@@ -436,6 +448,10 @@
                 "lingva_tts": {
                     "title": "Lingva",
                     "request_path": "请求地址"
+                },
+                "local_tts": {
+                    "title": "本地语音合成",
+                    "help": "使用系统已安装的 espeak-ng / espeak / speech-dispatcher 合成语音：完全离线、零配置。若提示未找到引擎，请安装 espeak-ng（sudo apt install espeak-ng）。"
                 }
             },
             "collection": {
@@ -457,6 +473,7 @@
             "speak": "朗读",
             "copy": "复制",
             "retry": "重试",
+            "unconfigured_skip": "未配置，已跳过（未发送请求）",
             "delete_newline": "删除换行",
             "translate_back": "翻译回原文"
         },
