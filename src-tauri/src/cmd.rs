@@ -8,6 +8,38 @@ use serde_json::{json, Value};
 use std::io::Read;
 use tauri::Manager;
 
+const PLUGIN_TYPES: &[&str] = &["recognize", "translate", "tts", "collection"];
+
+fn valid_plugin_type(value: &str) -> bool {
+    PLUGIN_TYPES.contains(&value)
+}
+
+fn valid_plugin_name(value: &str) -> bool {
+    value.starts_with("plugin")
+        && !value.is_empty()
+        && value
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
+}
+
+fn crop_in_bounds(
+    left: u32,
+    top: u32,
+    width: u32,
+    height: u32,
+    image_width: u32,
+    image_height: u32,
+) -> bool {
+    width > 0
+        && height > 0
+        && left
+            .checked_add(width)
+            .is_some_and(|right| right <= image_width)
+        && top
+            .checked_add(height)
+            .is_some_and(|bottom| bottom <= image_height)
+}
+
 #[tauri::command]
 pub fn get_text(state: tauri::State<StringWrapper>) -> String {
     return state.0.lock().unwrap().to_string();
@@ -21,32 +53,30 @@ pub fn reload_store() {
 }
 
 #[tauri::command]
-pub fn cut_image(left: u32, top: u32, width: u32, height: u32, app_handle: tauri::AppHandle) {
+pub fn cut_image(
+    left: u32,
+    top: u32,
+    width: u32,
+    height: u32,
+    app_handle: tauri::AppHandle,
+) -> Result<(), Error> {
     use dirs::cache_dir;
-    use image::GenericImage;
     info!("Cut image: {}x{}+{}+{}", width, height, left, top);
-    let mut app_cache_dir_path = cache_dir().expect("Get Cache Dir Failed");
+    let mut app_cache_dir_path =
+        cache_dir().ok_or_else(|| Error::Error("Get Cache Dir Failed".into()))?;
     app_cache_dir_path.push(&app_handle.config().tauri.bundle.identifier);
     app_cache_dir_path.push("pot_screenshot.png");
-    if !app_cache_dir_path.exists() {
-        return;
+    let img = image::open(&app_cache_dir_path)?;
+    if !crop_in_bounds(left, top, width, height, img.width(), img.height()) {
+        return Err(Error::Error(
+            "Screenshot crop is outside image bounds".into(),
+        ));
     }
-    let mut img = match image::open(&app_cache_dir_path) {
-        Ok(v) => v,
-        Err(e) => {
-            error!("{:?}", e.to_string());
-            return;
-        }
-    };
-    let img2 = img.sub_image(left, top, width, height);
+    let img2 = img.crop_imm(left, top, width, height);
     app_cache_dir_path.pop();
     app_cache_dir_path.push("pot_screenshot_cut.png");
-    match img2.to_image().save(&app_cache_dir_path) {
-        Ok(_) => {}
-        Err(e) => {
-            error!("{:?}", e.to_string());
-        }
-    }
+    img2.save(&app_cache_dir_path)?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -55,13 +85,22 @@ pub fn get_base64(app_handle: tauri::AppHandle) -> String {
     use dirs::cache_dir;
     use std::fs::File;
     use std::io::Read;
-    let mut app_cache_dir_path = cache_dir().expect("Get Cache Dir Failed");
+    let Some(mut app_cache_dir_path) = cache_dir() else {
+        error!("Get Cache Dir Failed");
+        return String::new();
+    };
     app_cache_dir_path.push(&app_handle.config().tauri.bundle.identifier);
     app_cache_dir_path.push("pot_screenshot_cut.png");
     if !app_cache_dir_path.exists() {
         return "".to_string();
     }
-    let mut file = File::open(app_cache_dir_path).unwrap();
+    let mut file = match File::open(app_cache_dir_path) {
+        Ok(file) => file,
+        Err(error) => {
+            error!("Failed to open cropped screenshot: {}", error);
+            return String::new();
+        }
+    };
     let mut vec = Vec::new();
     match file.read_to_end(&mut vec) {
         Ok(_) => {}
@@ -81,15 +120,22 @@ pub fn copy_img(app_handle: tauri::AppHandle, width: usize, height: usize) -> Re
     use image::ImageReader;
     use std::borrow::Cow;
 
-    let mut app_cache_dir_path = cache_dir().expect("Get Cache Dir Failed");
+    let mut app_cache_dir_path =
+        cache_dir().ok_or_else(|| Error::Error("Get Cache Dir Failed".into()))?;
     app_cache_dir_path.push(&app_handle.config().tauri.bundle.identifier);
     app_cache_dir_path.push("pot_screenshot_cut.png");
     let data = ImageReader::open(app_cache_dir_path)?.decode()?;
+    if (width, height) != (data.width() as usize, data.height() as usize) {
+        return Err(Error::Error(
+            "Screenshot dimensions changed before copying".into(),
+        ));
+    }
+    let rgba = data.to_rgba8().into_raw();
 
     let img = ImageData {
         width,
         height,
-        bytes: Cow::from(data.as_bytes()),
+        bytes: Cow::from(rgba),
     };
     let result = Clipboard::new()?.set_image(img)?;
     Ok(result)
@@ -97,18 +143,18 @@ pub fn copy_img(app_handle: tauri::AppHandle, width: usize, height: usize) -> Re
 
 #[tauri::command]
 pub fn set_proxy() -> Result<bool, ()> {
-    let host = match get("proxy_host") {
-        Some(v) => v.as_str().unwrap().to_string(),
-        None => return Err(()),
-    };
-    let port = match get("proxy_port") {
-        Some(v) => v.as_i64().unwrap(),
-        None => return Err(()),
-    };
-    let no_proxy = match get("no_proxy") {
-        Some(v) => v.as_str().unwrap().to_string(),
-        None => return Err(()),
-    };
+    let host = get("proxy_host")
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .filter(|value| !value.is_empty())
+        .ok_or(())?;
+    let port = get("proxy_port")
+        .and_then(|value| value.as_u64())
+        .and_then(|value| u16::try_from(value).ok())
+        .filter(|value| *value != 0)
+        .ok_or(())?;
+    let no_proxy = get("no_proxy")
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .unwrap_or_default();
     let proxy = format!("http://{}:{}", host, port);
 
     std::env::set_var("http_proxy", &proxy);
@@ -132,15 +178,18 @@ pub fn install_plugin(path_list: Vec<String>) -> Result<i32, Error> {
     let mut success_count = 0;
 
     for path in path_list {
-        if !path.ends_with("potext") {
+        let path = std::path::Path::new(&path);
+        if path.extension().and_then(|extension| extension.to_str()) != Some("potext") {
             continue;
         }
-        let path = std::path::Path::new(&path);
-        let file_name = path.file_name().unwrap().to_str().unwrap();
-        let file_name = file_name.replace(".potext", "");
-        if !file_name.starts_with("plugin") {
+        let file_name = path
+            .file_stem()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| Error::Error("Invalid Plugin: invalid file name".into()))?;
+        if !valid_plugin_name(file_name) {
             return Err(Error::Error(
-                "Invalid Plugin: file name must start with plugin".into(),
+                "Invalid Plugin: file name must start with plugin and contain only letters, numbers, '-' or '_'"
+                    .into(),
             ));
         }
 
@@ -160,6 +209,11 @@ pub fn install_plugin(path_list: Vec<String>) -> Result<i32, Error> {
         }
         if zip.by_name("main.js").is_err() {
             return Err(Error::Error("Invalid Plugin: miss main.js".into()));
+        }
+        if !valid_plugin_type(&plugin_type) {
+            return Err(Error::Error(
+                "Invalid Plugin: unsupported plugin type".into(),
+            ));
         }
         let config_path = dirs::config_dir().unwrap();
         let config_path =
@@ -185,6 +239,10 @@ pub fn run_binary(
     #[cfg(target_os = "windows")]
     use std::os::windows::process::CommandExt;
     use std::process::Command;
+
+    if !valid_plugin_type(&plugin_type) || !valid_plugin_name(&plugin_name) {
+        return Err(Error::Error("Invalid plugin path".into()));
+    }
 
     let config_path = dirs::config_dir().unwrap();
     let config_path = config_path.join(APP.get().unwrap().config().tauri.bundle.identifier.clone());
@@ -221,5 +279,27 @@ pub fn open_devtools(window: tauri::Window) {
         window.open_devtools();
     } else {
         window.close_devtools();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{crop_in_bounds, valid_plugin_name, valid_plugin_type};
+
+    #[test]
+    fn screenshot_crop_rejects_empty_overflowing_and_out_of_bounds_rectangles() {
+        assert!(crop_in_bounds(10, 20, 30, 40, 100, 100));
+        assert!(!crop_in_bounds(10, 20, 0, 40, 100, 100));
+        assert!(!crop_in_bounds(90, 20, 30, 40, 100, 100));
+        assert!(!crop_in_bounds(u32::MAX, 20, 30, 40, 100, 100));
+    }
+
+    #[test]
+    fn plugin_paths_cannot_escape_the_plugin_directory() {
+        assert!(valid_plugin_type("translate"));
+        assert!(!valid_plugin_type("../translate"));
+        assert!(valid_plugin_name("plugin-openai_2"));
+        assert!(!valid_plugin_name("../../plugin-evil"));
+        assert!(!valid_plugin_name("plugin/evil"));
     }
 }

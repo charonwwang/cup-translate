@@ -9,26 +9,34 @@ pub fn system_ocr(app_handle: tauri::AppHandle, lang: &str) -> Result<String, St
     use windows::Media::Ocr::OcrEngine;
     use windows::Storage::{FileAccessMode, StorageFile};
 
-    let mut app_cache_dir_path = cache_dir().expect("Get Cache Dir Failed");
+    let mut app_cache_dir_path = cache_dir().ok_or("Get Cache Dir Failed")?;
     app_cache_dir_path.push(&app_handle.config().tauri.bundle.identifier);
     app_cache_dir_path.push("pot_screenshot_cut.png");
 
     let path = app_cache_dir_path.to_string_lossy().replace("\\\\?\\", "");
 
     let file = StorageFile::GetFileFromPathAsync(&HSTRING::from(path))
-        .unwrap()
+        .map_err(|e| e.to_string())?
         .get()
-        .unwrap();
+        .map_err(|e| e.to_string())?;
 
     let bitmap = BitmapDecoder::CreateWithIdAsync(
-        BitmapDecoder::PngDecoderId().unwrap(),
-        &file.OpenAsync(FileAccessMode::Read).unwrap().get().unwrap(),
+        BitmapDecoder::PngDecoderId().map_err(|e| e.to_string())?,
+        &file
+            .OpenAsync(FileAccessMode::Read)
+            .map_err(|e| e.to_string())?
+            .get()
+            .map_err(|e| e.to_string())?,
     )
-    .unwrap()
+    .map_err(|e| e.to_string())?
     .get()
-    .unwrap();
+    .map_err(|e| e.to_string())?;
 
-    let bitmap = bitmap.GetSoftwareBitmapAsync().unwrap().get().unwrap();
+    let bitmap = bitmap
+        .GetSoftwareBitmapAsync()
+        .map_err(|e| e.to_string())?
+        .get()
+        .map_err(|e| e.to_string())?;
 
     let engine = match lang {
         "auto" => OcrEngine::TryCreateFromUserProfileLanguages(),
@@ -44,11 +52,11 @@ pub fn system_ocr(app_handle: tauri::AppHandle, lang: &str) -> Result<String, St
     match engine {
         Ok(v) => Ok(v
             .RecognizeAsync(&bitmap)
-            .unwrap()
+            .map_err(|e| e.to_string())?
             .get()
-            .unwrap()
+            .map_err(|e| e.to_string())?
             .Text()
-            .unwrap()
+            .map_err(|e| e.to_string())?
             .to_string_lossy()),
         Err(e) => {
             if e.to_string().contains("0x00000000") {
@@ -63,7 +71,7 @@ pub fn system_ocr(app_handle: tauri::AppHandle, lang: &str) -> Result<String, St
 #[tauri::command(async)]
 #[cfg(target_os = "macos")]
 pub fn system_ocr(app_handle: tauri::AppHandle, lang: &str) -> Result<String, String> {
-    let mut app_cache_dir_path = cache_dir().expect("Get Cache Dir Failed");
+    let mut app_cache_dir_path = cache_dir().ok_or("Get Cache Dir Failed")?;
     app_cache_dir_path.push(&app_handle.config().tauri.bundle.identifier);
     app_cache_dir_path.push("pot_screenshot_cut.png");
 
@@ -78,15 +86,21 @@ pub fn system_ocr(app_handle: tauri::AppHandle, lang: &str) -> Result<String, St
 
     match std::process::Command::new("chmod")
         .arg("+x")
-        .arg(bin_path.to_str().unwrap())
+        .arg(&bin_path)
         .output()
     {
-        Ok(_) => {}
+        Ok(status) if status.status.success() => {}
+        Ok(status) => {
+            return Err(format!(
+                "Failed to make OCR binary executable: {}",
+                status.status
+            ))
+        }
         Err(e) => return Err(e.to_string()),
     }
 
     let output = match std::process::Command::new(bin_path)
-        .arg(app_cache_dir_path.to_str().unwrap())
+        .arg(&app_cache_dir_path)
         .arg(lang)
         .output()
     {
@@ -106,20 +120,16 @@ pub fn system_ocr(app_handle: tauri::AppHandle, lang: &str) -> Result<String, St
 #[tauri::command(async)]
 #[cfg(target_os = "linux")]
 pub fn system_ocr(app_handle: tauri::AppHandle, lang: &str) -> Result<String, String> {
-    let mut app_cache_dir_path = cache_dir().expect("Get Cache Dir Failed");
+    let mut app_cache_dir_path = cache_dir().ok_or("Get Cache Dir Failed")?;
     app_cache_dir_path.push(&app_handle.config().tauri.bundle.identifier);
     app_cache_dir_path.push("pot_screenshot_cut.png");
-    let mut args = ["", ""];
+    let mut command = std::process::Command::new("tesseract");
+    command.arg(&app_cache_dir_path).arg("stdout");
     if lang != "auto" {
-        args = ["-l", lang];
+        command.arg("-l").arg(lang);
     }
 
-    let output = match std::process::Command::new("tesseract")
-        .arg(app_cache_dir_path.to_str().unwrap())
-        .arg("stdout")
-        .args(args)
-        .output()
-    {
+    let output = match command.output() {
         Ok(v) => v,
         Err(e) => {
             if e.to_string().contains("os error 2") {

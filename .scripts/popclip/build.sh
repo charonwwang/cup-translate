@@ -1,7 +1,9 @@
-rm Pot.popclipextz
-mkdir Pot.popclipext
-cp Config.plist Pot.popclipext
-cp Pot.png Pot.popclipext
-cp Pot.sh Pot.popclipext
-zip -r Pot.popclipextz Pot.popclipext
-rm -r Pot.popclipext
+set -e
+rm -f cup-translate.popclipextz
+mkdir cup-translate.popclipext
+cp Config.plist cup-translate.popclipext
+cp ../../src-tauri/icons/icon.png cup-translate.popclipext/cup-translate.png
+cp Pot.sh cup-translate.popclipext/cup-translate.sh
+chmod +x cup-translate.popclipext/cup-translate.sh
+zip -r cup-translate.popclipextz cup-translate.popclipext
+rm -r cup-translate.popclipext

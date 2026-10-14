@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>cup-translate · UI 重构原型（v2 设计语言）</title>
+<link rel="stylesheet" href="tokens.css">
+</head>
+<body>
+<div class="stage">
+<div class="wrap">
+
+  <!-- 顶部：视图切换（原型外壳，不属于产品 UI） -->
+  <div class="topbar">
+    <div class="logo">
+      <svg viewBox="0 0 32 32" fill="none">
+        <path d="M8 12h13v7a6 6 0 0 1-6 6h-1a6 6 0 0 1-6-6z" fill="#fff" fill-opacity=".95"/>
+        <path d="M21 14h3a3.5 3.5 0 0 1 0 7h-3" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>
+        <path d="M11.5 6.5v2.8M16 5.5v3.8M20.5 6.5v2.8" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div>
+      <h1>cup-translate · UI 重构原型</h1>
+      <div class="sub">v2 设计语言 · 暖色强调 + 卡片化信息层级 · 未改动任何业务逻辑，仅供 review</div>
+    </div>
+    <div class="spacer"></div>
+    <div class="seg" id="view-seg">
+      <button data-view="settings" class="on">设置窗口</button>
+      <button data-view="popup">翻译弹窗</button>
+    </div>
+    <div class="seg">
+      <button data-theme-btn="light" class="on">浅色</button>
+      <button data-theme-btn="dark">深色</button>
+    </div>
+  </div>
+
+  <!-- ==================== 设置窗口 ==================== -->
+  <div id="stage" class="section">
+    <p class="lead">导航从「8 个平铺大按钮」改为<b>图标+标签+快捷键数字</b>的紧凑列表；标题栏承担窗口控制，右侧内容区统一为「标题 → 卡片分组 → 行式设置项」，每行左说明右控件。</p>
+
+    <div class="Win">
+      <div class="Win-top">
+        <span class="tb-title">设置</span>
+        <div class="Win-wc">
+          <button title="最小化"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 12h14"/></svg></button>
+          <button title="最大化"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="5.5" y="5.5" width="13" height="13" rx="2"/></svg></button>
+          <button class="x" title="关闭"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        </div>
+      </div>
+
+      <aside class="Side">
+        <div class="Side-brand">
+          <div class="logo" style="width:26px;height:26px;border-radius:8px;box-shadow:none">
+            <svg viewBox="0 0 32 32" width="15" height="15" fill="none">
+              <path d="M8 12h13v7a6 6 0 0 1-6 6h-1a6 6 0 0 1-6-6z" fill="#fff" fill-opacity=".95"/>
+              <path d="M21 14h3a3.5 3.5 0 0 1 0 7h-3" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div>
+            <div style="font-size:13px;font-weight:650;letter-spacing:-.01em">cup-translate</div>
+            <div style="font-size:11px;color:var(--fg-3);margin-top:-1px">轻量划词翻译</div>
+          </div>
+        </div>
+        <div class="Side-search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input placeholder="搜索设置项…">
+        </div>
+        <nav id="nav"></nav>
+        <div class="Side-foot">
+          <div class="update">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M4.5 19.5h15"/></svg>
+            有可用更新 v3.1.0
+          </div>
+          <div class="ver">v3.0.7 · GPL-3.0</div>
+        </div>
+      </aside>
+
+      <main class="Main">
+        <div class="Main-head">
+          <h2 id="title">常规</h2>
+          <p id="sub"></p>
+        </div>
+        <div class="Main-body" id="page"></div>
+      </main>
+    </div>
+
+    <!-- 备选方案：标签下拉 -->
+    <div class="section">
+      <h2>方案对照</h2>
+      <p class="lead">左侧列表版（当前稿）与「标题下拉」版的区别：前者可容纳搜索、快捷键数字与底部更新位；后者把导航压缩进标题，更省空间但分区多了之后不好扫。</p>
+      <div class="frames" style="align-items:flex-start">
+        <div class="frame" style="min-width:420px">
+          <div class="cap">当前稿 · 侧栏列表</div>
+          <div style="display:flex;align-items:center;gap:8px;background:var(--surface-2);border-radius:10px;padding:8px 12px;border:1px solid var(--border)">
+            <span class="logo" style="width:22px;height:22px;border-radius:7px;box-shadow:none;display:inline-grid"></span>
+            <span style="font-size:13px;font-weight:600">设置</span>
+            <span style="color:var(--fg-3);font-size:12px">/ 常规</span>
+            <span class="spacer" style="flex:1"></span>
+            <span style="font-size:11px;color:var(--fg-3)">侧栏承载导航 + 搜索 + 版本</span>
+          </div>
+        </div>
+        <div class="frame" style="min-width:420px">
+          <div class="cap">备选 · 标题下拉</div>
+          <div style="position:relative">
+            <div style="display:flex;align-items:center;gap:8px;background:var(--surface-2);border-radius:10px;padding:8px 12px;border:1px solid var(--border)">
+              <span class="logo" style="width:22px;height:22px;border-radius:7px;box-shadow:none;display:inline-grid"></span>
+              <span style="font-size:13px;font-weight:600">常规</span>
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--fg-3)"><path d="m6 9 6 6 6-6"/></svg>
+              <span class="spacer" style="flex:1"></span>
+              <span style="font-size:11px;color:var(--fg-3)">内容区更宽，但隐藏了分区全貌</span>
+            </div>
+            <div id="nav-di" style="position:absolute;top:44px;left:0;width:220px;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--sh-3);padding:6px;z-index:5"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 翻译弹窗 ==================== -->
+  <div id="stage-pop" class="section hidden">
+    <p class="lead">弹窗从「三块卡片垂直堆叠 + 右上角两个孤立图标」改为<b>聚焦式布局</b>：源文是唯一输入焦点，语言条紧贴其下，译文卡片以引擎为单位排列，首个引擎为视觉主角；底部固定操作条不再随内容滚动。</p>
+
+    <div class="seg" id="pop-seg" style="display:inline-flex;margin-bottom:20px">
+      <button data-st="idle" class="on">常规翻译</button>
+      <button data-st="dict">词典结果</button>
+      <button data-st="loading">加载中</button>
+      <button data-st="error">失败重试</button>
+    </div>
+
+    <div class="panel-group" style="align-items:flex-start">
+      <div class="Pop">
+        <div class="Pop-head">
+          <span class="badge"><span class="dot"></span>已翻译 · 142 ms</span>
+          <span class="spacer"></span>
+          <button class="icon-btn" title="替换引擎"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 6.3"/><path d="M20 5.5V11h-5.5"/></svg></button>
+          <button class="icon-btn" title="设置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.5 12a7.5 7.5 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7.5 7.5 0 0 0-2-1.2l-.4-2.6h-4l-.4 2.6a7.5 7.5 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6a7.5 7.5 0 0 0 0 2.4l-2 1.6 2 3.4 2.4-1a7.5 7.5 0 0 0 2 1.2l.4 2.6h4l.4-2.6a7.5 7.5 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.06-.4.1-.8.1-1.2z"/></svg></button>
+          <button class="icon-btn" title="置顶"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3.5h6l-.8 5.2 2.6 2.6H7.2l2.6-2.6z"/><path d="M12 11.3V20"/></svg></button>
+          <button class="icon-btn" title="关闭"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        </div>
+        <div class="Pop-body" id="pop-body"></div>
+        <div class="Pop-foot">
+          <button class="btn btn-sm btn-ghost">朗读</button>
+          <button class="btn btn-sm btn-ghost">复制译文</button>
+          <button class="btn btn-sm btn-ghost">存生词本</button>
+          <span class="spacer"></span>
+          <span class="hint">Ctrl+Shift+S 交换</span>
+        </div>
+      </div>
+
+      <div style="flex:1;min-width:320px;max-width:520px">
+        <div class="note" style="margin-top:0">
+          <b>交互逻辑改动</b><br>
+          1. 源文块是唯一可编辑焦点，其余全部只读；点击译文自动全选该段。<br>
+          2. 语言条与源文同宽、紧贴其下，交换按钮居中；「翻译」按钮只在输入态出现（自动翻译时可以省掉）。<br>
+          3. 每个引擎一张结果卡，<b>首位引擎为主角</b>（描边+更大字号），失败/未配置不再展开空卡片，只留一行状态。<br>
+          4. 卡片上的操作默认隐藏，hover 才出现，静默态更干净。<br>
+          5. 底部操作条固定，不随内容滚动；关闭/置顶等窗口级操作上移到标题栏。
+        </div>
+        <div class="note">
+          <b>与现有实现的对应关系</b><br>
+          · 源文块 ← <code>SourceArea</code>；语言条 ← <code>LanguageArea</code>；结果卡 ← <code>TargetArea</code>（拖拽排序保留，手柄放在卡片标题栏）。<br>
+          · 现有 <code>hide_source</code> / <code>hide_language</code> 开关可直接映射为「隐藏源文块」「隐藏语言条」。<br>
+          · 置顶/关闭仍调用同一批 <code>appWindow</code> API，只是换了位置与样式。
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>状态栏渲染样式</h2>
+      <p class="lead">对应设置页里的 <code>statusBar</code> 风格选项。三种风格共用同一份样式令牌，切换时不会跳色。</p>
+      <div class="frames" id="frames"></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>说明</h2>
+    <div class="note">
+      本原型是<b>纯静态演示</b>：只还原视觉与交互意图，不含真实翻译、热键注册或 IPC 调用。
+      评审通过后再按此方案改 <code>src/window/**</code>，届时替换 NextUI 组件、收敛 <code>tailwind.config.cjs</code> 的色板。
+      原型文件位于 <code>docs/design/ui-redesign/</code>，不参与构建，不影响现有产物。
+    </div>
+  </div>
+
+</div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

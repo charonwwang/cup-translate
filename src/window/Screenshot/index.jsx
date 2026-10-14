@@ -6,6 +6,7 @@ import { appWindow } from '@tauri-apps/api/window';
 import { emit } from '@tauri-apps/api/event';
 import { warn } from 'tauri-plugin-log-api';
 import { invoke } from '@tauri-apps/api';
+import { cropRectFromPointer } from '../../utils/screenshot-geometry';
 
 export default function Screenshot() {
     const [imgurl, setImgurl] = useState('');
@@ -19,16 +20,21 @@ export default function Screenshot() {
     const imgRef = useRef();
 
     useEffect(() => {
-        currentMonitor().then((monitor) => {
-            const position = monitor.position;
-            invoke('screenshot', { x: position.x, y: position.y }).then(() => {
-                appCacheDir().then((appCacheDirPath) => {
-                    join(appCacheDirPath, 'pot_screenshot.png').then((filePath) => {
-                        setImgurl(convertFileSrc(filePath));
-                    });
-                });
-            });
-        });
+        let active = true;
+        async function capture() {
+            try {
+                const monitor = await currentMonitor();
+                if (!monitor) throw new Error('No current monitor');
+                await invoke('screenshot', { x: monitor.position.x, y: monitor.position.y });
+                const filePath = await join(await appCacheDir(), 'pot_screenshot.png');
+                if (active) setImgurl(convertFileSrc(filePath));
+            } catch (error) {
+                await warn(`Screenshot failed: ${error}`);
+                if (active) await appWindow.close();
+            }
+        }
+        void capture();
+        return () => { active = false; };
     }, []);
 
     return (
@@ -74,24 +80,26 @@ export default function Screenshot() {
                     }
                 }}
                 onMouseUp={async (e) => {
-                    appWindow.hide();
+                    await appWindow.hide();
                     setIsDown(false);
                     setIsMoved(false);
-                    const imgWidth = imgRef.current.naturalWidth;
-                    const dpi = imgWidth / screen.width;
-                    const left = Math.floor(Math.min(mouseDownX, e.clientX) * dpi);
-                    const top = Math.floor(Math.min(mouseDownY, e.clientY) * dpi);
-                    const right = Math.floor(Math.max(mouseDownX, e.clientX) * dpi);
-                    const bottom = Math.floor(Math.max(mouseDownY, e.clientY) * dpi);
-                    const width = right - left;
-                    const height = bottom - top;
-                    if (width <= 0 || height <= 0) {
-                        warn('Screenshot area is too small');
+                    const image = imgRef.current;
+                    const crop = cropRectFromPointer(
+                        mouseDownX, mouseDownY, e.clientX, e.clientY,
+                        image?.getBoundingClientRect(), image?.naturalWidth, image?.naturalHeight
+                    );
+                    if (!crop) {
+                        await warn('Screenshot area is too small');
                         await appWindow.close();
                     } else {
-                        await invoke('cut_image', { left, top, width, height });
-                        await emit('success');
-                        await appWindow.close();
+                        try {
+                            await invoke('cut_image', crop);
+                            await emit('success');
+                        } catch (error) {
+                            await warn(`Screenshot crop failed: ${error}`);
+                        } finally {
+                            await appWindow.close();
+                        }
                     }
                 }}
             />

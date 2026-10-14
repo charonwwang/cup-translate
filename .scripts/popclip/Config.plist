@@ -6,30 +6,30 @@
         <array>
             <dict>
                 <key>Shell Script File</key>
-                <string>Pot.sh</string>
+                <string>cup-translate.sh</string>
                 <key>Image File</key>
-                <string>Pot.png</string>
+                <string>cup-translate.png</string>
                 <key>Title</key>
-                <string>Pot Translate</string>
+                <string>cup-translate</string>
             </dict>
         </array>
         <key>Credits</key>
         <array>
             <dict>
                 <key>Link</key>
-                <string>https://pot-app.com/</string>
+                <string>https://github.com/charonwwang/cup-translate</string>
                 <key>Name</key>
-                <string>pot-app</string>
+                <string>cup-translate</string>
             </dict>
         </array>
         <key>Extension Description</key>
-        <string>Translate text with Pot.</string>
+        <string>Translate selected text with cup-translate.</string>
         <key>Extension Identifier</key>
-        <string>com.pot-app.popclip.extension.desktop</string>
+        <string>com.cup-translate.popclip.extension.desktop</string>
         <key>Extension Image File</key>
-        <string>Pot.png</string>
+        <string>cup-translate.png</string>
         <key>Extension Name</key>
-        <string>Pot</string>
+        <string>cup-translate</string>
         <key>Required OS Version</key>
         <string>10.13</string>
     </dict>

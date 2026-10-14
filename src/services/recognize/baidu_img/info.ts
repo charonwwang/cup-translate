@@ -1,6 +1,6 @@
 export const info = {
     name: 'baidu_img_ocr',
-    icon: 'logo/baidu.svg',
+    icon: '/logo/baidu.svg',
 };
 
 export enum Language {

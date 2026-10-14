@@ -6,13 +6,15 @@ on:
     push:
         tags: ["v*"]
     workflow_dispatch:
-permissions: write-all
+permissions:
+    contents: write
 
 jobs:
     change-version:
         runs-on: ubuntu-latest
         outputs:
             version: ${{ steps.outputstep.outputs.VERSION }}
+            signing: ${{ steps.signing.outputs.ENABLED }}
         steps:
             - name: Checkout
               uses: actions/checkout@v4
@@ -25,22 +27,31 @@ jobs:
                   sudo apt-get install -y git
             - id: outputstep
               run: |
-                  echo "VERSION=$(git describe --tags | sed 's/-[0-9]*-.*//g')" >> "$GITHUB_OUTPUT"
+                  echo "VERSION=$(git describe --tags | sed -E 's/^v//; s/-[0-9]+-.*$//')" >> "$GITHUB_OUTPUT"
+            - id: signing
+              env:
+                  TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+              run: |
+                  if [ -n "$TAURI_PRIVATE_KEY" ]; then echo 'ENABLED=true' >> "$GITHUB_OUTPUT"; fi
             - name: Change Version for Windows
               run: |
-                  sed -i "s/\"version\":.*/\"version\": \"$(git describe --tags | sed 's/-[0-9]*-.*//g')\",/g" package.json
+                  sed -i "s/\"version\":.*/\"version\": \"$(git describe --tags | sed -E 's/^v//; s/-[0-9]+-.*$//')\",/g" package.json
 
-                  sed -i "s/\"version\":.*/\"version\": \"$(git describe --tags | sed 's/-[0-9]*-.*//g')\"/g" src-tauri/tauri.conf.json
+                  sed -i "s/\"version\":.*/\"version\": \"$(git describe --tags | sed -E 's/^v//; s/-[0-9]+-.*$//')\"/g" src-tauri/tauri.conf.json
 
-                  sed -i "s/version = \"0.0.0\"/version = \"$(git describe --tags | sed 's/-[0-9]*-.*//g')\"/g" src-tauri/Cargo.toml
+                  sed -i -E "s/^version = \"[^\"]+\"/version = \"$(git describe --tags | sed -E 's/^v//; s/-[0-9]+-.*$//')\"/" src-tauri/Cargo.toml
 
-                  echo $(git describe --tags | sed 's/-[0-9]*-.*//g')
+                  git describe --tags | sed -E 's/^v//; s/-[0-9]+-.*$//'
 
             - name: Upload Artifacts for Windows
               uses: actions/upload-artifact@v4
               with:
                   name: source
-                  path: ./*
+                  path: |
+                      .
+                      !.git
+                      !node_modules
+                      !src-tauri/target
                   include-hidden-files: true
                   if-no-files-found: error
 
@@ -64,37 +75,40 @@ jobs:
             - name: Upload Artifacts
               uses: actions/upload-artifact@v4
               with:
-                  name: Pot.popclipextz
-                  path: .scripts/popclip/Pot.popclipextz
+                  name: cup-translate.popclipextz
+                  path: .scripts/popclip/cup-translate.popclipextz
                   if-no-files-found: error
             - name: Upload Artifacts
               uses: actions/upload-artifact@v4
               with:
-                  name: pot.pbar
-                  path: .scripts/snipdo/pot.pbar
+                  name: cup-translate.pbar
+                  path: .scripts/snipdo/cup-translate.pbar
                   if-no-files-found: error
             - name: Upload Release
               if: startsWith(github.ref, 'refs/tags')
-              uses: softprops/action-gh-release@v1
+              uses: softprops/action-gh-release@v3
               with:
                   body_path: CHANGELOG
                   token: ${{ secrets.GITHUB_TOKEN }}
-                  files: .scripts/popclip/Pot.popclipextz
+                  files: .scripts/popclip/cup-translate.popclipextz
             - name: Upload Release
               if: startsWith(github.ref, 'refs/tags')
-              uses: softprops/action-gh-release@v1
+              uses: softprops/action-gh-release@v3
               with:
                   body_path: CHANGELOG
                   token: ${{ secrets.GITHUB_TOKEN }}
-                  files: .scripts/snipdo/pot.pbar
+                  files: .scripts/snipdo/cup-translate.pbar
 
     build-for-macos:
         needs: change-version
         strategy:
             fail-fast: false
             matrix:
-                platform: [macos-latest]
-                target: [aarch64-apple-darwin, x86_64-apple-darwin]
+                include:
+                    - platform: macos-15
+                      target: aarch64-apple-darwin
+                    - platform: macos-15-intel
+                      target: x86_64-apple-darwin
 
         runs-on: ${{ matrix.platform }}
         steps:
@@ -104,7 +118,7 @@ jobs:
             - name: Setup Nodejs
               uses: actions/setup-node@v4
               with:
-                  node-version: 21
+                  node-version: 22
             - name: Install Rust Stable
               uses: dtolnay/rust-toolchain@stable
             - name: install dependencies
@@ -115,9 +129,11 @@ jobs:
               with:
                   version: 9
             - name: Install Dependencies
-              run: pnpm install
-            - name: Code Format
-              run: pnpm prettier --write .
+              run: pnpm install --frozen-lockfile
+            - name: Test
+              run: pnpm test
+            - name: Prepare bundled tools
+              run: chmod +x src-tauri/resources/*
             - name: Build and Package
               run: |
                   export TAURI_PRIVATE_KEY="${{ secrets.TAURI_PRIVATE_KEY }}"
@@ -130,19 +146,25 @@ jobs:
                   export APPLE_API_KEY="${{ secrets.APPLE_API_KEY }}"
                   export APPLE_ID="${{ secrets.APPLE_ID }}"
                   export APPLE_PASSWORD="${{ secrets.APPLE_PASSWORD }}"
-                  pnpm tauri build --target ${{ matrix.target }}
-                  sudo chmod +x src-tauri/resources/*
-                  chmod +x src-tauri/resources/*
+                  if [ -n "$TAURI_PRIVATE_KEY" ]; then
+                      pnpm tauri build -b dmg,updater --target ${{ matrix.target }}
+                  else
+                      pnpm tauri build -b dmg --target ${{ matrix.target }}
+                  fi
             - name: Change File Name
               if: matrix.target == 'aarch64-apple-darwin'
               run: |
-                  sudo mv src-tauri/target/aarch64-apple-darwin/release/bundle/macos/cup-translate.app.tar.gz src-tauri/target/aarch64-apple-darwin/release/bundle/macos/cup-translate_${{needs.change-version.outputs.version}}_aarch64.app.tar.gz
-                  sudo mv src-tauri/target/aarch64-apple-darwin/release/bundle/macos/cup-translate.app.tar.gz.sig src-tauri/target/aarch64-apple-darwin/release/bundle/macos/cup-translate_${{needs.change-version.outputs.version}}_aarch64.app.tar.gz.sig
+                  if [ -f src-tauri/target/aarch64-apple-darwin/release/bundle/macos/cup-translate.app.tar.gz ]; then
+                      mv src-tauri/target/aarch64-apple-darwin/release/bundle/macos/cup-translate.app.tar.gz src-tauri/target/aarch64-apple-darwin/release/bundle/macos/cup-translate_${{needs.change-version.outputs.version}}_aarch64.app.tar.gz
+                      mv src-tauri/target/aarch64-apple-darwin/release/bundle/macos/cup-translate.app.tar.gz.sig src-tauri/target/aarch64-apple-darwin/release/bundle/macos/cup-translate_${{needs.change-version.outputs.version}}_aarch64.app.tar.gz.sig
+                  fi
             - name: Change File Name
               if: matrix.target == 'x86_64-apple-darwin'
               run: |
-                  sudo mv src-tauri/target/x86_64-apple-darwin/release/bundle/macos/cup-translate.app.tar.gz src-tauri/target/x86_64-apple-darwin/release/bundle/macos/cup-translate_${{needs.change-version.outputs.version}}_x64.app.tar.gz
-                  sudo mv src-tauri/target/x86_64-apple-darwin/release/bundle/macos/cup-translate.app.tar.gz.sig src-tauri/target/x86_64-apple-darwin/release/bundle/macos/cup-translate_${{needs.change-version.outputs.version}}_x64.app.tar.gz.sig
+                  if [ -f src-tauri/target/x86_64-apple-darwin/release/bundle/macos/cup-translate.app.tar.gz ]; then
+                      mv src-tauri/target/x86_64-apple-darwin/release/bundle/macos/cup-translate.app.tar.gz src-tauri/target/x86_64-apple-darwin/release/bundle/macos/cup-translate_${{needs.change-version.outputs.version}}_x64.app.tar.gz
+                      mv src-tauri/target/x86_64-apple-darwin/release/bundle/macos/cup-translate.app.tar.gz.sig src-tauri/target/x86_64-apple-darwin/release/bundle/macos/cup-translate_${{needs.change-version.outputs.version}}_x64.app.tar.gz.sig
+                  fi
             - name: Upload Artifacts
               uses: actions/upload-artifact@v4
               with:
@@ -153,22 +175,22 @@ jobs:
               uses: actions/upload-artifact@v4
               with:
                   name: macos_${{ matrix.target }}_updater
-                  path: src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app*
-                  if-no-files-found: error
+                  path: src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz*
+                  if-no-files-found: warn
             - name: Upload Release
               if: startsWith(github.ref, 'refs/tags')
-              uses: softprops/action-gh-release@v1
+              uses: softprops/action-gh-release@v3
               with:
                   body_path: CHANGELOG
                   token: ${{ secrets.GITHUB_TOKEN }}
                   files: src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
             - name: Upload Release
               if: startsWith(github.ref, 'refs/tags')
-              uses: softprops/action-gh-release@v1
+              uses: softprops/action-gh-release@v3
               with:
                   body_path: CHANGELOG
                   token: ${{ secrets.GITHUB_TOKEN }}
-                  files: src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app*
+                  files: src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz*
 
     build-for-windows:
         needs: change-version
@@ -195,7 +217,7 @@ jobs:
             - name: Setup Nodejs
               uses: actions/setup-node@v4
               with:
-                  node-version: 21
+                  node-version: 22
             - name: Install Rust Stable
               uses: dtolnay/rust-toolchain@stable
             - name: install dependencies
@@ -207,14 +229,18 @@ jobs:
               with:
                   version: 9
             - name: Install Dependencies
-              run: pnpm install
-            - name: Code Format
-              run: pnpm prettier --write .
+              run: pnpm install --frozen-lockfile
+            - name: Test
+              run: pnpm test
             - name: Build and Package
               run: |
                   $env:TAURI_PRIVATE_KEY="${{ secrets.TAURI_PRIVATE_KEY }}"
                   $env:TAURI_KEY_PASSWORD="${{ secrets.TAURI_KEY_PASSWORD }}"
-                  pnpm tauri build -b nsis,updater --target ${{ matrix.target }}
+                  if ($env:TAURI_PRIVATE_KEY) {
+                      pnpm tauri build -b nsis,updater --target ${{ matrix.target }}
+                  } else {
+                      pnpm tauri build -b nsis --target ${{ matrix.target }}
+                  }
             - name: Upload Artifacts
               uses: actions/upload-artifact@v4
               with:
@@ -223,7 +249,7 @@ jobs:
                   if-no-files-found: error
             - name: Upload Release
               if: startsWith(github.ref, 'refs/tags')
-              uses: softprops/action-gh-release@v1
+              uses: softprops/action-gh-release@v3
               with:
                   body_path: CHANGELOG
                   token: ${{ secrets.GITHUB_TOKEN }}
@@ -257,7 +283,7 @@ jobs:
             - name: Setup Nodejs
               uses: actions/setup-node@v4
               with:
-                  node-version: 21
+                  node-version: 22
             - name: Install Rust Stable
               uses: dtolnay/rust-toolchain@stable
             - name: install dependencies
@@ -269,9 +295,9 @@ jobs:
               with:
                   version: 9
             - name: Install Dependencies
-              run: pnpm install
-            - name: Code Format
-              run: pnpm prettier --write .
+              run: pnpm install --frozen-lockfile
+            - name: Test
+              run: pnpm test
             - name: Download WebView2 Runtime
               run: |
                   invoke-webrequest -uri https://github.com/westinyang/WebView2RuntimeArchive/releases/download/109.0.1518.78/Microsoft.WebView2.FixedVersionRuntime.109.0.1518.78.${{ matrix.arch }}.cab -outfile Microsoft.WebView2.FixedVersionRuntime.109.0.1518.78.${{ matrix.arch }}.cab
@@ -282,10 +308,16 @@ jobs:
               run: |
                   $env:TAURI_PRIVATE_KEY="${{ secrets.TAURI_PRIVATE_KEY }}"
                   $env:TAURI_KEY_PASSWORD="${{ secrets.TAURI_KEY_PASSWORD }}"
-                  pnpm tauri build -b nsis,updater --target ${{ matrix.target }}
+                  if ($env:TAURI_PRIVATE_KEY) {
+                      pnpm tauri build -b nsis,updater --target ${{ matrix.target }}
+                  } else {
+                      pnpm tauri build -b nsis --target ${{ matrix.target }}
+                  }
                   Rename-Item .\src-tauri\target\${{ matrix.target }}\release\bundle\nsis\cup-translate_${{needs.change-version.outputs.version}}_${{ matrix.arch }}-setup.exe cup-translate_${{needs.change-version.outputs.version}}_${{ matrix.arch }}_fix_webview2_runtime-setup.exe
-                  Rename-Item .\src-tauri\target\${{ matrix.target }}\release\bundle\nsis\cup-translate_${{needs.change-version.outputs.version}}_${{ matrix.arch }}-setup.nsis.zip cup-translate_${{needs.change-version.outputs.version}}_${{ matrix.arch }}_fix_webview2_runtime-setup.nsis.zip
-                  Rename-Item .\src-tauri\target\${{ matrix.target }}\release\bundle\nsis\cup-translate_${{needs.change-version.outputs.version}}_${{ matrix.arch }}-setup.nsis.zip.sig cup-translate_${{needs.change-version.outputs.version}}_${{ matrix.arch }}_fix_webview2_runtime-setup.nsis.zip.sig
+                  if ($env:TAURI_PRIVATE_KEY) {
+                      Rename-Item .\src-tauri\target\${{ matrix.target }}\release\bundle\nsis\cup-translate_${{needs.change-version.outputs.version}}_${{ matrix.arch }}-setup.nsis.zip cup-translate_${{needs.change-version.outputs.version}}_${{ matrix.arch }}_fix_webview2_runtime-setup.nsis.zip
+                      Rename-Item .\src-tauri\target\${{ matrix.target }}\release\bundle\nsis\cup-translate_${{needs.change-version.outputs.version}}_${{ matrix.arch }}-setup.nsis.zip.sig cup-translate_${{needs.change-version.outputs.version}}_${{ matrix.arch }}_fix_webview2_runtime-setup.nsis.zip.sig
+                  }
             - name: Upload Artifacts
               uses: actions/upload-artifact@v4
               with:
@@ -294,7 +326,7 @@ jobs:
                   if-no-files-found: error
             - name: Upload Release
               if: startsWith(github.ref, 'refs/tags')
-              uses: softprops/action-gh-release@v1
+              uses: softprops/action-gh-release@v3
               with:
                   body_path: CHANGELOG
                   token: ${{ secrets.GITHUB_TOKEN }}
@@ -360,40 +392,30 @@ jobs:
                   if-no-files-found: error
             - name: Upload Release
               if: startsWith(github.ref, 'refs/tags') && matrix.target == 'x86_64-unknown-linux-gnu'
-              uses: softprops/action-gh-release@v1
+              uses: softprops/action-gh-release@v3
               with:
                   body_path: CHANGELOG
                   token: ${{ secrets.GITHUB_TOKEN }}
                   files: src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage*
             - name: Upload Release
               if: startsWith(github.ref, 'refs/tags')
-              uses: softprops/action-gh-release@v1
+              uses: softprops/action-gh-release@v3
               with:
                   body_path: CHANGELOG
                   token: ${{ secrets.GITHUB_TOKEN }}
                   files: src-tauri/target/${{ matrix.target }}/release/bundle/deb/*.deb
             - name: Upload Release
               if: startsWith(github.ref, 'refs/tags')
-              uses: softprops/action-gh-release@v1
+              uses: softprops/action-gh-release@v3
               with:
                   body_path: CHANGELOG
                   token: ${{ secrets.GITHUB_TOKEN }}
                   files: src-tauri/target/${{ matrix.target }}/release/bundle/rpm/*.rpm
 
-    # NOTE (cup-translate): disabled — this dispatched to the upstream
-    # pot-app/pot-docs repository, which is not ours to notify.
-    trigger-docs-update:
-        if: false
-        needs: [build-for-macos, build-for-windows, build-for-linux]
-        runs-on: ubuntu-latest
-        steps:
-            - name: Disabled in cup-translate
-              run: echo "upstream docs dispatch disabled"
-
     release-update:
-        needs: [build-for-macos, build-for-windows, build-for-linux, build-for-windows-fix-runtime]
+        needs: [change-version, build-for-macos, build-for-windows, build-for-linux, build-for-windows-fix-runtime]
         runs-on: ubuntu-latest
-        if: startsWith(github.ref, 'refs/tags')
+        if: startsWith(github.ref, 'refs/tags') && needs.change-version.outputs.signing == 'true'
         steps:
             - name: Checkout repository
               uses: actions/checkout@v4
@@ -405,22 +427,23 @@ jobs:
                   sudo apt-get install -y git curl
             - name: Get Tag Name
               run: |
-                  echo "VERSION=$(git describe --tags | sed 's/-[0-9]*-.*//g')" >> $GITHUB_ENV
-                  echo "VERSION=$(git describe --tags | sed 's/-[0-9]*-.*//g')"
+                  echo "VERSION=$(git describe --tags | sed -E 's/^v//; s/-[0-9]+-.*$//')" >> $GITHUB_ENV
+                  git describe --tags | sed -E 's/^v//; s/-[0-9]+-.*$//'
             - name: Setup pnpm
               uses: pnpm/action-setup@v4
               with:
                   version: 9
             - name: pnpm install
-              run: pnpm install
+              run: pnpm install --frozen-lockfile
             - name: Release updater file
               run: |
                   pnpm run updater
                   pnpm run updater:fixRuntime
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  RELEASE_TAG: ${{ github.ref_name }}
             - name: Upload Release
-              uses: softprops/action-gh-release@v1
+              uses: softprops/action-gh-release@v3
               with:
                   body: ${{env.VERSION}}
                   tag_name: updater
@@ -428,24 +451,3 @@ jobs:
                   files: |
                       update.json
                       update-fix-runtime.json
-
-    # NOTE (cup-translate): disabled — published under the UPSTREAM identity
-    # (pot-app/homebrew-tap, winget id Pylogmon.pot, secrets.TOKEN).
-    # Re-enable once cup-translate has its own tap / winget identifier.
-    homebrew:
-        name: Update Homebrew cask
-        needs: build-for-macos
-        runs-on: macos-latest
-        if: false
-        steps:
-            - name: Disabled in cup-translate
-              run: echo "upstream homebrew tap disabled"
-
-    winget:
-        name: Update WinGet Package
-        needs: build-for-windows
-        runs-on: ubuntu-latest
-        if: false
-        steps:
-            - name: Disabled in cup-translate
-              run: echo "upstream winget identifier disabled"

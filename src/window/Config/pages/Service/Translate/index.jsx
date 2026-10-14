@@ -3,6 +3,7 @@ import { Card, Spacer, Button, useDisclosure } from '@nextui-org/react';
 import toast, { Toaster } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import React, { useState } from 'react';
+import { DEFAULT_TRANSLATE_SERVICE_INSTANCE_LIST } from '../../../../../services/translate/defaults';
 
 import { useToastStyle } from '../../../../../hooks';
 import SelectPluginModal from '../SelectPluginModal';
@@ -23,13 +24,11 @@ export default function Translate(props) {
     const { isOpen: isConfigOpen, onOpen: onConfigOpen, onOpenChange: onConfigOpenChange } = useDisclosure();
     const [currentConfigKey, setCurrentConfigKey] = useState('deepl');
     // now it's service instance list
-    // 默认只启用「开箱即用」的免费引擎（无需 API key、上游可用）：
-    // yandex —— 实测可用；google —— 主流兜底（支持 custom_url 镜像）。
     // deepl 需 API key；lingva / bing / ecdict 上游已停服且无自建入口，代码已删除（2026 实测）。
-    const [translateServiceInstanceList, setTranslateServiceInstanceList] = useConfig('translate_service_list', [
-        'yandex',
-        'google',
-    ]);
+    const [translateServiceInstanceList, setTranslateServiceInstanceList] = useConfig(
+        'translate_service_list',
+        DEFAULT_TRANSLATE_SERVICE_INSTANCE_LIST
+    );
 
     const { t } = useTranslation();
     const toastStyle = useToastStyle();

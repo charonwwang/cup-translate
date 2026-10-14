@@ -1,6 +1,6 @@
 export const info = {
     name: 'niutrans',
-    icon: 'logo/niutrans.svg',
+    icon: '/logo/niutrans.svg',
 };
 // https://niutrans.com/documents/contents/trans_text#languageList
 export enum Language {

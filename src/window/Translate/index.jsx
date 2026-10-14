@@ -12,6 +12,7 @@ import { BsPinFill } from 'react-icons/bs';
 import LanguageArea from './components/LanguageArea';
 import SourceArea from './components/SourceArea';
 import TargetArea from './components/TargetArea';
+import { DEFAULT_TRANSLATE_SERVICE_INSTANCE_LIST } from '../../services/translate/defaults';
 import { osType } from '../../utils/env';
 import { useConfig } from '../../hooks';
 import { store } from '../../utils/store';
@@ -68,13 +69,11 @@ export default function Translate() {
     const [alwaysOnTop] = useConfig('translate_always_on_top', false);
     const [windowPosition] = useConfig('translate_window_position', 'mouse');
     const [rememberWindowSize] = useConfig('translate_remember_window_size', false);
-    // 默认只启用「开箱即用」的免费引擎（无需 API key、上游可用）：
-    // yandex —— 实测可用；google —— 主流兜底（支持 custom_url 镜像）。
     // deepl 需 API key；lingva / bing / ecdict 上游已停服且无自建入口，代码已删除（2026 实测）。
-    const [translateServiceInstanceList, setTranslateServiceInstanceList] = useConfig('translate_service_list', [
-        'yandex',
-        'google',
-    ]);
+    const [translateServiceInstanceList, setTranslateServiceInstanceList] = useConfig(
+        'translate_service_list',
+        DEFAULT_TRANSLATE_SERVICE_INSTANCE_LIST
+    );
     const [recognizeServiceInstanceList] = useConfig('recognize_service_list', ['system', 'tesseract']);
     const [ttsServiceInstanceList] = useConfig('tts_service_list', ['local_tts']);
     const [collectionServiceInstanceList] = useConfig('collection_service_list', []);
@@ -230,7 +229,7 @@ export default function Translate() {
     return (
         pluginList && (
             <div
-                className={`bg-background h-screen w-screen ${
+                className={`translate-shell bg-background h-screen w-screen ${
                     osType === 'Linux' && 'rounded-[10px] border-1 border-default-100'
                 }`}
             >
@@ -238,7 +237,7 @@ export default function Translate() {
                     className='fixed top-[5px] left-[5px] right-[5px] h-[30px]'
                     data-tauri-drag-region='true'
                 />
-                <div className={`h-[35px] w-full flex ${osType === 'Darwin' ? 'justify-end' : 'justify-between'}`}>
+                <div className={`translate-titlebar h-[44px] w-full flex ${osType === 'Darwin' ? 'justify-end' : 'justify-between'}`}>
                     <Button
                         isIconOnly
                         size='sm'
@@ -273,8 +272,8 @@ export default function Translate() {
                         <AiFillCloseCircle className='text-[20px] text-default-400' />
                     </Button>
                 </div>
-                <div className={`${osType === 'Linux' ? 'h-[calc(100vh-37px)]' : 'h-[calc(100vh-35px)]'} px-[8px]`}>
-                    <div className='h-full overflow-y-auto'>
+                <div className={`${osType === 'Linux' ? 'h-[calc(100vh-46px)]' : 'h-[calc(100vh-44px)]'} px-[8px]`}>
+                    <div className='translate-scroll h-full overflow-y-auto'>
                         <div>
                             {serviceInstanceConfigMap !== null && (
                                 <SourceArea

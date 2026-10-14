@@ -42,6 +42,7 @@
 
 > 关于 Wayland 的已知限制与规避方案，见上游原文档（`UPSTREAM_README.md`）。
 > 划词、OCR、热键在纯 Wayland 的处理是本仓库重点维护方向。
+> 第三方插件包含可执行 JavaScript，且可调用本机命令；仅安装信任来源的插件。
 
 ---
 
@@ -53,7 +54,7 @@
 
 ```bash
 # 1) 构建 + 打包（脚本会自动修正 .deb 的幽灵依赖）
-bash packaging/build-linux.sh deb        # 或：bash packaging/build-linux.sh appimage
+bash packaging/build-linux.sh deb        # 也可选 rpm、appimage 或 all
 
 # 2) 安装（无需任何额外包）
 sudo apt install ./src-tauri/target/release/bundle/deb/cup-translate_*.deb
@@ -68,6 +69,7 @@ cup-translate                                # 启动
 
 > AppImage 用户需先 `sudo apt install libfuse2`，或解压运行：
 > `./cup-translate_*.AppImage --appimage-extract && ./squashfs-root/AppRun`
+> 构建 AppImage 时需安装 `patchelf`；打包脚本会包含 GStreamer 播放插件。
 
 ### 方式二：源码运行（开发）
 
@@ -99,15 +101,9 @@ pnpm tauri build
 
 ## 品牌迁移说明
 
-为保留原有运行机制，内部标识（app id、窗口 title）仍沿用上游 `org.pot_app.pot`；
-对外品牌使用 `cup-translate`，不主张上游商标「pot / 派了个萌」。若后续想彻底去除
-pot 品牌痕迹，可替换以下位置（暂不作为默认改动）：
-
-| 文件 | 内容 |
-|---|---|
-| `com.pot_app.pot.metainfo.xml` | 应用元数据名 |
-| `src-tauri/tauri.conf.json` | 窗口 title / app id |
-| `src-tauri/Cargo.toml` | package 名 |
+内部标识已改为 `com.cup-translate.app`；首次启动会迁移旧版配置目录。
+对外品牌使用 `cup-translate`，不主张上游商标「pot / 派了个萌」。仍保留
+`com.pot_app.pot.metainfo.xml` 这一历史应用元数据文件，后续发行时需核对其内容与标识。
 
 ---
 

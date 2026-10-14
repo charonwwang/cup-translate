@@ -16,7 +16,7 @@ export default function About() {
     return (
         <div className='h-full w-full py-[80px] px-[100px]'>
             <img
-                src='icon.png'
+                src='/icon.png'
                 className='mx-auto h-[100px] mb-[5px]'
                 draggable={false}
             />

@@ -1,6 +1,6 @@
 export const info = {
     name: 'volcengine_ocr',
-    icon: 'logo/volcengine.svg',
+    icon: '/logo/volcengine.svg',
 };
 
 export enum Language {

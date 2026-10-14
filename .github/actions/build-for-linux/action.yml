@@ -1,4 +1,5 @@
 name: 'Build for Linux'
+description: 'Build Linux installer packages for cup-translate'
 branding:
     icon: user-check
     color: gray-dark

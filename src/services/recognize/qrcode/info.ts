@@ -1,6 +1,6 @@
 export const info = {
     name: 'qrcode',
-    icon: 'logo/qrcode.svg',
+    icon: '/logo/qrcode.svg',
 };
 
 export enum Language {

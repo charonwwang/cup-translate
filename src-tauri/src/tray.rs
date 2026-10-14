@@ -62,7 +62,10 @@ pub fn update_tray(app_handle: tauri::AppHandle, mut language: String, mut copy_
         .unwrap();
     #[cfg(not(target_os = "linux"))]
     tray_handle
-        .set_tooltip(&format!("cup-translate {}", app_handle.package_info().version))
+        .set_tooltip(&format!(
+            "cup-translate {}",
+            app_handle.package_info().version
+        ))
         .unwrap();
 
     let enable_clipboard_monitor = match get("clipboard_monitor") {

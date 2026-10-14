@@ -1,6 +1,6 @@
 export const info = {
     name: 'caiyun',
-    icon: 'logo/caiyun.svg',
+    icon: '/logo/caiyun.svg',
 };
 
 export enum Language {

@@ -1,6 +1,6 @@
 export const info = {
     name: 'google',
-    icon: 'logo/google.svg',
+    icon: '/logo/google.svg',
 };
 // https://cloud.google.com/translate/docs/languages?hl=zh-cn
 export enum Language {

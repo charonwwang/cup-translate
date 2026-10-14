@@ -1,7 +1,11 @@
+#[cfg(updater)]
 use crate::config::{get, set};
+#[cfg(updater)]
 use crate::window::updater_window;
+#[cfg(updater)]
 use log::{info, warn};
 
+#[cfg(updater)]
 pub fn check_update(app_handle: tauri::AppHandle) {
     let enable = match get("check_update") {
         Some(v) => v.as_bool().unwrap(),
@@ -26,3 +30,6 @@ pub fn check_update(app_handle: tauri::AppHandle) {
         });
     }
 }
+
+#[cfg(not(updater))]
+pub fn check_update(_app_handle: tauri::AppHandle) {}

@@ -6,23 +6,21 @@
 // 产物名中的 `_fix_webview2_runtime` 段由 CI 的 build-for-windows-fix-runtime job 重命名产生，
 // 若该 job 中的前缀改了，这里必须同步。
 import fetch from 'node-fetch';
-import fs from 'fs';
+import { writeFile } from 'node:fs/promises';
 
 const REPO = 'charonwwang/cup-translate';
 const RELEASES = `https://github.com/${REPO}/releases/download`;
 
 async function resolveUpdater() {
-    if (process.env.GITHUB_TOKEN === undefined) {
-        throw new Error('GITHUB_TOKEN is required');
+    const token = process.env.GITHUB_TOKEN;
+    const tag = process.env.RELEASE_TAG ?? process.env.GITHUB_REF_NAME;
+    if (!token || !tag) {
+        throw new Error('GITHUB_TOKEN and RELEASE_TAG are required');
     }
 
-    const TOKEN = process.env.GITHUB_TOKEN;
-    let version = await getVersion(TOKEN);
-    let changelog = await getChangeLog(TOKEN);
-
-    if (!version) {
-        throw new Error(`Cannot resolve the latest release tag from ${REPO}. Has a release been published?`);
-    }
+    const release = await getRelease(token, tag);
+    const version = release.tag_name;
+    const changelog = release.body;
 
     // tag 可能是 v3.1.0，而产物名中的版本号不带 v 前缀（来自 tauri.conf.json 的 version）。
     const assetVersion = version.replace(/^v/, '');
@@ -42,33 +40,21 @@ async function resolveUpdater() {
             'windows-aarch64': await entry(`cup-translate_${assetVersion}_arm64_fix_webview2_runtime-setup.nsis.zip`),
         },
     };
-    fs.writeFile('./update-fix-runtime.json', JSON.stringify(updateData, null, 2), (e) => {
-        if (e) console.error(e);
-    });
+    await writeFile('./update-fix-runtime.json', JSON.stringify(updateData, null, 2));
 }
 
-async function getRelease(token) {
-    const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
+async function getRelease(token, tag) {
+    const res = await fetch(`https://api.github.com/repos/${REPO}/releases/tags/${encodeURIComponent(tag)}`, {
         method: 'GET',
         headers: {
             Authorization: `Bearer ${token}`,
         },
     });
 
-    if (res.ok) {
-        return await res.json();
+    if (!res.ok) {
+        throw new Error(`Cannot resolve release ${tag} from ${REPO} (status ${res.status})`);
     }
-    return null;
-}
-
-async function getVersion(token) {
-    const data = await getRelease(token);
-    return data && data['tag_name'];
-}
-
-async function getChangeLog(token) {
-    const data = await getRelease(token);
-    return data && data['body'];
+    return res.json();
 }
 
 async function getSignature(url) {
@@ -76,13 +62,12 @@ async function getSignature(url) {
         method: 'GET',
         headers: { 'Content-Type': 'application/octet-stream' },
     });
-    if (response.ok) {
-        return response.text();
-    } else {
-        // 空签名会让用户端在安装阶段验签失败并中止。
-        console.error(`WARNING: cannot fetch signature: ${url} (status ${response.status})`);
-        return '';
+    if (!response.ok) {
+        throw new Error(`Cannot fetch signature: ${url} (status ${response.status})`);
     }
+    const signature = (await response.text()).trim();
+    if (!signature) throw new Error(`Empty signature: ${url}`);
+    return signature;
 }
 
 resolveUpdater().catch((e) => {

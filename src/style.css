@@ -25,3 +25,41 @@ html {
 *::-webkit-scrollbar-thumb:hover {
     background: #c0c1c550;
 }
+
+
+/* cup-translate 2026 ui */
+:root {
+    --cup-brand: #e87522;
+    --cup-brand-soft: #fff0e4;
+    --cup-border: #e4ded7;
+    --cup-text-soft: #80776d;
+    --cup-shadow: 0 18px 48px -22px rgba(56, 42, 29, 0.28), 0 3px 12px rgba(56, 42, 29, 0.06);
+}
+.dark {
+    --cup-brand: #f5952f;
+    --cup-brand-soft: #3a2619;
+    --cup-border: #39332d;
+    --cup-text-soft: #aaa096;
+    --cup-shadow: 0 22px 54px -22px rgba(0, 0, 0, 0.72);
+}
+body { color: hsl(var(--nextui-foreground)); -webkit-font-smoothing: antialiased; }
+button, [role='button'] { transition: background-color .16s ease, color .16s ease, border-color .16s ease, transform .12s ease; }
+button:active, [role='button']:active { transform: scale(.98); }
+.translate-shell { background: color-mix(in srgb, hsl(var(--nextui-background)) 93%, var(--cup-brand-soft)); }
+.translate-titlebar { border-bottom: 1px solid var(--cup-border); padding: 0 7px; }
+.translate-titlebar button { border-radius: 9px !important; }
+.translate-scroll { padding-bottom: 8px; scrollbar-gutter: stable; }
+.source-panel, .result-panel { border: 1px solid var(--cup-border); box-shadow: 0 1px 2px rgba(40,30,20,.04); overflow: hidden; }
+.source-panel:focus-within { border-color: color-mix(in srgb, var(--cup-brand) 70%, white); box-shadow: 0 0 0 3px var(--cup-brand-soft); }
+.source-panel textarea { line-height: 1.62; }
+.language-panel { background: transparent !important; border: 0 !important; }
+.language-panel > div { background: transparent !important; padding-inline: 3px !important; }
+.language-panel button { font-weight: 600; border-radius: 9px !important; }
+.language-panel button[aria-label] { color: var(--cup-brand); background: var(--cup-brand-soft); border-radius: 999px !important; }
+.result-panel { background: hsl(var(--nextui-content1)); }
+.result-primary { border-color: color-mix(in srgb, var(--cup-brand) 45%, var(--cup-border)); box-shadow: 0 6px 18px -12px color-mix(in srgb, var(--cup-brand) 38%, transparent); }
+.result-panel > header { min-height: 38px !important; padding: 5px 8px !important; border-bottom: 1px solid var(--cup-border); }
+.result-panel textarea { line-height: 1.65; }
+.result-panel:first-of-type textarea { font-size: 1.04em; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--cup-text-soft) 34%, transparent); border: 2px solid transparent; background-clip: padding-box; border-radius: 99px; }

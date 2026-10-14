@@ -1,6 +1,6 @@
 export const info = {
     name: 'bing_dict',
-    icon: 'logo/bing.svg',
+    icon: '/logo/bing.svg',
 };
 
 export enum Language {

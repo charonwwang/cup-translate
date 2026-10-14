@@ -1,6 +1,6 @@
 export const info = {
     name: 'transmart',
-    icon: 'logo/transmart.svg',
+    icon: '/logo/transmart.svg',
 };
 // https://docs.qq.com/doc/DY2NxUWpmdnB2RXV3
 export enum Language {

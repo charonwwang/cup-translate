@@ -1,6 +1,6 @@
 export const info = {
     name: 'tencent_accurate_ocr',
-    icon: 'logo/tencent_cloud.png',
+    icon: '/logo/tencent_cloud.png',
 };
 
 export enum Language {

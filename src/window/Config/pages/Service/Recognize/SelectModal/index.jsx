@@ -34,7 +34,7 @@ export default function SelectModal(props) {
                                                 <img
                                                     src={
                                                         x === 'system'
-                                                            ? `logo/${osType}.svg`
+                                                            ? `/logo/${osType}.svg`
                                                             : builtinServices[x].info.icon
                                                     }
                                                     className='h-[24px] w-[24px] my-auto'

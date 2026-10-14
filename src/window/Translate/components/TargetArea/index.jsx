@@ -50,6 +50,19 @@ import {
     whetherPluginService,
 } from '../../../../utils/service_instance';
 
+// Dictionary services sometimes return small HTML fragments for emphasis. Never
+// insert that remote HTML into the privileged Tauri webview: an upstream service
+// (or a local plugin) could otherwise execute script with desktop permissions.
+function richTextToPlainText(value) {
+    if (typeof value !== 'string') return '';
+
+    const withLineBreaks = value
+        .replace(/<br\s*\/?\s*>/gi, '\n')
+        .replace(/<\/(?:p|div|li)>/gi, '\n');
+    const document = new DOMParser().parseFromString(withLineBreaks, 'text/html');
+    return document.body.textContent ?? '';
+}
+
 let translateID = [];
 
 export default function TargetArea(props) {
@@ -128,7 +141,6 @@ export default function TargetArea(props) {
         clipboardMonitor,
     ]);
 
-    // todo: history panel use service instance key
     const addToHistory = async (text, source, target, serviceInstanceKey, result) => {
         const db = await Database.load('sqlite:history.db');
 
@@ -221,7 +233,7 @@ export default function TargetArea(props) {
                                 sourceText.trim(),
                                 detectLanguage,
                                 newTargetLanguage,
-                                translateServiceName,
+                                currentTranslateServiceInstanceKey,
                                 typeof v === 'string' ? v.trim() : v
                             );
                         }
@@ -294,7 +306,7 @@ export default function TargetArea(props) {
                                     sourceText.trim(),
                                     detectLanguage,
                                     newTargetLanguage,
-                                    translateServiceName,
+                                    currentTranslateServiceInstanceKey,
                                     typeof v === 'string' ? v.trim() : v
                                 );
                             }
@@ -395,7 +407,7 @@ export default function TargetArea(props) {
     return (
         <Card
             shadow='none'
-            className='rounded-[10px]'
+            className={`result-panel rounded-[14px] ${index === 0 ? 'result-primary' : ''}`}
         >
             <Toaster />
             <CardHeader
@@ -609,22 +621,18 @@ export default function TargetArea(props) {
                                                 </span>
                                                 <>
                                                     {sentence['source'] && (
-                                                        <span
-                                                            className={`text-[${appFontSize}px] select-text`}
-                                                            dangerouslySetInnerHTML={{
-                                                                __html: sentence['source'],
-                                                            }}
-                                                        />
+                                                        <span className={`text-[${appFontSize}px] select-text whitespace-pre-wrap`}>
+                                                            {richTextToPlainText(sentence['source'])}
+                                                        </span>
                                                     )}
                                                 </>
                                                 <>
                                                     {sentence['target'] && (
                                                         <div
-                                                            className={`text-[${appFontSize}px] select-text text-default-500`}
-                                                            dangerouslySetInnerHTML={{
-                                                                __html: sentence['target'],
-                                                            }}
-                                                        />
+                                                            className={`text-[${appFontSize}px] select-text whitespace-pre-wrap text-default-500`}
+                                                        >
+                                                            {richTextToPlainText(sentence['target'])}
+                                                        </div>
                                                     )}
                                                 </>
                                             </div>

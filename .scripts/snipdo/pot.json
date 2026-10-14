@@ -1,11 +1,11 @@
 {
-    "name": "Pot Translation",
-    "identifier": "com.pot-app.snipdoext.desktop",
-    "icon": "pot.png",
+    "name": "cup-translate",
+    "identifier": "com.cup-translate.snipdoext.desktop",
+    "icon": "cup-translate.png",
     "actions": [
         {
-            "title": "Pot Translation",
-            "icon": "pot.png",
+            "title": "cup-translate",
+            "icon": "cup-translate.png",
             "powershellFile": "pot.ps1"
         }
     ]

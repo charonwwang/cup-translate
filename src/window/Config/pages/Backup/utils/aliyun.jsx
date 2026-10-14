@@ -1,29 +1,41 @@
 import { invoke } from '@tauri-apps/api';
 import { Body, fetch } from '@tauri-apps/api/http';
 import { appConfigDir, join } from '@tauri-apps/api/path';
+import { exists, removeFile } from '@tauri-apps/api/fs';
+import { nanoid } from 'nanoid';
+import { finishRestore } from './restore';
 
 export async function backup(token, name) {
     const appConfigDirPath = await appConfigDir();
-    const filePath = await join(appConfigDirPath, name);
-    await invoke('local', {
-        operate: 'put',
-        path: filePath,
-    });
-    const drive_id = await driveId(token);
-    const dir_id = await createDir(token, drive_id);
-    const { file_id, upload_id, upload_url } = await createFile(token, drive_id, dir_id, name);
-    await invoke('aliyun', { operate: 'put', path: filePath, url: upload_url });
-    await fetch('https://openapi.alipan.com/adrive/v1.0/openFile/complete', {
-        method: 'POST',
-        headers: {
-            Authorization: `Bearer ${token}`,
-        },
-        body: Body.json({
-            drive_id,
-            file_id,
-            upload_id,
-        }),
-    });
+    const filePath = await join(appConfigDirPath, `aliyun-upload-${nanoid()}.zip`);
+    try {
+        await invoke('local', {
+            operate: 'put',
+            path: filePath,
+        });
+        const drive_id = await driveId(token);
+        const dir_id = await createDir(token, drive_id);
+        const { file_id, upload_id, upload_url } = await createFile(token, drive_id, dir_id, name);
+        await invoke('aliyun', { operate: 'put', path: filePath, url: upload_url });
+        const complete = await fetch('https://openapi.alipan.com/adrive/v1.0/openFile/complete', {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+            body: Body.json({
+                drive_id,
+                file_id,
+                upload_id,
+            }),
+        });
+        if (!complete.ok) {
+            throw new Error(`Aliyun backup completion failed: ${JSON.stringify(complete.data)}`);
+        }
+    } finally {
+        if (await exists(filePath)) {
+            await removeFile(filePath);
+        }
+    }
 }
 
 export async function list(token) {
@@ -65,6 +77,7 @@ export async function get(token, name) {
     const file_id = await getFileByPath(token, drive_id, name);
     const url = await getDownloadUrl(token, drive_id, file_id);
     await invoke('aliyun', { operate: 'get', path: '', url });
+    return finishRestore();
 }
 
 export async function remove(token, name) {

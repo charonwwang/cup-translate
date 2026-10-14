@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api';
+import { finishRestore } from './restore';
 
 export async function backup(url, username, password, name) {
     return await invoke('webdav', {
@@ -27,13 +28,14 @@ export async function list(url, username, password) {
 }
 
 export async function get(url, username, password, name) {
-    const _ = await invoke('webdav', {
+    await invoke('webdav', {
         operate: 'get',
         url,
         username,
         password,
         name,
     });
+    return finishRestore();
 }
 
 export async function remove(url, username, password, name) {

@@ -1,6 +1,6 @@
 export const info = {
     name: 'baidu_field',
-    icon: 'logo/baidu.svg',
+    icon: '/logo/baidu.svg',
 };
 // https://fanyi-api.baidu.com/product/113
 export enum Language {

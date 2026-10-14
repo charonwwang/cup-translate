@@ -66,12 +66,14 @@ export default function Backup() {
                 if (aliyunAccessToken === '') {
                     toast.error(t('config.backup.aliyun_login_first'), { style: toastStyle });
                     setUploading(false);
+                    return;
                 } else {
                     result = aliyun.backup(aliyunAccessToken, fileName + '.zip');
                 }
                 break;
             default:
                 warn('Unknown backup type');
+                setUploading(false);
                 return;
         }
         result.then(

@@ -66,7 +66,7 @@ export default function ControlArea(props) {
                                             ? pluginList[getServiceName(currentServiceInstanceKey)].icon
                                             : builtinService[getServiceName(currentServiceInstanceKey)].info.icon ===
                                                 'system'
-                                              ? `logo/${osType}.svg`
+                                              ? `/logo/${osType}.svg`
                                               : builtinService[getServiceName(currentServiceInstanceKey)].info.icon
                                     }
                                 />
@@ -100,7 +100,7 @@ export default function ControlArea(props) {
                                                 getServiceSouceType(instanceKey) === ServiceSourceType.PLUGIN
                                                     ? pluginList[getServiceName(instanceKey)].icon
                                                     : builtinService[getServiceName(instanceKey)].info.icon === 'system'
-                                                      ? `logo/${osType}.svg`
+                                                      ? `/logo/${osType}.svg`
                                                       : builtinService[getServiceName(instanceKey)].info.icon
                                             }
                                         />

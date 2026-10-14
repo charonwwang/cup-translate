@@ -24,7 +24,7 @@ use config::*;
 use hotkey::*;
 use lang_detect::*;
 use local_mt::*;
-use log::info;
+use log::{info, warn, LevelFilter};
 use once_cell::sync::OnceCell;
 use screenshot::screenshot;
 use server::*;
@@ -57,6 +57,7 @@ fn main() {
         }))
         .plugin(
             tauri_plugin_log::Builder::default()
+                .level(LevelFilter::Info)
                 .targets([LogTarget::LogDir, LogTarget::Stdout])
                 .build(),
         )
@@ -103,13 +104,10 @@ fn main() {
                     .show()
                     .unwrap(),
             }
-            match get("proxy_enable") {
-                Some(v) => {
-                    if v.as_bool().unwrap() && get("proxy_host").map_or(false, |host| !host.as_str().unwrap().is_empty()) {
-                        let _ = set_proxy();
-                    }
-                }
-                None => {}
+            if get("proxy_enable").and_then(|value| value.as_bool()) == Some(true)
+                && set_proxy().is_err()
+            {
+                warn!("Proxy configuration is invalid; proxy was not enabled");
             }
             // Check Update
             check_update(app.handle());

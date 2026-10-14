@@ -67,7 +67,7 @@ export default function Updater() {
                     className={`h-full w-full flex ${osType === 'Darwin' ? 'justify-end' : 'justify-start'}`}
                 >
                     <img
-                        src='icon.png'
+                        src='/icon.png'
                         className='h-[25px] w-[25px] mr-[10px]'
                         draggable={false}
                     />

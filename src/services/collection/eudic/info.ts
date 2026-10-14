@@ -1,4 +1,4 @@
 export const info = {
     name: 'eudic',
-    icon: 'logo/eudic.png',
+    icon: '/logo/eudic.png',
 };

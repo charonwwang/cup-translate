@@ -1,6 +1,6 @@
 export const info = {
     name: 'iflytek_ocr',
-    icon: 'logo/iflytek.png',
+    icon: '/logo/iflytek.png',
 };
 
 export enum Language {

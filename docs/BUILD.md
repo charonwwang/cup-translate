@@ -3,7 +3,7 @@
 > 本文档记录 **从零构建 cup-translate 的完整步骤**，以及上游（Tauri v1 + pot-desktop）
 > 在新系统上构建时会踩到的**真实坑**与解决方案。
 >
-> 实测环境：Ubuntu 24.04 (GNOME)，Node 24 / pnpm 12 / Rust 1.95，**2025 年实测全流程通过**。
+> 实测环境：Ubuntu 24.04 (GNOME)，Node 22+ / pnpm 9+ / Rust stable；2026 年已验证 Linux x86_64 的 `.deb`、`.rpm`、AppImage 构建，AppImage 已隔离启动。Windows/macOS 尚待各自 CI 运行验证。
 
 ---
 
@@ -22,7 +22,7 @@
 | 产物 | `src-tauri/target/release/cup-translate`（约 60MB） | ✅ |
 | 打包 .deb | `bash packaging/build-linux.sh deb` | ✅ 32MB |
 | 安装 .deb | 用 `packaging/build-linux.sh` 后**零额外依赖**（§6.2） | ✅ 实测可安装启动 |
-| 打包 AppImage | `pnpm tauri build --bundles appimage` | ✅ 175MB（运行需 `libfuse2`） |
+| 打包 AppImage | `bash packaging/build-linux.sh appimage` | ✅ 180MB（包含 GStreamer 插件；运行需 `libfuse2`） |
 
 > ⚠️ **重要**：Ubuntu 24.04 上，**§3 与 §5.2 任一缺失都会导致 Rust 构建失败**。
 > 这是上游归档后最常见的构建障碍，下文给出根因与修复。
@@ -32,7 +32,7 @@
 ## 1. 前置工具
 
 ```bash
-node -v      # 需要 >= 18（仓库 .node-version 写 21，实测 Node 24 亦可）
+node -v      # 推荐 Node 22（仓库 .node-version）；本机 Node 24 亦已验证
 pnpm -v      # 需要 >= 8（pnpm 12 已验证）
 rustup show  # 需要 stable，实测 1.95
 ```
@@ -266,11 +266,13 @@ ldd  target/release/cup-translate | grep -i "not found"   # 应无输出
 ```bash
 bash packaging/build-linux.sh deb        # 只构建 deb（推荐）
 bash packaging/build-linux.sh            # 默认 deb
-bash packaging/build-linux.sh appimage   # AppImage
+bash packaging/build-linux.sh rpm        # 只构建 rpm
+bash packaging/build-linux.sh appimage   # AppImage（需 patchelf）
+bash packaging/build-linux.sh all        # 三种格式
 ```
 
-该脚本在 `pnpm tauri build` 之后会**自动修掉 .deb 的幽灵依赖**（见 §6.2），
-并清理历史品牌的旧产物。若直接用 `pnpm tauri build --bundles deb`，
+该脚本在构建 `.deb` 后会**自动修正其 WebKit 运行时依赖**（见 §6.2），
+构建 AppImage 时会打包 GStreamer 插件。它不会删除历史产物。若直接用 `pnpm tauri build --bundles deb`，
 产出的 .deb 在 Ubuntu 24.04 上**装不上**。
 
 ### 6.2 为什么需要封装脚本：`libwebkit2gtk-4.0-37` 是幽灵依赖
@@ -330,14 +332,13 @@ sudo apt install libfuse2
 ./squashfs-root/AppRun
 ```
 
-### 6.4 实测结论（Ubuntu 24.04, 2025）
+### 6.4 实测结论（Ubuntu 24.04, 2026）
 
 | 项目 | 结果 |
 |---|---|
-| `pnpm tauri build --bundles deb` | ✅ 生成 36MB `.deb` |
-| `apt install` 主包（幽灵依赖已剔除） | ✅ 安装成功，无需额外包 |
-| 安装后 `pot` 启动 | ✅ 正常（加载配置、创建窗口、托盘、本地 HTTP 服务） |
-| `pnpm tauri build --bundles appimage` | ✅ 生成 175MB `.AppImage`（需 `libfuse2` 运行） |
+| `.deb` | ✅ 生成约 34MB；依赖已规范化 |
+| `.rpm` | ✅ 生成约 38MB；尚未在 RPM 系统上安装验证 |
+| AppImage | ✅ 生成约 180MB，内含 GStreamer 插件；已在隔离 X11 中启动 |
 
 ### 6.5 尚未验证的部分
 
@@ -345,10 +346,10 @@ sudo apt install libfuse2
 
 | 项目 | 状态 |
 |---|---|
-| RPM 系（Fedora/RHEL）打包与依赖 | ❌ `bundle.rpm.depends` 仍是上游原值（Debian 风格包名），多半不正确 |
+| RPM 系（Fedora/RHEL）安装与依赖 | ❌ 已打包，但尚未在 Fedora/RHEL 上安装验证 |
 | CI 流水线 | ❌ 已收敛为仅 `v*` tag 触发，但从未打 tag，**从未真正运行过** |
 | Windows / macOS 构建与打包 | ❌ 仅在 Ubuntu 24.04 上验证过 |
-| 自动化测试 | ❌ 项目当前**零测试**（见 `CLAUDE.md` §6） |
+| 自动化测试 | ✅ 已加入前端资源、截图几何与 Rust 边界测试；跨系统 GUI 验收仍需补齐 |
 
 ---
 

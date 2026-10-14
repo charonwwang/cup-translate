@@ -29,7 +29,7 @@ export default function Config() {
                 shadow='none'
                 className={`${
                     transparent ? 'bg-background/90' : 'bg-content1'
-                } float-left w-[230px] h-screen rounded-none ${
+                } config-sidebar float-left w-[216px] h-screen rounded-none ${
                     osType === 'Linux' && 'rounded-l-[10px] border-1'
                 } border-r-1 border-default-100 select-none cursor-default`}
             >
@@ -42,9 +42,9 @@ export default function Config() {
                 <div className='p-[5px]'>
                     <div data-tauri-drag-region='true'>
                         <img
-                            alt='pot logo'
-                            src='icon.svg'
-                            className='h-[60px] w-[60px] m-auto mb-[30px]'
+                            alt='cup-translate logo'
+                            src='/icon.png'
+                            className='config-logo h-[42px] w-[42px] mx-auto mb-[18px]'
                             draggable={false}
                         />
                     </div>
@@ -52,24 +52,24 @@ export default function Config() {
                 <SideBar />
             </Card>
             <div
-                className={`bg-background ml-[230px] h-screen select-none cursor-default ${
+                className={`bg-background config-main ml-[216px] h-screen select-none cursor-default ${
                     osType === 'Linux' && 'rounded-r-[10px] border-1 border-l-0 border-default-100'
                 }`}
             >
                 <div
                     data-tauri-drag-region='true'
-                    className='top-[5px] left-[235px] right-[5px] h-[30px] fixed'
+                    className='top-[5px] left-[221px] right-[5px] h-[30px] fixed'
                 />
-                <div className='h-[35px] flex justify-between'>
+                <div className='config-titlebar h-[44px] flex justify-between'>
                     <div className='flex'>
-                        <h2 className='m-auto ml-[10px]'>{t(`config.${location.pathname.slice(1)}.title`)}</h2>
+                        <h2 className='config-title m-auto ml-[20px]'>{t(`config.${location.pathname.slice(1)}.title`)}</h2>
                     </div>
 
                     <div className='flex'>{osType !== 'Darwin' && <WindowControl />}</div>
                 </div>
                 <Divider />
                 <div
-                    className={`p-[10px] overflow-y-auto ${
+                    className={`config-content p-[22px] overflow-y-auto ${
                         osType === 'Linux' ? 'h-[calc(100vh-38px)]' : 'h-[calc(100vh-36px)]'
                     }`}
                 >

@@ -1,30 +1,30 @@
 use log::info;
 
 #[tauri::command]
-pub fn screenshot(x: i32, y: i32) {
+pub fn screenshot(x: i32, y: i32) -> Result<(), String> {
     use crate::APP;
     use dirs::cache_dir;
     use screenshots::{Compression, Screen};
     use std::fs;
     info!("Screenshot screen with position: x={}, y={}", x, y);
-    let screens = Screen::all().unwrap();
+    let screens = Screen::all().map_err(|error| error.to_string())?;
     for screen in screens {
         let info = screen.display_info;
         info!("Screen: {:?}", info);
         if info.x == x && info.y == y {
-            let handle = APP.get().unwrap();
-            let mut app_cache_dir_path = cache_dir().expect("Get Cache Dir Failed");
+            let handle = APP.get().ok_or("Application is not initialized")?;
+            let mut app_cache_dir_path = cache_dir().ok_or("Get Cache Dir Failed")?;
             app_cache_dir_path.push(&handle.config().tauri.bundle.identifier);
-            if !app_cache_dir_path.exists() {
-                // 创建目录
-                fs::create_dir_all(&app_cache_dir_path).expect("Create Cache Dir Failed");
-            }
+            fs::create_dir_all(&app_cache_dir_path).map_err(|error| error.to_string())?;
             app_cache_dir_path.push("pot_screenshot.png");
 
-            let image = screen.capture().unwrap();
-            let buffer = image.to_png(Compression::Fast).unwrap();
-            fs::write(app_cache_dir_path, buffer).unwrap();
-            break;
+            let image = screen.capture().map_err(|error| error.to_string())?;
+            let buffer = image
+                .to_png(Compression::Fast)
+                .map_err(|error| error.to_string())?;
+            fs::write(app_cache_dir_path, buffer).map_err(|error| error.to_string())?;
+            return Ok(());
         }
     }
+    Err(format!("No screen found at position ({x}, {y})"))
 }

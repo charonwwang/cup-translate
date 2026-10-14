@@ -1,9 +1,11 @@
+#[cfg(target_os = "macos")]
 use std::fs;
 
 use crate::config::get;
 use crate::config::set;
 use crate::StringWrapper;
 use crate::APP;
+#[cfg(target_os = "macos")]
 use dirs::cache_dir;
 use log::{info, warn};
 use tauri::Manager;
@@ -26,7 +28,6 @@ fn get_daemon_window() -> Window {
                 tauri::WindowUrl::App("daemon.html".into()),
             )
             .title("Daemon")
-            .additional_browser_args("--disable-web-security")
             .visible(false)
             .build()
             .unwrap()
@@ -86,7 +87,6 @@ fn build_window(label: &str, title: &str) -> (Window, bool) {
                 tauri::WindowUrl::App("index.html".into()),
             )
             .position(position.x.into(), position.y.into())
-            .additional_browser_args("--disable-web-security")
             .focused(true)
             .title(title)
             .visible(false);
@@ -227,15 +227,24 @@ pub fn selection_translate() {
     use selection::get_text;
     // Get Selected Text
     let text = get_text();
-    if !text.trim().is_empty() {
-        let app_handle = APP.get().unwrap();
-        // Write into State
-        let state: tauri::State<StringWrapper> = app_handle.state();
-        state.0.lock().unwrap().replace_range(.., &text);
+    if text.trim().is_empty() {
+        // Do not replace the previous translation or flash an empty window when
+        // the hotkey is pressed without an active selection.
+        return;
     }
 
+    let app_handle = APP.get().unwrap();
+    // Write into State
+    let state: tauri::State<StringWrapper> = app_handle.state();
+    state.0.lock().unwrap().replace_range(.., &text);
+
     let window = translate_window();
-    window.emit("new_text", text).unwrap();
+    if let Err(error) = window.emit("new_text", text) {
+        log::warn!(
+            "Failed to send selected text to translation window: {}",
+            error
+        );
+    }
 }
 
 pub fn input_translate() {

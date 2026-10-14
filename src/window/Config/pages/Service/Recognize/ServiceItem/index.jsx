@@ -43,7 +43,7 @@ export default function ServiceItem(props) {
                             <img
                                 src={
                                     serviceName === 'system'
-                                        ? `logo/${osType}.svg`
+                                        ? `/logo/${osType}.svg`
                                         : builtinServices[serviceName].info.icon
                                 }
                                 className='h-[24px] w-[24px] my-auto'

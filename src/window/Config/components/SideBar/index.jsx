@@ -21,16 +21,16 @@ export default function SideBar() {
     }
 
     return (
-        <div className='mx-[12px] overflow-y-auto'>
+        <div className='config-nav mx-[10px] overflow-y-auto'>
             <Button
                 fullWidth
                 size='lg'
                 variant={setStyle('/general')}
-                className='mb-[5px]'
+                className='config-nav-item mb-[3px]'
                 onPress={() => {
                     navigate('/general');
                 }}
-                startContent={<AiFillAppstore className='text-[24px]' />}
+                startContent={<AiFillAppstore className='text-[18px]' />}
             >
                 <div className='w-full'>{t('config.general.label')}</div>
             </Button>
@@ -38,11 +38,11 @@ export default function SideBar() {
                 fullWidth
                 size='lg'
                 variant={setStyle('/translate')}
-                className='mb-[5px]'
+                className='config-nav-item mb-[3px]'
                 onPress={() => {
                     navigate('/translate');
                 }}
-                startContent={<PiTranslateFill className='text-[24px]' />}
+                startContent={<PiTranslateFill className='text-[18px]' />}
             >
                 <div className='w-full'>{t('config.translate.label')}</div>
             </Button>
@@ -50,11 +50,11 @@ export default function SideBar() {
                 fullWidth
                 size='lg'
                 variant={setStyle('/recognize')}
-                className='mb-[5px]'
+                className='config-nav-item mb-[3px]'
                 onPress={() => {
                     navigate('/recognize');
                 }}
-                startContent={<PiTextboxFill className='text-[24px]' />}
+                startContent={<PiTextboxFill className='text-[18px]' />}
             >
                 <div className='w-full'>{t('config.recognize.label')}</div>
             </Button>
@@ -62,11 +62,11 @@ export default function SideBar() {
                 fullWidth
                 size='lg'
                 variant={setStyle('/hotkey')}
-                className='mb-[5px]'
+                className='config-nav-item mb-[3px]'
                 onPress={() => {
                     navigate('/hotkey');
                 }}
-                startContent={<MdKeyboardAlt className='text-[24px]' />}
+                startContent={<MdKeyboardAlt className='text-[18px]' />}
             >
                 <div className='w-full'>{t('config.hotkey.label')}</div>
             </Button>
@@ -74,11 +74,11 @@ export default function SideBar() {
                 fullWidth
                 size='lg'
                 variant={setStyle('/service')}
-                className='mb-[5px]'
+                className='config-nav-item mb-[3px]'
                 onPress={() => {
                     navigate('/service');
                 }}
-                startContent={<MdExtension className='text-[24px]' />}
+                startContent={<MdExtension className='text-[18px]' />}
             >
                 <div className='w-full'>{t('config.service.label')}</div>
             </Button>
@@ -86,11 +86,11 @@ export default function SideBar() {
                 fullWidth
                 size='lg'
                 variant={setStyle('/history')}
-                className='mb-[5px]'
+                className='config-nav-item mb-[3px]'
                 onPress={() => {
                     navigate('/history');
                 }}
-                startContent={<FaHistory className='text-[24px]' />}
+                startContent={<FaHistory className='text-[18px]' />}
             >
                 <div className='w-full'>{t('config.history.label')}</div>
             </Button>
@@ -98,11 +98,11 @@ export default function SideBar() {
                 fullWidth
                 size='lg'
                 variant={setStyle('/backup')}
-                className='mb-[5px]'
+                className='config-nav-item mb-[3px]'
                 onPress={() => {
                     navigate('/backup');
                 }}
-                startContent={<AiFillCloud className='text-[24px]' />}
+                startContent={<AiFillCloud className='text-[18px]' />}
             >
                 <div className='w-full'>{t('config.backup.label')}</div>
             </Button>
@@ -110,11 +110,11 @@ export default function SideBar() {
                 fullWidth
                 size='lg'
                 variant={setStyle('/about')}
-                className='mb-[5px]'
+                className='config-nav-item mb-[3px]'
                 onPress={() => {
                     navigate('/about');
                 }}
-                startContent={<BsInfoSquareFill className='text-[24px]' />}
+                startContent={<BsInfoSquareFill className='text-[18px]' />}
             >
                 <div className='w-full'>{t('config.about.label')}</div>
             </Button>

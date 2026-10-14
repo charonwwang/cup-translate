@@ -2,6 +2,21 @@
 # These are required for the build to work:
 #   - esbuild: links its platform binary (required by vite)
 #   - tesseract.js: fetches its core WASM assets (OCR feature)
+packages:
+  - .
+
+# Pin patched releases of compatible transitive build dependencies.
+overrides:
+  '@babel/runtime': 7.29.7
+  brace-expansion: 2.1.7
+  cross-spawn: 7.0.6
+  glob: 10.5.0
+  minimatch: 9.0.9
+  mdast-util-to-hast: 13.2.1
+  picomatch: 2.3.2
+  postcss-selector-parser: 6.1.4
+  yaml: 2.9.1
+
 allowBuilds:
   esbuild: true
   tesseract.js: true

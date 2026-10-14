@@ -14,7 +14,7 @@
         "allowlist": {
             "all": false,
             "shell": {
-                "all": true,
+                "all": false,
                 "open": ".*"
             },
             "path": {
@@ -60,6 +60,9 @@
             "dialog": {
                 "open": true,
                 "save": true
+            },
+            "process": {
+                "relaunch": true
             }
         },
         "bundle": {
@@ -71,7 +74,10 @@
             "longDescription": "cup-translate - a lightweight, selection-first translation tool. Community fork of pot-desktop, with first-class Linux/Wayland support.",
             "shortDescription": "cup-translate",
             "externalBin": [],
-            "resources": [],
+            "resources": [
+                "resources/ocr-aarch64-apple-darwin",
+                "resources/ocr-x86_64-apple-darwin"
+            ],
             "icon": [
                 "icons/32x32.png",
                 "icons/128x128.png",
@@ -93,10 +99,10 @@
             },
             "rpm": {
                 "depends": [
-                    "libxdo-dev",
-                    "libxcb1",
-                    "libxrandr2",
-                    "tesseract-ocr"
+                    "libxdo",
+                    "libxcb",
+                    "libXrandr",
+                    "tesseract"
                 ]
             },
             "macOS": {
@@ -108,16 +114,15 @@
             }
         },
         "security": {
-            "csp": "default-src * data: ; img-src * 'self' asset: https: data: ; style-src * 'unsafe-inline'; worker-src 'self' blob: ; script-src * 'unsafe-eval';",
-            "devCsp": "default-src * data: ; img-src * 'self' asset: https: data: ; style-src * 'unsafe-inline'; worker-src 'self' blob: ; script-src * 'unsafe-eval';"
+            "csp": "default-src 'self'; connect-src ipc: http: https:; img-src 'self' asset: http: https: data:; media-src 'self' asset: blob: data:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; script-src 'self' 'unsafe-eval';",
+            "devCsp": "default-src 'self'; connect-src ipc: http: https: ws:; img-src 'self' asset: http: https: data:; media-src 'self' asset: blob: data:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; script-src 'self' 'unsafe-eval';"
         },
         "windows": [
             {
                 "title": "Daemon",
                 "label": "daemon",
                 "visible": false,
-                "url": "daemon.html",
-                "additionalBrowserArgs": "--disable-web-security"
+                "url": "daemon.html"
             }
         ],
         "systemTray": {

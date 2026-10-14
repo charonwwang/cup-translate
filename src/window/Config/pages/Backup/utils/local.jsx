@@ -1,5 +1,6 @@
 import { save, open } from '@tauri-apps/api/dialog';
 import { invoke } from '@tauri-apps/api';
+import { finishRestore } from './restore';
 
 export async function backup() {
     const selected = await save({
@@ -33,10 +34,11 @@ export async function get() {
     });
 
     if (selected !== null && selected.endsWith('zip')) {
-        return await invoke('local', {
+        await invoke('local', {
             operate: 'get',
             path: selected,
         });
+        return finishRestore();
     } else {
         throw 'Invalid File';
     }

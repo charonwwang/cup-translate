@@ -29,13 +29,13 @@
 上游 `pot-app/pot-desktop` 已 `archived`。**所有开发只在 `charonwwang/cup-translate` 进行**，
 不要把 conf/commit 推到上游，也不要向上游 `pot-app/pot-docs` 发 webhook（相关 CI 已禁用）。
 
-### 1.3 CI 中的上游身份残留（已禁用，勿误开）
-`.github/workflows/package.yml` 中以下 job 使用**上游身份**，已被 `if: false` 禁用：
+### 1.3 CI 中的上游身份残留（已移除，勿恢复）
+`.github/workflows/package.yml` 中以下使用**上游身份**的 job 已移除：
 - `homebrew` — 会推 `pot-app/homebrew-tap`
 - `winget` — winget id 为 `Pylogmon.pot`，`fork-user: Pylogmon`
 - `trigger-docs-update` — 会 curl 上游 `pot-app/pot-docs`
 
-**除非 cup-translate 有了自己的 tap / winget 标识，否则不要启用。**
+**除非 cup-translate 有了自己的 tap / winget 标识，否则不要恢复。**
 
 ---
 
@@ -77,7 +77,7 @@ cd src-tauri && cargo build --release --features custom-protocol # 产物 target
 
 ### 2.2 打包（.deb / AppImage）
 
-**必须用封装脚本**，它会自动剔除 .deb 的幽灵依赖并清理旧品牌产物：
+**必须用封装脚本**，它会自动剔除 .deb 的幽灵依赖：
 
 ```bash
 bash packaging/build-linux.sh deb        # 推荐
@@ -102,9 +102,8 @@ readelf -d src-tauri/target/release/cup-translate | grep NEEDED   # 只有 4.1
 
 ### 2.3 已知未验证项（不要当成已完成）
 
-- **RPM 依赖未验证**：`tauri.conf.json` 的 `bundle.rpm.depends` 仍是上游原值
-  （含 `libxdo-dev`、`libxcb1` 等 **Debian 风格包名**），在 Fedora/RHEL 上大概率不正确。
-  **尚未在 RPM 系发行版上实测过**，修之前请在真实 Fedora 环境验证包名。
+- **RPM 安装未验证**：`tauri.conf.json` 的 `bundle.rpm.depends` 已改为 Fedora
+  的运行包名称，但**尚未在 RPM 系发行版上实际安装运行**，发版前仍需验证。
 - **CI 未验证**：`package.yml` 已收敛为仅 `v*` tag 触发，但**从未打过 tag，因此从未真正跑通**。
 - **Windows / macOS 打包未验证**：当前仅在 Ubuntu 24.04 上实测过。
 
@@ -162,8 +161,8 @@ readelf -d src-tauri/target/release/cup-translate | grep NEEDED   # 只有 4.1
 ECDict（`pot-app.com/api/dict` 404/405）、Lingva 翻译（NXDOMAIN）、Bing 取 token（404）。
 如需恢复请以 pot 插件形式自行接入，勿在核心里复活死端点。
 
-**默认引擎策略（开箱即用）**：默认 `translate_service_list` 只含 `yandex` + `google`
-（免 API key、上游可用，`google` 支持 `custom_url` 镜像）；TTS 默认 `local_tts`
+**默认引擎策略（开箱即用）**：默认 `translate_service_list` 为 `google`、`yandex`
+（免 API key，Google 优先；Yandex 在部分地区返回 403，`google` 支持 `custom_url` 镜像）；TTS 默认 `local_tts`
 （本地 espeak-ng / spd-say 合成，零配置、离线）；本地离线翻译 `local_mt` 为**可选插件式**
 （默认不启用，模型在设置页按需下载，见 `src-tauri/src/local_mt.rs`）。启动时
 `src-tauri/src/config.rs::prune_unconfigured_dead_services()` 会清理**从未配置过**的

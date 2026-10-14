@@ -1,6 +1,6 @@
 export const info = {
     name: 'youdao',
-    icon: 'logo/youdao.svg',
+    icon: '/logo/youdao.svg',
 };
 // https://ai.youdao.com/DOCSIRMA/html/trans/api/wbfy/index.html
 export enum Language {

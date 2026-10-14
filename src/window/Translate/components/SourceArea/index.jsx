@@ -26,7 +26,6 @@ import { debug } from 'tauri-plugin-log-api';
 export const sourceTextAtom = atom('');
 export const detectLanguageAtom = atom('');
 
-let unlisten = null;
 let timer = null;
 
 export default function SourceArea(props) {
@@ -47,6 +46,7 @@ export default function SourceArea(props) {
     const toastStyle = useToastStyle();
     const { t } = useTranslation();
     const textAreaRef = useRef();
+    const handleNewTextRef = useRef();
     const speak = useVoice();
 
     const handleNewText = async (text) => {
@@ -165,6 +165,10 @@ export default function SourceArea(props) {
         }
     };
 
+    // Keep the native event listener stable while ensuring it always sees the
+    // latest service/config values after the settings window changes them.
+    handleNewTextRef.current = handleNewText;
+
     const keyDown = (event) => {
         if (event.key === 'Enter' && !event.shiftKey) {
             event.preventDefault();
@@ -213,15 +217,23 @@ export default function SourceArea(props) {
 
     useEffect(() => {
         if (hideWindow !== null) {
-            if (unlisten) {
-                unlisten.then((f) => {
-                    f();
-                });
-            }
-            unlisten = listen('new_text', (event) => {
+            let disposed = false;
+            let stopListening;
+            listen('new_text', (event) => {
                 appWindow.setFocus();
-                handleNewText(event.payload);
+                handleNewTextRef.current(event.payload);
+            }).then((unlisten) => {
+                if (disposed) {
+                    unlisten();
+                } else {
+                    stopListening = unlisten;
+                }
             });
+
+            return () => {
+                disposed = true;
+                stopListening?.();
+            };
         }
     }, [hideWindow]);
 
@@ -376,7 +388,7 @@ export default function SourceArea(props) {
         <div className={hideSource && windowType !== '[INPUT_TRANSLATE]' && 'hidden'}>
             <Card
                 shadow='none'
-                className='bg-content1 rounded-[10px] mt-[1px] pb-0'
+                className='source-panel bg-content1 rounded-[14px] mt-[1px] pb-0'
             >
                 <Toaster />
                 <CardBody className='bg-content1 p-[12px] pb-0 max-h-[40vh] overflow-y-auto'>

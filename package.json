@@ -6,6 +6,10 @@
     "scripts": {
         "dev": "vite",
         "build": "vite build",
+        "check": "pnpm build && pnpm test",
+        "test": "node --test tests/*.test.mjs",
+        "package:linux": "bash packaging/build-linux.sh deb",
+        "package:linux:all": "bash packaging/build-linux.sh all",
         "preview": "vite preview",
         "tauri": "tauri",
         "updater": "node updater/updater.mjs",
@@ -24,7 +28,7 @@
         "jotai": "^2.10.1",
         "jsqr": "^1.4.0",
         "md5": "^2.3.0",
-        "nanoid": "^5.0.8",
+        "nanoid": "^5.1.16",
         "next-themes": "^0.3.0",
         "ollama": "^0.5.9",
         "react": "^18.3.1",
@@ -34,26 +38,39 @@
         "react-i18next": "^15.1.0",
         "react-icons": "^5.3.0",
         "react-markdown": "^9.0.1",
-        "react-router-dom": "^6.27.0",
+        "react-router-dom": "^6.30.4",
         "react-spinners": "^0.14.1",
         "react-use-measure": "^2.1.1",
-        "tauri-plugin-autostart-api": "github:tauri-apps/tauri-plugin-autostart#v1",
-        "tauri-plugin-fs-watch-api": "github:tauri-apps/tauri-plugin-fs-watch#v1",
-        "tauri-plugin-log-api": "github:tauri-apps/tauri-plugin-log#v1",
-        "tauri-plugin-sql-api": "github:tauri-apps/tauri-plugin-sql#v1",
-        "tauri-plugin-store-api": "github:tauri-apps/tauri-plugin-store#v1",
+        "tauri-plugin-autostart-api": "github:tauri-apps/tauri-plugin-autostart#6e4666fe3462f0534e90ed6bc075394dff1a1bde",
+        "tauri-plugin-fs-watch-api": "github:tauri-apps/tauri-plugin-fs-watch#b595fef18f0b861b212c09dbfda86a0f4f2acda6",
+        "tauri-plugin-log-api": "github:tauri-apps/tauri-plugin-log#cc86b2d9878d6ec02c9f25bd48292621a4bc2a6f",
+        "tauri-plugin-sql-api": "github:tauri-apps/tauri-plugin-sql#10c441d2e90e5df0e414c40ba81f597b6c38b164",
+        "tauri-plugin-store-api": "github:tauri-apps/tauri-plugin-store#0b7079b8c55bf25f6d9d9e8c57812d03b48a9788",
         "tesseract.js": "^5.1.1",
-        "uuid": "^11.0.2"
+        "uuid": "^11.1.1"
     },
     "devDependencies": {
         "@tauri-apps/cli": "^1.6.3",
         "@vitejs/plugin-react": "^4.3.3",
         "autoprefixer": "^10.4.20",
         "node-fetch": "^3.3.2",
-        "postcss": "^8.4.47",
+        "postcss": "^8.5.23",
         "prettier": "3.3.2",
         "tailwindcss": "^3.4.14",
         "typescript": "^5.6.3",
         "vite": "^5.4.10"
+    },
+    "pnpm": {
+        "overrides": {
+            "@babel/runtime": "7.29.7",
+            "brace-expansion": "2.1.7",
+            "cross-spawn": "7.0.6",
+            "glob": "10.5.0",
+            "minimatch": "9.0.9",
+            "mdast-util-to-hast": "13.2.1",
+            "picomatch": "2.3.2",
+            "postcss-selector-parser": "6.1.4",
+            "yaml": "2.9.1"
+        }
     }
 }

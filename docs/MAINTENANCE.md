@@ -85,10 +85,10 @@
 - [x] **死服务清理 + 本地 TTS**：翻译侧 `bing`/`ecdict`/`lingva` 代码删除（上游全死且无自建入口）
   - TTS 默认 `lingva_tts` → `local_tts`（espeak-ng / espeak / spd-say 本地合成：离线、零配置、GPL-3.0 兼容）
   - `lingva_tts` 代码保留仅供自建实例（`requestPath` 可配）；高质量本地 TTS（Piper + sherpa-onnx，Apache-2.0）为后续升级项
-- [ ] 引入最小测试（当前**零测试**，见 `CLAUDE.md` §6）
+- [x] 引入最小测试：前端/打包规则与 Rust 单元测试已覆盖主要回归点；跨平台安装与真实划词仍需持续做集成验证
 - [ ] 自建更新源 —— **代码侧已完成，待发版验证**，见下方「更新器（updater）启用状态」
 - [ ] 脱离上游基础设施依赖：ECDICT / Lingva / Bing token **已删除**，TTS **已本地化**；
-      仍剩阿里云盘备份代理（依赖上游，暂可用）待替换
+      仍剩阿里云盘备份授权代理（依赖上游，本轮未验证其可用性）待替换；本地/WebDAV/阿里云备份已统一使用新应用配置目录，恢复后会自动重启以应用设置
 
 ### 阶段 M2（中期）
 - [ ] 专注"划词→弹窗"响应优化（内存/耗时）
@@ -111,6 +111,7 @@
 |---|---|---|
 | 更新源 | `src-tauri/tauri.conf.json` → `updater.endpoints` | 指向 `releases/download/updater/update.json` |
 | 验签公钥 | `src-tauri/tauri.conf.json` → `updater.pubkey` | 自有 minisign 公钥（key id `DB420303520E0CB5`） |
+| 内置 WebView2 更新 | `src-tauri/webview.{x64,x86,arm64}.json` | 指向本仓库的 `update-fix-runtime.json`，使用同一公钥 |
 | 清单生成 | `updater/updater.mjs`、`updater-for-fix-runtime.mjs` | 已改为 `charonwwang/cup-translate` + `cup-translate_*` 产物名 |
 | 产物重命名 | `.github/workflows/package.yml` | macOS / Windows 的 `Rename-Item` 源名已从 `pot_` 改为 `cup-translate_`（原先会因找不到文件而失败） |
 
@@ -135,8 +136,8 @@ CI 也只为 x86_64 构建 AppImage，且 Tauri 更新器在 Linux 上仅支持 
 
 - `updater.mjs` 中的产物名依赖 `tauri.conf.json` 的 `package.productName`（当前 `cup-translate`）。
   **改 productName 必须同步改这两个 mjs 和 CI 里的重命名步骤。**
-- 签名抓取失败时脚本会打印 `WARNING` 并返回空签名；空签名会让用户端安装阶段中止。
-  若 CI 日志出现该 WARNING，说明 `.sig` 文件未上传，需先修流水线。
+- 清单生成按当前触发的 tag 读取 release；签名缺失或为空时脚本直接失败，
+  不会上传无法通过验签的更新清单。
 
 ## 8. 权限与分工
 - **维护者（现状负责人）**：审 PR、合并、规划、发版
@@ -149,6 +150,7 @@ CI 也只为 x86_64 构建 AppImage，且 Tauri 更新器在 Linux 上仅支持 
 | Wayland 上游协议限制（划词）| 预留 XWayland + curl 外部调用兜底 |
 | 上游版权/商标使用 | 保留 GPL、改掉 pot 名称、不主张原商标 |
 | 单人维护精力 | 控制默认功能边界，减少维护面 |
+| 前端依赖告警 | 直接依赖已升级到安全修补版；`pnpm audit --prod --registry https://registry.npmjs.org` 仍报告 9 条高危，均经由 NextUI/Tailwind/Sucrase 的构建工具链（glob、minimatch 等）。发布前需继续评估上游升级，不能把审计通过当成已完成。 |
 
 ---
 

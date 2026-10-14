@@ -26,6 +26,9 @@ export async function translate(text, from, to) {
             throw JSON.stringify(result);
         }
     } else {
+        if (res.status === 403 && res.data?.message === 'Forbidden area') {
+            throw 'Yandex is unavailable in this region (HTTP 403)';
+        }
         throw `Http Request Error\nHttp Status: ${res.status}\n${JSON.stringify(res.data)}`;
     }
 }

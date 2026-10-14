@@ -1,6 +1,6 @@
 export const info = {
     name: 'cambridge_dict',
-    icon: 'logo/cambridge_dict.svg',
+    icon: '/logo/cambridge_dict.svg',
 };
 
 export enum Language {

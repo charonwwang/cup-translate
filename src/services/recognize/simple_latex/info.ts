@@ -1,6 +1,6 @@
 export const info = {
     name: 'simple_latex_ocr',
-    icon: 'logo/simple_latex.png',
+    icon: '/logo/simple_latex.png',
 };
 
 export enum Language {

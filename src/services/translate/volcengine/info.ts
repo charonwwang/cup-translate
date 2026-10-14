@@ -1,6 +1,6 @@
 export const info = {
     name: 'volcengine',
-    icon: 'logo/volcengine.svg',
+    icon: '/logo/volcengine.svg',
 };
 // https://www.volcengine.com/docs/4640/35107
 export enum Language {

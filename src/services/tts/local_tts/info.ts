@@ -1,6 +1,6 @@
 export const info = {
     name: 'local_tts',
-    icon: 'logo/local_tts.svg',
+    icon: '/logo/local_tts.svg',
 };
 
 export enum Language {

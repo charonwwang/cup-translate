@@ -1,6 +1,6 @@
 export const info = {
     name: 'local_mt',
-    icon: 'logo/local_mt.svg',
+    icon: '/logo/local_mt.svg',
 };
 
 export enum Language {
