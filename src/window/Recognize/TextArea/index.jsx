@@ -142,12 +142,12 @@ export default function TextArea(props) {
                             }
                         );
                 } else {
-                    setError('Language not supported');
+                    setError(t('common.language_not_supported'));
                     setLoading(false);
                 }
             }
         }
-    }, [base64, currentServiceInstanceKey, language, recognizeFlag, autoCopy, deleteNewline, hideWindow]);
+    }, [base64, currentServiceInstanceKey, language, recognizeFlag, autoCopy, deleteNewline, hideWindow, t]);
 
     return (
         <Card

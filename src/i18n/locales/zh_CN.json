@@ -8,7 +8,8 @@
             "plugin": "插件",
             "coming": "敬请期待…",
             "clear": "清空",
-            "copied": "已复制到剪贴板"
+            "copied": "已复制到剪贴板",
+            "language_not_supported": "当前服务不支持所选语言"
         },
         "languages": {
             "auto": "自动检测",

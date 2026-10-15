@@ -8,7 +8,8 @@
             "plugin": "Plugin",
             "coming": "Coming soon…",
             "clear": "Clear",
-            "copied": "Copied to clipboard"
+            "copied": "Copied to clipboard",
+            "language_not_supported": "The selected language is not supported by this service"
         },
         "languages": {
             "auto": "Auto Detect",

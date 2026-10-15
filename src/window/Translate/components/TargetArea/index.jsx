@@ -292,7 +292,7 @@ export default function TargetArea(props) {
                     }
                 );
             } else {
-                setError('Language not supported');
+                setError(t('common.language_not_supported'));
             }
         } else {
             const LanguageEnum = builtinServices[translateServiceName].Language;
@@ -357,7 +357,7 @@ export default function TargetArea(props) {
                         }
                     );
             } else {
-                setError('Language not supported');
+                setError(t('common.language_not_supported'));
             }
         }
     };
@@ -398,7 +398,7 @@ export default function TargetArea(props) {
         if (getServiceSouceType(instanceKey) === ServiceSourceType.PLUGIN) {
             const pluginConfig = serviceInstanceConfigMap[instanceKey];
             if (!(targetLanguage in ttsPluginInfo.language)) {
-                throw new Error('Language not supported');
+                throw new Error(t('common.language_not_supported'));
             }
             let [func, utils] = await invoke_plugin('tts', getServiceName(instanceKey));
             let data = await func(result, ttsPluginInfo.language[targetLanguage], {
@@ -408,7 +408,7 @@ export default function TargetArea(props) {
             speak(data);
         } else {
             if (!(targetLanguage in builtinTtsServices[getServiceName(instanceKey)].Language)) {
-                throw new Error('Language not supported');
+                throw new Error(t('common.language_not_supported'));
             }
             const instanceConfig = serviceInstanceConfigMap[instanceKey];
             let data = await builtinTtsServices[getServiceName(instanceKey)].tts(
@@ -806,7 +806,7 @@ export default function TargetArea(props) {
                                                     }
                                                 );
                                             } else {
-                                                setError('Language not supported');
+                                                setError(t('common.language_not_supported'));
                                             }
                                         } else {
                                             const LanguageEnum =
@@ -853,7 +853,7 @@ export default function TargetArea(props) {
                                                         }
                                                     );
                                             } else {
-                                                setError('Language not supported');
+                                                setError(t('common.language_not_supported'));
                                             }
                                         }
                                     }}
