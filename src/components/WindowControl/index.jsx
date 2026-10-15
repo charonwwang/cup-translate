@@ -11,13 +11,27 @@ export default function WindowControl() {
     const [isMax, setIsMax] = useState(false);
 
     useEffect(() => {
+        let unlisten = null;
+        let disposed = false;
         listen('tauri://resize', async () => {
             if (await appWindow.isMaximized()) {
                 setIsMax(true);
             } else {
                 setIsMax(false);
             }
+        }).then((f) => {
+            if (disposed) {
+                f();
+            } else {
+                unlisten = f;
+            }
         });
+        return () => {
+            disposed = true;
+            if (unlisten) {
+                unlisten();
+            }
+        };
     }, []);
 
     return (
