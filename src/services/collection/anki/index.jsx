@@ -15,6 +15,9 @@ export async function collection(source, target, options = {}) {
             method: 'POST',
             body: Body.json({ action, version, params }),
         });
+        if (!res.ok) {
+            throw `Anki Connect Failed: HTTP ${res.status}`;
+        }
         return res.data;
     }
 

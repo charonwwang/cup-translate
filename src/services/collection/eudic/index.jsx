@@ -20,6 +20,9 @@ async function checkCategory(name, token) {
             Authorization: token,
         },
     });
+    if (!res.ok) {
+        throw `Get Category Failed: HTTP ${res.status}`;
+    }
 
     let result = res.data;
     if (result.data) {
@@ -40,6 +43,9 @@ async function checkCategory(name, token) {
                 name: name,
             }),
         });
+        if (!res1.ok) {
+            throw `Create Category Failed: HTTP ${res1.status}`;
+        }
         let result1 = res1.data;
         if (result1.data) {
             return result1.data.id;
@@ -64,6 +70,9 @@ async function addWordToCategory(id, word, token) {
             words: [word],
         }),
     });
+    if (!res.ok) {
+        throw `Add Word Failed: HTTP ${res.status}`;
+    }
     let result = res.data;
     return result.message;
 }
