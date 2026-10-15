@@ -25,6 +25,21 @@ fn app_config_dir() -> Result<PathBuf, Error> {
 /// 但仍避免网络卡死时永久挂起
 const BACKUP_HTTP_TIMEOUT: Duration = Duration::from_secs(300);
 
+/// 校验远端备份文件名。名字来自 WebDAV 服务器的 href（前端只取最后一段、
+/// **不做百分号解码**），因此属于**外部输入**，必须严格校验。
+///
+/// 除了路径穿越（空、`/`、`\`、`.`、`..`），这里还拒绝**控制字符**。
+/// 原因是实测得出的一条链路行为：名字最终被 `reqwest_dav` 用
+/// `format!("{host}/{name}")` 拼成字符串再交给 `Url::parse`，而 `Url::parse` 会
+/// **静默丢弃**原始换行 / 制表 / 回车（实测 `"a\nb.zip"` 变成 `"ab.zip"`），
+/// 并把 NUL 编码成 `%00`。结果是「恢复」和「删除」实际操作的是
+/// **另一个文件名**，而用户与日志看到的都是原始名字——轻则无谓的 404，
+/// 重则删错文件。与其静默改名，不如在这里直接拒绝、让调用方拿到明确错误。
+///
+/// 注：`%2E%2E%2F` 这类**已编码**的形式会被 `Url::parse` 当作不透明片段原样保留，
+/// 不会被解码成 `../`，因此不构成本文件需要额外处理的穿越风险
+/// （真正的 `..` 段会先被上面的规则拒掉）。这里拒绝控制字符解决的是
+/// 「静默改名」，不是「穿越」。
 fn backup_name(name: Option<&str>) -> Result<&str, Error> {
     name.filter(|value| {
         !value.is_empty()
@@ -32,6 +47,8 @@ fn backup_name(name: Option<&str>) -> Result<&str, Error> {
             && !value.contains('\\')
             && *value != "."
             && *value != ".."
+            // 控制字符（含 NUL / 换行 / 制表 / 回车 / DEL）：见上方说明
+            && !value.chars().any(|c| c.is_control())
     })
     .ok_or_else(|| Error::Error("Invalid backup name".into()))
 }
@@ -586,5 +603,78 @@ mod tests {
             assert!(backup_name(name).is_err());
         }
         assert_eq!(backup_name(Some("settings.zip")).unwrap(), "settings.zip");
+    }
+
+    #[test]
+    fn rejects_remote_backup_names_containing_control_characters() {
+        // 这些名字**不是**穿越风险，而是「静默改名」风险：
+        // 它们会被 reqwest_dav 拼进 URL，Url::parse 随后丢掉换行/制表/回车
+        // （实测 "a\nb.zip" -> "ab.zip"）、把 NUL 编码成 %00。
+        // 结果就是恢复/删除操作实际打到了另一个文件名上。
+        // 与其静默改到一个可能存在的文件，不如直接拒绝。
+        for name in [
+            Some("a\nb.zip"),    // 换行
+            Some("a\rb.zip"),    // 回车
+            Some("a\tb.zip"),    // 制表
+            Some("a\u{0}b.zip"), // NUL
+            Some("a\u{7f}b.zip"),   // DEL (C0)
+            Some("\u{1b}[31m.zip"),  // ANSI 转义（还会污染日志）
+            Some("a\u{85}b.zip"),   // NEL (C1)：char::is_control() 覆盖 C1 区
+        ] {
+            assert!(
+                backup_name(name).is_err(),
+                "{name:?} contains a control character and must be rejected"
+            );
+        }
+    }
+
+    /// 明确记录 `is_control()` 的**边界**，避免夸大该防护的覆盖面。
+    ///
+    /// 它覆盖 C0 与 C1 控制字符，但**不覆盖** U+200B（零宽空格）、
+    /// U+FEFF（BOM）这类「格式字符」（Unicode 类别 Cf，不是 Cc）。
+    /// 本轮的修复针对的是会把名字**改写成另一个文件**的字符——
+    /// 那正是 `Url::parse` 会丢弃/重编码的那批（CR/LF/TAB/NUL），全部在 Cc 内。
+    /// Cf 字符不会导致改名，因此不纳入拒绝范围；这条测试把该界限钉住，
+    /// 免得后人看到「拒绝控制字符」就以为 ZWSP 也被拦了。
+    #[test]
+    fn format_characters_are_outside_the_control_character_check() {
+        for name in ["a\u{200b}b.zip", "\u{feff}a.zip"] {
+            assert!(
+                backup_name(Some(name)).is_ok(),
+                "{name:?} is a Unicode *format* character (Cf), not a control character (Cc); \
+                 it does not get rewritten by Url::parse, so it is intentionally accepted"
+            );
+        }
+    }
+
+    #[test]
+    fn ordinary_remote_backup_names_still_pass() {
+        // 反向：不要把正常名字误伤。前端的默认名字形如
+        // `macos-2026-10-15-14-30-0.zip`，含连字符与点，必须放行。
+        for name in ["settings.zip", "macos-2026-10-15-14-30-0.zip", "备份.zip", "a b.zip"] {
+            assert_eq!(
+                backup_name(Some(name)).unwrap(),
+                name,
+                "{name:?} is an ordinary backup name and must be accepted"
+            );
+        }
+    }
+
+    #[test]
+    fn encoded_traversal_sequences_are_not_silently_decoded() {
+        // 记录一条实测结论，避免后人误以为这里是穿越漏洞而做出错误的"加固"：
+        // 名字最终由 reqwest_dav 拼成 `{host}/{name}` 再 `Url::parse`，
+        // 而 Url::parse **不会**解码已有的 %XX，`%2E%2E%2F` 会被当作不透明片段保留。
+        // 因此 backup_name 无需（也不应）尝试解码后再判断——
+        // 真正的 `..` 段已经由 `*value != ".."` 拒掉了。
+        // 这里只断言当前行为：这些形式被接受，且原样返回、不做解码。
+        for name in ["%2E%2E%2Fetc%2Fpasswd", "..%2F..%2Fx.zip"] {
+            assert_eq!(
+                backup_name(Some(name)).unwrap(),
+                name,
+                "{name:?} is passed through verbatim — Url::parse keeps %XX opaque, \
+                 so this is not a path-traversal bypass"
+            );
+        }
     }
 }
