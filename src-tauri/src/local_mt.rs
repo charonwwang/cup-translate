@@ -130,6 +130,37 @@ fn translator_cache() -> &'static Mutex<HashMap<String, (usize, Arc<MtTranslator
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+/// 防止同一模型并发下载/删除（双击下载按钮或下载与删除竞态会写坏 model.bin）。
+/// 值为 ()，仅用 key 存在与否表示「正在下载」。
+fn download_lock() -> &'static Mutex<HashMap<String, ()>> {
+    static LOCKS: OnceLock<Mutex<HashMap<String, ()>>> = OnceLock::new();
+    LOCKS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// RAII 守卫：持有期间该 pair 处于下载中状态，Drop 时自动释放
+struct DownloadGuard {
+    pair: String,
+}
+
+impl DownloadGuard {
+    fn acquire(pair: &str) -> Result<Self, String> {
+        let mut locks = download_lock().lock().map_err(|e| e.to_string())?;
+        if locks.contains_key(pair) {
+            return Err(format!("{pair} 模型正在下载/删除中，请稍候再试"));
+        }
+        locks.insert(pair.to_string(), ());
+        Ok(Self { pair: pair.to_string() })
+    }
+}
+
+impl Drop for DownloadGuard {
+    fn drop(&mut self) {
+        if let Ok(mut locks) = download_lock().lock() {
+            locks.remove(&self.pair);
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn local_mt_model_status(app_handle: AppHandle, pair: String) -> Result<Value, String> {
     let spec = model_spec(&pair)?;
@@ -150,6 +181,7 @@ pub async fn local_mt_model_status(app_handle: AppHandle, pair: String) -> Resul
 
 #[tauri::command]
 pub async fn local_mt_download_model(app_handle: AppHandle, pair: String) -> Result<(), String> {
+    let _guard = DownloadGuard::acquire(&pair)?;
     let spec = model_spec(&pair)?;
     let dir = model_dir(&app_handle, &pair)?;
     std::fs::create_dir_all(&dir).map_err(|e| format!("创建模型目录失败: {e}"))?;
@@ -230,6 +262,7 @@ pub async fn local_mt_download_model(app_handle: AppHandle, pair: String) -> Res
 
 #[tauri::command]
 pub async fn local_mt_delete_model(app_handle: AppHandle, pair: String) -> Result<(), String> {
+    let _guard = DownloadGuard::acquire(&pair)?;
     let dir = model_dir(&app_handle, &pair)?;
     translator_cache()
         .lock()
@@ -314,6 +347,18 @@ pub async fn local_mt_translate(
 mod tests {
     use super::{file_sha256, model_spec, verify_model_checksums, ModelSpec};
     use std::path::PathBuf;
+
+    #[test]
+    fn download_guard_prevents_concurrent_access_to_same_pair() {
+        // 同一 pair 不允许并发持有
+        let guard = super::DownloadGuard::acquire("en-zh").unwrap();
+        assert!(super::DownloadGuard::acquire("en-zh").is_err());
+        // 不同 pair 不受影响
+        assert!(super::DownloadGuard::acquire("zh-en").is_ok());
+        drop(guard);
+        // 释放后可重新获取
+        assert!(super::DownloadGuard::acquire("en-zh").is_ok());
+    }
 
     #[test]
     fn model_specs_pin_checksums_for_every_model_file() {
