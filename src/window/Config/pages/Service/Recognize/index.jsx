@@ -43,14 +43,17 @@ export default function Recognize(props) {
         setRecognizeServiceInstanceList(items);
     };
 
+    // 返回 true 表示确实删除了；false 表示被拒（例如「至少保留一个服务」）。
+    // 调用方（SelectPluginModal 卸载插件）必须据此决定是否删除磁盘上的插件文件，
+    // 否则会出现「文件已删但配置仍在」的不一致状态。
     const deleteServiceInstance = (instanceKey) => {
         if (recognizeServiceInstanceList.length === 1) {
             toast.error(t('config.service.least'), { style: toastStyle });
-            return;
-        } else {
-            setRecognizeServiceInstanceList(recognizeServiceInstanceList.filter((x) => x !== instanceKey));
-            deleteKey(instanceKey);
+            return false;
         }
+        setRecognizeServiceInstanceList(recognizeServiceInstanceList.filter((x) => x !== instanceKey));
+        deleteKey(instanceKey);
+        return true;
     };
     const updateServiceInstanceList = (instanceKey) => {
         if (recognizeServiceInstanceList.includes(instanceKey)) {

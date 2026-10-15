@@ -45,14 +45,17 @@ export default function Translate(props) {
         setTranslateServiceInstanceList(items);
     };
 
+    // 返回 true 表示确实删除了；false 表示被拒（例如「至少保留一个服务」）。
+    // 调用方（SelectPluginModal 卸载插件）必须据此决定是否删除磁盘上的插件文件，
+    // 否则会出现「文件已删但配置仍在」的不一致状态。
     const deleteServiceInstance = (instanceKey) => {
         if (translateServiceInstanceList.length === 1) {
             toast.error(t('config.service.least'), { style: toastStyle });
-            return;
-        } else {
-            setTranslateServiceInstanceList(translateServiceInstanceList.filter((x) => x !== instanceKey));
-            deleteKey(instanceKey);
+            return false;
         }
+        setTranslateServiceInstanceList(translateServiceInstanceList.filter((x) => x !== instanceKey));
+        deleteKey(instanceKey);
+        return true;
     };
     const updateServiceInstanceList = (instanceKey) => {
         if (translateServiceInstanceList.includes(instanceKey)) {

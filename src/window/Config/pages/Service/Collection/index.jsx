@@ -37,9 +37,12 @@ export default function Collection(props) {
         setCollectionServiceInstanceList(items);
     };
 
+    // 返回 true 表示确实删除了（Collection 无「至少保留一个」限制，恒为 true）。
+    // 与其余三个服务页保持同一签名，便于 SelectPluginModal 统一判断。
     const deleteServiceInstance = (instanceKey) => {
         setCollectionServiceInstanceList(collectionServiceInstanceList.filter((x) => x !== instanceKey));
         deleteKey(instanceKey);
+        return true;
     };
     const updateServiceInstanceList = (instanceKey) => {
         if (collectionServiceInstanceList.includes(instanceKey)) {

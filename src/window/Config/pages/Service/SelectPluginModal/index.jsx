@@ -69,6 +69,14 @@ export default function SelectPluginModal(props) {
                                             color='danger'
                                             variant='flat'
                                             onPress={() => {
+                                                // 先问配置层「能不能删」再动文件：deleteService
+                                                // 在「仅剩最后一个服务实例」时会拒绝并返回 false。
+                                                // 原实现先 removeDir 再调 deleteService，导致被拒时
+                                                // 文件已删、配置仍在，且同时弹出「卸载成功」与
+                                                // 「至少保留一个服务」两条自相矛盾的提示。
+                                                if (!deleteService(x)) {
+                                                    return;
+                                                }
                                                 removeDir(`plugins/${pluginType}/${x}`, {
                                                     dir: BaseDirectory.AppConfig,
                                                     recursive: true,
@@ -77,10 +85,12 @@ export default function SelectPluginModal(props) {
                                                         toast.success(t('config.service.uninstall_success'), {
                                                             style: toastStyle,
                                                         });
-                                                        deleteService(x);
                                                         emit('reload_plugin_list');
                                                     },
                                                     (e) => {
+                                                        // 配置已删、文件残留：不影响功能
+                                                        //（不再被引用，且可覆盖重装），
+                                                        // 但要如实告知用户。
                                                         toast.error(e.toString(), { style: toastStyle });
                                                     }
                                                 );
