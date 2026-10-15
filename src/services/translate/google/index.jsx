@@ -14,36 +14,40 @@ const BROWSER_UA =
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
 async function tryTranslate(customUrl, text, from, to) {
-    return await fetch(
-        `${customUrl}/translate_a/single?dt=at&dt=bd&dt=ex&dt=ld&dt=md&dt=qca&dt=rw&dt=rm&dt=ss&dt=t`,
-        {
-            method: 'GET',
-            headers: {
-                'content-type': 'application/json',
-                'User-Agent': BROWSER_UA,
-                'Referer': 'https://translate.google.com/',
-                'Accept-Language': 'en-US,en;q=0.9',
-            },
-            query: {
-                client: 'dict-chrome-ex',
-                sl: from,
-                tl: to,
-                hl: to,
-                ie: 'UTF-8',
-                oe: 'UTF-8',
-                otf: '1',
-                ssel: '0',
-                tsel: '0',
-                kc: '7',
-                q: text,
-            },
-        }
-    );
+    return await fetch(`${customUrl}/translate_a/single?dt=at&dt=bd&dt=ex&dt=ld&dt=md&dt=qca&dt=rw&dt=rm&dt=ss&dt=t`, {
+        method: 'GET',
+        headers: {
+            'content-type': 'application/json',
+            'User-Agent': BROWSER_UA,
+            Referer: 'https://translate.google.com/',
+            'Accept-Language': 'en-US,en;q=0.9',
+        },
+        query: {
+            client: 'dict-chrome-ex',
+            sl: from,
+            tl: to,
+            hl: to,
+            ie: 'UTF-8',
+            oe: 'UTF-8',
+            otf: '1',
+            ssel: '0',
+            tsel: '0',
+            kc: '7',
+            q: text,
+        },
+    });
 }
 
 function sleep(ms) {
     return new Promise((r) => setTimeout(r, ms));
 }
+
+// 429/异常后的指数退避：2s / 4s / 8s / 16s。
+// 注意：这只应在**后面还有重试**时等待。旧实现放在循环体末尾无条件等待，
+// 最后一次尝试也会先睡 32 秒再抛错——那 32 秒占全部等待（约 62s）的一半以上，
+// 且明知不会再有重试，纯粹让用户多等。
+const MAX_ATTEMPTS = 5;
+const backoffMs = (attempt) => 2000 * Math.pow(2, Math.min(attempt, 4));
 
 export async function translate(text, from, to, options = {}) {
     const { config } = options;
@@ -57,25 +61,31 @@ export async function translate(text, from, to, options = {}) {
         custom_url = 'https://' + custom_url;
     }
 
-    // 多端点轮换 + 429 限流重试（最多 5 次，退避 2s/4s/8s/16s/32s）
+    // 多端点轮换 + 429 限流重试（最多 5 次，退避 2s/4s/8s/16s）
     const urls = custom_url !== ENDPOINTS[0] ? [custom_url, ...ENDPOINTS] : ENDPOINTS;
     let res = null;
     let lastErr = '';
-    for (let attempt = 0; attempt < 5; attempt++) {
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
         const url = urls[attempt % urls.length];
+        // 仅当后面还有重试时才退避等待
+        const willRetry = attempt < MAX_ATTEMPTS - 1;
         try {
             res = await tryTranslate(url, text, from, to);
             if (res.ok) break;
             lastErr = `HTTP ${res.status}`;
             if (res.status === 429) {
                 // 429 限流：指数退避后重试
-                await sleep(2000 * Math.pow(2, Math.min(attempt, 4)));
+                if (willRetry) {
+                    await sleep(backoffMs(attempt));
+                }
                 continue;
             }
             break;
         } catch (e) {
             lastErr = String(e);
-            await sleep(2000 * Math.pow(2, Math.min(attempt, 4)));
+            if (willRetry) {
+                await sleep(backoffMs(attempt));
+            }
         }
     }
 
