@@ -79,26 +79,40 @@ fn copy_dir_all(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result
 
 fn check_available(list: Vec<String>, builtin: Vec<&str>, plugin: Vec<String>, key: &str) {
     let origin_length = list.len();
+    let new_list = retain_available(list, &builtin, &plugin);
+    if new_list.len() != origin_length {
+        set(key, new_list);
+    }
+}
+
+/// 过滤掉「前端已无对应实现」的服务实例，返回应当保留的列表。
+///
+/// 单独抽成纯函数是为了能直接测：这个函数**会改写用户配置**，
+/// 判错就会静默删掉用户的服务实例（CLAUDE.md §4.1 第 5 步记录过
+/// 「local_mt 加了前端忘了加 Rust，用户配置活不过一次重启」）。
+///
+/// 规则：
+/// - 实例键形如 `name` 或 `name@id`（早期版本没有 `@id`），取 `@` 前部分作为服务名
+/// - 服务名以 `plugin` 开头视为插件，需存在于 `plugin` 列表
+/// - 否则视为内置服务，需存在于 `builtin` 白名单
+///
+/// 注意 `retain` 删除的是**所有**与不可用实例键相等的元素，这是刻意的：
+/// 同一不可用服务的重复项（用户手工编辑或迁移产生）应当一并清掉。
+fn retain_available(list: Vec<String>, builtin: &[&str], plugin: &[String]) -> Vec<String> {
     let mut new_list = list.clone();
     for service in list {
-        let name = service.split("@").collect::<Vec<&str>>()[0];
-        let mut is_available = true;
-        if name.starts_with("plugin") {
-            if !plugin.contains(&name.to_string()) {
-                is_available = false;
-            }
+        // `str::split` 至少产出一个元素，空串也会得到 [""]，故此处不会 panic。
+        let name = service.split('@').next().unwrap_or("");
+        let is_available = if name.starts_with("plugin") {
+            plugin.iter().any(|p| p == name)
         } else {
-            if !builtin.contains(&name) {
-                is_available = false;
-            }
-        }
+            builtin.contains(&name)
+        };
         if !is_available {
             new_list.retain(|x| x != &service);
         }
     }
-    if new_list.len() != origin_length {
-        set(key, new_list);
-    }
+    new_list
 }
 
 /// 上游已停服、或缺少配置就必然失败的内置服务（裸实例名，2026 实测）：
@@ -365,5 +379,128 @@ mod tests {
         assert_eq!(coerce_i64(&json!("abc")), None);
         assert_eq!(coerce_i64(&json!(true)), None);
         assert_eq!(coerce_i64(&json!(null)), None);
+    }
+
+    // ---- retain_available：决定哪些服务实例会被从用户配置里删掉 ----
+    // 这些测试守住的是**破坏性行为**：判错会静默删除用户配置，
+    // 而用户只会看到「我的服务实例没了」。
+
+    use super::retain_available;
+
+    fn owned(items: &[&str]) -> Vec<String> {
+        items.iter().map(|s| s.to_string()).collect()
+    }
+
+    fn plugins() -> Vec<String> {
+        vec!["plugin-translate-demo".to_string()]
+    }
+
+    #[test]
+    fn keeps_builtin_instances_that_are_whitelisted() {
+        let list = owned(&["google", "yandex"]);
+        assert_eq!(
+            retain_available(list.clone(), &["google", "yandex"], &plugins()),
+            list
+        );
+    }
+
+    #[test]
+    fn keeps_instances_with_an_at_id_suffix() {
+        // 实例键形如 name@id：判定只看 @ 前的服务名
+        let list = owned(&["google@ab12", "yandex@cd34"]);
+        assert_eq!(
+            retain_available(list.clone(), &["google", "yandex"], &plugins()),
+            list
+        );
+    }
+
+    #[test]
+    fn drops_builtin_instances_that_left_the_whitelist() {
+        // 代码已删除的服务（bing/ecdict/lingva）不该留在配置里
+        let list = owned(&["google", "bing", "lingva@x1", "yandex"]);
+        assert_eq!(
+            retain_available(list, &["google", "yandex"], &plugins()),
+            owned(&["google", "yandex"])
+        );
+    }
+
+    #[test]
+    fn keeps_plugin_instances_that_exist_on_disk() {
+        let list = owned(&["plugin-translate-demo", "plugin-translate-demo@id1"]);
+        assert_eq!(
+            retain_available(list.clone(), &["google"], &plugins()),
+            list
+        );
+    }
+
+    #[test]
+    fn drops_plugin_instances_whose_plugin_was_uninstalled() {
+        // 插件被删掉后，指向它的实例也必须清掉，否则服务列表 UI 必崩
+        let list = owned(&["plugin-translate-gone", "google"]);
+        assert_eq!(
+            retain_available(list, &["google"], &plugins()),
+            owned(&["google"])
+        );
+    }
+
+    #[test]
+    fn drops_every_duplicate_of_an_unavailable_instance() {
+        // 重复项（手工编辑配置或迁移产生）应当一并清掉，而非只删一个
+        let list = owned(&["bing", "bing", "google"]);
+        assert_eq!(
+            retain_available(list, &["google"], &plugins()),
+            owned(&["google"])
+        );
+    }
+
+    #[test]
+    fn a_plugin_is_not_kept_just_because_its_name_is_whitelisted_as_builtin() {
+        // 前缀决定走哪个名单：以 plugin 开头的名字不会去 builtin 里找
+        let list = owned(&["plugin-x"]);
+        let builtin_with_same_name: &[&str] = &["plugin-x"];
+        assert_eq!(
+            retain_available(list, builtin_with_same_name, &plugins()),
+            Vec::<String>::new(),
+            "a plugin-prefixed name must be judged against the plugin list, not the builtin one"
+        );
+    }
+
+    #[test]
+    fn empty_string_never_panics_and_is_dropped() {
+        // split('@') 对空串返回 [""]，取 next() 不会 panic；空服务名无效，应被清掉
+        let list = owned(&["", "google"]);
+        assert_eq!(
+            retain_available(list, &["google"], &plugins()),
+            owned(&["google"])
+        );
+    }
+
+    #[test]
+    fn an_empty_list_is_returned_unchanged() {
+        // 空列表不应产生任何写入
+        assert_eq!(
+            retain_available(Vec::new(), &["google"], &plugins()),
+            Vec::<String>::new()
+        );
+    }
+
+    #[test]
+    fn a_lone_at_sign_is_treated_as_an_empty_service_name() {
+        // "@id" 的 @ 前为空 -> 服务名 "" -> 不在白名单 -> 清掉
+        let list = owned(&["@id1"]);
+        assert_eq!(
+            retain_available(list, &["google"], &plugins()),
+            Vec::<String>::new()
+        );
+    }
+
+    #[test]
+    fn available_instances_are_never_reordered() {
+        // 保留顺序：服务列表的第一项是默认服务，顺序变化会改变默认引擎
+        let list = owned(&["yandex@a", "google@b", "yandex@c"]);
+        assert_eq!(
+            retain_available(list.clone(), &["google", "yandex"], &plugins()),
+            list
+        );
     }
 }
