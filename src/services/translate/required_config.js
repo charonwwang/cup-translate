@@ -23,17 +23,34 @@ const REQUIRED_CONFIG_KEYS = {
 
 // 配置语义特殊的引擎：返回 true 表示「配置齐全、可以调用」
 const SPECIAL_CONFIG_CHECK = {
-    // apiKey 为 "id.secret" 两段式
-    chatglm: (config) => typeof config['apiKey'] === 'string' && config['apiKey'].includes('.'),
+    // apiKey 为 "id.secret" 两段式。
+    //
+    // ⚠️ 这里**必须**用 isFilledString 判两段，不能只写 `includes('.')`：
+    // `'   .   '` / `'\n.\t'` 都含 `.`，会被判为「已配置」，然后
+    // `chatglm/index.jsx` 的 `apiKey.split('.')` 切出全空白的 id/secret
+    // 真的发出请求 —— 与 round 48 修掉的漏洞同形，只是走的是特殊表而不是登记表。
+    chatglm: (config) => {
+        const key = config['apiKey'];
+        if (typeof key !== 'string') {
+            return false;
+        }
+        const [id, secret] = key.split('.');
+        return isFilledString(id) && isFilledString(secret);
+    },
     // api 类型需要 authKey；deeplx 类型需要自定义地址；free 需显式选择类型
     // （空配置的 deepl 不再默认走免 key 端点——实测已 429 封禁，见 docs/research/）
+    //
+    // ⚠️ 两个字符串分支同样必须走 isFilledString：原先写的是 `!== ''`，
+    // 于是 `'   '` 被判为「已配置」，而 `translate_by_deeplx` 会把该值直接
+    // 当 url 传给 fetch，归一化成 `'https://   '` 后 `new URL()` 抛
+    // `Invalid URL`，用户只看到「翻译失败」，不知道原因只是多了个空格。
     deepl: (config) => {
         const type = config['type'];
         if (type === 'api') {
-            return typeof config['authKey'] === 'string' && config['authKey'] !== '';
+            return isFilledString(config['authKey']);
         }
         if (type === 'deeplx') {
-            return typeof config['customUrl'] === 'string' && config['customUrl'] !== '';
+            return isFilledString(config['customUrl']);
         }
         return type === 'free';
     },

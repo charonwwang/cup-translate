@@ -138,6 +138,85 @@ test('values with incidental surrounding whitespace are still accepted', async (
     assert.equal(isServiceConfigured('ollama', { requestPath: 'http://127.0.0.1:11434' }), true);
 });
 
+test('the special-config engines the gate knows about are derived from the source, not hand-listed', async () => {
+    // ⚠️ 这条是**元测试**：守的是「上面那条纯空白用例有没有漏掉引擎」。
+    //
+    // round 86 发现的漏洞正出在这里：上面 `a whitespace-only value never counts
+    // as configured` 里的 `engines` 是**手写清单**，只抄了登记表
+    // REQUIRED_CONFIG_KEYS 的 11 项，而**没有** SPECIAL_CONFIG_CHECK 里的
+    // chatglm / deepl。于是这两条分支长期无人守护：
+    //   · chatglm 写的是 `apiKey.includes('.')` -> '   .   ' 被判为已配置，
+    //     随后 `apiKey.split('.')` 切出全空白的 id/secret 真的发请求；
+    //   · deepl   写的是 `authKey !== ''`      -> '   ' 被判为已配置，
+    //     随后 `translate_by_deeplx` 把它当归一化 url，`new URL()` 抛 Invalid URL。
+    // 两者都与 round 48 修掉的漏洞**同形**，只是绕过了那张手写清单。
+    //
+    // 手写清单**永远无法证明自己完整**（r58/59/60/64/73/82 反复踩到），
+    // 所以这里改为从**权威来源**——源码本身——推导应当覆盖哪些引擎。
+    const source = await readFile('src/services/translate/required_config.js', 'utf8');
+
+    // 从 SPECIAL_CONFIG_CHECK 对象字面量里取出被登记的引擎名
+    const tableStart = source.indexOf('const SPECIAL_CONFIG_CHECK = {');
+    assert.notEqual(tableStart, -1, 'SPECIAL_CONFIG_CHECK must still exist in the source');
+    const tableEnd = source.indexOf('\n};', tableStart);
+    assert.notEqual(tableEnd, -1, 'could not delimit SPECIAL_CONFIG_CHECK');
+    const table = source.slice(tableStart, tableEnd);
+    const specialEngines = [...table.matchAll(/^\s{4}(\w+):/gm)].map((m) => m[1]);
+    assert.ok(
+        specialEngines.length >= 2,
+        `expected at least 2 special-config engines in the source, parsed ${specialEngines.length}`
+    );
+
+    // 同样从源码里取出登记表的引擎名
+    const reqStart = source.indexOf('const REQUIRED_CONFIG_KEYS = {');
+    assert.notEqual(reqStart, -1, 'REQUIRED_CONFIG_KEYS must still exist');
+    const reqEnd = source.indexOf('\n};', reqStart);
+    const reqTable = source.slice(reqStart, reqEnd);
+    const requiredEngines = [...reqTable.matchAll(/^\s{4}(\w+):/gm)].map((m) => m[1]);
+    assert.ok(requiredEngines.length >= 11, `parsed only ${requiredEngines.length} required-config engines`);
+
+    // 每个被登记的引擎都必须真的存在（拼写错会静默退化成「免 key 引擎」= 永远放行）
+    for (const engine of [...specialEngines, ...requiredEngines]) {
+        const dir = `src/services/translate/${engine}`;
+        const entries = await readdir(dir).catch(() => null);
+        assert.notEqual(entries, null, `'${engine}' is registered in the gate but has no ${dir}/ directory`);
+        assert.ok(entries.includes('index.jsx'), `'${dir}/index.jsx' must exist`);
+    }
+
+    // 特殊表里的每个引擎：**纯空白配置一律不得放行**。
+    // 逐个用该引擎的真实配置形状构造「全是空白」的对象。
+    const blanks = [' ', '   ', '\t', '\n', ' \t\n '];
+    const blankShape = {
+        // "id.secret" 两段式：两段都是空白，仍应判为未配置
+        chatglm: () => ({ apiKey: '   .   ' }),
+        deepl: () => ({ type: 'api', authKey: '   ' }),
+    };
+    assert.deepEqual(
+        specialEngines.filter((e) => !(e in blankShape)),
+        [],
+        'every special-config engine must have a blank-shape fixture here; add one when you add an engine'
+    );
+    for (const engine of specialEngines) {
+        for (const blank of blanks) {
+            const config = blankShape[engine](blank);
+            assert.equal(
+                isServiceConfigured(engine, config),
+                false,
+                `${engine} must reject a whitespace-only config (${JSON.stringify(config)})`
+            );
+        }
+    }
+
+    // deeplx 分支单独覆盖：它走的是 customUrl 而不是 authKey
+    for (const blank of blanks) {
+        assert.equal(
+            isServiceConfigured('deepl', { type: 'deeplx', customUrl: blank }),
+            false,
+            `deeplx must reject a whitespace-only customUrl (${JSON.stringify(blank)})`
+        );
+    }
+});
+
 test('the gate trims for comparison but does not rewrite the stored config', async () => {
     // isFilledString 只读不写：不能因为判定就改动用户传进来的对象，
     // 否则「我明明填了」会变成难以排查的困惑。
