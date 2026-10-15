@@ -22,8 +22,14 @@ export async function translate(text, from, to) {
     );
     if (res.ok) {
         const result = res.data;
-        const meaningGroups = result.value[0].meaningGroups;
-        if (meaningGroups.length === 0) {
+        // 必须先确认 value[0] 存在再取 meaningGroups：
+        // 服务端在查不到词等情况下会回 **HTTP 200 + 没有 value（或 value 为空）** 的响应体，
+        // 此时 `result.value[0]` 会先抛
+        // `TypeError: Cannot read properties of undefined (reading '0')`，
+        // 把下面那句本意要给的「Words not yet included」友好提示顶掉。
+        // 实测三种形态：无 value / value: [] / value: null 全都崩在这里。
+        const meaningGroups = result.value?.[0]?.meaningGroups;
+        if (!Array.isArray(meaningGroups) || meaningGroups.length === 0) {
             throw `Words not yet included: ${text}`;
         }
         const formats = DISPLAY_FORMAT_DEFAULT.trim().split(/,\s*/);
@@ -41,23 +47,31 @@ export async function translate(text, from, to) {
             }, {})
         );
         let target = { pronunciations: [], explanations: [], associations: [], sentence: [] };
+        // 下面几处都改成可选链：字典接口的深层字段（richDefinitions / fragments 等）
+        // 并非每条词条都齐全，缺字段时应当**跳过该条**而不是让整次查询崩掉——
+        // 用户看到的是「查不到」，比一个内建 TypeError 有用得多。
         for (const pronunciation of formatGroups['发音']) {
-            target.pronunciations.push({
-                region: pronunciation.partsOfSpeech[0].name,
-                symbol: pronunciation.meanings[0].richDefinitions[0].fragments[0].text,
-                voice: '',
-            });
+            const symbol = pronunciation.meanings?.[0]?.richDefinitions?.[0]?.fragments?.[0]?.text;
+            const region = pronunciation.partsOfSpeech?.[0]?.name;
+            if (typeof symbol !== 'string' || typeof region !== 'string') {
+                continue;
+            }
+            target.pronunciations.push({ region, symbol, voice: '' });
         }
         for (const explanation of formatGroups['快速释义']) {
+            const trait = explanation.partsOfSpeech?.[0]?.name;
+            const fragments = explanation.meanings?.[0]?.richDefinitions?.[0]?.fragments;
+            if (typeof trait !== 'string' || !Array.isArray(fragments)) {
+                continue;
+            }
             target.explanations.push({
-                trait: explanation.partsOfSpeech[0].name,
-                explains: explanation.meanings[0].richDefinitions[0].fragments.map((x) => {
-                    return x.text;
-                }),
+                trait,
+                explains: fragments.map((x) => x.text),
             });
         }
-        if (formatGroups['变形'][0]) {
-            for (const association of formatGroups['变形'][0].meanings[0].richDefinitions[0].fragments) {
+        const inflections = formatGroups['变形'][0]?.meanings?.[0]?.richDefinitions?.[0]?.fragments;
+        if (Array.isArray(inflections)) {
+            for (const association of inflections) {
                 target.associations.push(association.text);
             }
         }
