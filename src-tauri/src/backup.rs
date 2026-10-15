@@ -163,8 +163,22 @@ pub async fn webdav(
             let res = client
                 .get(&format!("/{}", backup_name(name.as_deref())?))
                 .await?;
-            let data = res.bytes().await?;
-            restore_archive(ZipArchive::new(Cursor::new(data))?, &app_config_dir()?)?;
+            // 流式写入临时文件再恢复，避免大备份全量加载进内存
+            let tmp_path = std::env::temp_dir().join(format!(
+                "cup-translate-webdav-restore-{}",
+                std::process::id()
+            ));
+            let mut tmp_file = std::fs::File::create(&tmp_path)?;
+            let mut resp = res;
+            while let Some(chunk) = resp.chunk().await? {
+                std::io::Write::write_all(&mut tmp_file, &chunk)?;
+            }
+            drop(tmp_file);
+            let mut zip_file = std::fs::File::open(&tmp_path)?;
+            let result =
+                restore_archive(ZipArchive::new(&mut zip_file)?, &app_config_dir()?);
+            let _ = std::fs::remove_file(&tmp_path);
+            result?;
             Ok("".to_string())
         }
         "put" => {
@@ -241,8 +255,22 @@ pub async fn aliyun(operate: &str, path: String, url: String) -> Result<String, 
                 .send()
                 .await?
                 .error_for_status()?;
-            let data = res.bytes().await?;
-            restore_archive(ZipArchive::new(Cursor::new(data))?, &app_config_dir()?)?;
+            // 流式写入临时文件再恢复，避免大备份全量加载进内存
+            let tmp_path = std::env::temp_dir().join(format!(
+                "cup-translate-aliyun-restore-{}",
+                std::process::id()
+            ));
+            let mut tmp_file = std::fs::File::create(&tmp_path)?;
+            let mut resp = res;
+            while let Some(chunk) = resp.chunk().await? {
+                std::io::Write::write_all(&mut tmp_file, &chunk)?;
+            }
+            drop(tmp_file);
+            let mut zip_file = std::fs::File::open(&tmp_path)?;
+            let result =
+                restore_archive(ZipArchive::new(&mut zip_file)?, &app_config_dir()?);
+            let _ = std::fs::remove_file(&tmp_path);
+            result?;
             Ok("".to_string())
         }
         _ => {
