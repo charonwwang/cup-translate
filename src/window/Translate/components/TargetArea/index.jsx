@@ -547,9 +547,9 @@ export default function TargetArea(props) {
                         ) : (
                             <div>
                                 {result['pronunciations'] &&
-                                    result['pronunciations'].map((pronunciation) => {
+                                    result['pronunciations'].map((pronunciation, index) => {
                                         return (
-                                            <div key={nanoid()}>
+                                            <div key={index}>
                                                 {pronunciation['region'] && (
                                                     <span
                                                         className={`text-[${appFontSize}px] mr-[12px] text-default-500`}
@@ -576,13 +576,13 @@ export default function TargetArea(props) {
                                         );
                                     })}
                                 {result['explanations'] &&
-                                    result['explanations'].map((explanations) => {
+                                    result['explanations'].map((explanations, index) => {
                                         return (
-                                            <div key={nanoid()}>
+                                            <div key={index}>
                                                 {explanations['explains'] &&
                                                     explanations['explains'].map((explain, index) => {
                                                         return (
-                                                            <span key={nanoid()}>
+                                                            <span key={index}>
                                                                 {index === 0 ? (
                                                                     <>
                                                                         <span
@@ -600,7 +600,6 @@ export default function TargetArea(props) {
                                                                 ) : (
                                                                     <span
                                                                         className={`text-[${appFontSize - 2}px] text-default-500 select-text mr-1`}
-                                                                        key={nanoid()}
                                                                     >
                                                                         {explain}
                                                                     </span>
@@ -613,9 +612,9 @@ export default function TargetArea(props) {
                                     })}
                                 <br />
                                 {result['associations'] &&
-                                    result['associations'].map((association) => {
+                                    result['associations'].map((association, index) => {
                                         return (
-                                            <div key={nanoid()}>
+                                            <div key={index}>
                                                 <span className={`text-[${appFontSize}px] text-default-500`}>
                                                     {association}
                                                 </span>
@@ -625,7 +624,7 @@ export default function TargetArea(props) {
                                 {result['sentence'] &&
                                     result['sentence'].map((sentence, index) => {
                                         return (
-                                            <div key={nanoid()}>
+                                            <div key={index}>
                                                 <span className={`text-[${appFontSize - 2}px] mr-[12px]`}>
                                                     {index + 1}.
                                                 </span>
