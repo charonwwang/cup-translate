@@ -115,7 +115,11 @@ fn build_window(label: &str, title: &str) -> (Window, bool) {
         .map(|m| *m.position())
         .unwrap_or(tauri::PhysicalPosition { x: 0, y: 0 });
 
-    let app_handle = APP.get().unwrap();
+    let Some(app_handle) = APP.get() else {
+        // AppHandle 未初始化时无法创建窗口，返回 daemon 窗口兜底（不会发生于 setup 后）
+        warn!("build_window({label}): app not initialized, returning daemon fallback");
+        return (get_daemon_window().expect("daemon window unavailable"), true);
+    };
     match app_handle.get_window(label) {
         Some(v) => {
             info!("Window existence: {}", label);
@@ -146,7 +150,13 @@ fn build_window(label: &str, title: &str) -> (Window, bool) {
             {
                 builder = builder.transparent(true).decorations(false);
             }
-            let window = builder.build().unwrap();
+            let window = match builder.build() {
+                Ok(v) => v,
+                Err(e) => {
+                    warn!("Failed to build window {label}: {e:?}, returning daemon fallback");
+                    return (get_daemon_window().expect("daemon window unavailable"), true);
+                }
+            };
 
             if label != "screenshot" {
                 #[cfg(not(target_os = "linux"))]
@@ -160,11 +170,15 @@ fn build_window(label: &str, title: &str) -> (Window, bool) {
 
 pub fn config_window() {
     let (window, _exists) = build_window("config", "Config");
-    window
-        .set_min_size(Some(tauri::LogicalSize::new(800, 400)))
-        .unwrap();
-    window.set_size(tauri::LogicalSize::new(800, 600)).unwrap();
-    window.center().unwrap();
+    if let Err(e) = window.set_min_size(Some(tauri::LogicalSize::new(800, 400))) {
+        warn!("Failed to set config window min size: {e:?}");
+    }
+    if let Err(e) = window.set_size(tauri::LogicalSize::new(800, 600)) {
+        warn!("Failed to set config window size: {e:?}");
+    }
+    if let Err(e) = window.center() {
+        warn!("Failed to center config window: {e:?}");
+    }
 }
 
 fn translate_window() -> Window {
@@ -181,7 +195,9 @@ fn translate_window() -> Window {
     if exists {
         return window;
     }
-    window.set_skip_taskbar(true).unwrap();
+    if let Err(e) = window.set_skip_taskbar(true) {
+        warn!("Failed to set translate window skip_taskbar: {e:?}");
+    }
     // Get Translate Window Size
     let width = match get_i64("translate_window_width") {
         Some(v) => v,
@@ -235,12 +251,11 @@ fn translate_window() -> Window {
                 }
             }
 
-            window
-                .set_position(tauri::PhysicalPosition::new(
-                    mouse_position.x,
-                    mouse_position.y,
-                ))
-                .unwrap();
+            if let Err(e) =
+                window.set_position(tauri::PhysicalPosition::new(mouse_position.x, mouse_position.y))
+            {
+                warn!("Failed to set translate window position: {e:?}");
+            }
         }
         _ => {
             let position_x = get_i64("translate_window_position_x").unwrap_or_default();
@@ -313,7 +328,9 @@ pub fn image_translate() {
 pub fn recognize_window() {
     let (window, exists) = build_window("recognize", "Recognize");
     if exists {
-        window.emit("new_image", "").unwrap();
+        if let Err(e) = window.emit("new_image", "") {
+            warn!("Failed to emit new_image to recognize window: {e:?}");
+        }
         return;
     }
     let width = match get_i64("recognize_window_width") {
@@ -344,7 +361,9 @@ pub fn recognize_window() {
 fn screenshot_window() -> Window {
     let (window, _exists) = build_window("screenshot", "Screenshot");
 
-    window.set_skip_taskbar(true).unwrap();
+    if let Err(e) = window.set_skip_taskbar(true) {
+        warn!("Failed to set screenshot window skip_taskbar: {e:?}");
+    }
     #[cfg(target_os = "macos")]
     {
         if let Some(monitor) = window_monitor_or_default(&window) {
@@ -357,9 +376,13 @@ fn screenshot_window() -> Window {
     }
 
     #[cfg(not(target_os = "macos"))]
-    window.set_fullscreen(true).unwrap();
+    if let Err(e) = window.set_fullscreen(true) {
+        warn!("Failed to set screenshot window fullscreen: {e:?}");
+    }
 
-    window.set_always_on_top(true).unwrap();
+    if let Err(e) = window.set_always_on_top(true) {
+        warn!("Failed to set screenshot window always_on_top: {e:?}");
+    }
     window
 }
 
@@ -451,9 +474,13 @@ pub fn ocr_translate() {
 #[tauri::command(async)]
 pub fn updater_window() {
     let (window, _exists) = build_window("updater", "Updater");
-    window
-        .set_min_size(Some(tauri::LogicalSize::new(600, 400)))
-        .unwrap();
-    window.set_size(tauri::LogicalSize::new(600, 400)).unwrap();
-    window.center().unwrap();
+    if let Err(e) = window.set_min_size(Some(tauri::LogicalSize::new(600, 400))) {
+        warn!("Failed to set updater window min size: {e:?}");
+    }
+    if let Err(e) = window.set_size(tauri::LogicalSize::new(600, 400)) {
+        warn!("Failed to set updater window size: {e:?}");
+    }
+    if let Err(e) = window.center() {
+        warn!("Failed to center updater window: {e:?}");
+    }
 }
