@@ -141,27 +141,37 @@ export default function TargetArea(props) {
         clipboardMonitor,
     ]);
 
-    const addToHistory = async (text, source, target, serviceInstanceKey, result) => {
-        const db = await Database.load('sqlite:history.db');
-
-        await db
-            .execute(
+    const addToHistory = async (text, source, target, serviceInstanceKey, result, isRetry = false) => {
+        let db;
+        try {
+            db = await Database.load('sqlite:history.db');
+            await db.execute(
                 'INSERT into history (text, source, target, service, result, timestamp) VALUES ($1, $2, $3, $4, $5, $6)',
                 [text, source, target, serviceInstanceKey, result, Date.now()]
-            )
-            .then(
-                (v) => {
-                    db.close();
-                },
-                (e) => {
-                    db.execute(
-                        'CREATE TABLE history(id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT NOT NULL,source TEXT NOT NULL,target TEXT NOT NULL,service TEXT NOT NULL, result TEXT NOT NULL,timestamp INTEGER NOT NULL)'
-                    ).then(() => {
-                        db.close();
-                        addToHistory(text, source, target, serviceInstanceKey, result);
-                    });
-                }
             );
+        } catch (e) {
+            // 首次失败可能是表不存在，建表后重试一次；再失败则放弃（防止无限递归）
+            if (!isRetry) {
+                try {
+                    await db.execute(
+                        'CREATE TABLE IF NOT EXISTS history(id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT NOT NULL,source TEXT NOT NULL,target TEXT NOT NULL,service TEXT NOT NULL, result TEXT NOT NULL,timestamp INTEGER NOT NULL)'
+                    );
+                    await addToHistory(text, source, target, serviceInstanceKey, result, true);
+                } catch (e2) {
+                    console.error('[history] create table failed:', e2);
+                }
+            } else {
+                console.error('[history] insert failed after retry:', e);
+            }
+        } finally {
+            if (db) {
+                try {
+                    db.close();
+                } catch {
+                    // 忽略关闭失败
+                }
+            }
+        }
     };
 
     function invokeOnce(fn) {
