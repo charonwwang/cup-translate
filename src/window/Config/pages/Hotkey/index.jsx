@@ -46,11 +46,15 @@ const keyMap = {
 };
 
 export default function Hotkey() {
-    const [selectionTranslate, setSelectionTranslate] = useConfig('hotkey_selection_translate', 'Alt+T');
-    const [clipboardTranslate, setClipboardTranslate] = useConfig('hotkey_clipboard_translate', 'Alt+Shift+T');
-    const [inputTranslate, setInputTranslate] = useConfig('hotkey_input_translate', '');
-    const [ocrRecognize, setOcrRecognize] = useConfig('hotkey_ocr_recognize', '');
-    const [ocrTranslate, setOcrTranslate] = useConfig('hotkey_ocr_translate', '');
+    const [selectionTranslate, setSelectionTranslate] = useConfig('hotkey_selection_translate', 'Alt+T', {
+        sync: false,
+    });
+    const [clipboardTranslate, setClipboardTranslate] = useConfig('hotkey_clipboard_translate', 'Alt+Shift+T', {
+        sync: false,
+    });
+    const [inputTranslate, setInputTranslate] = useConfig('hotkey_input_translate', '', { sync: false });
+    const [ocrRecognize, setOcrRecognize] = useConfig('hotkey_ocr_recognize', '', { sync: false });
+    const [ocrTranslate, setOcrTranslate] = useConfig('hotkey_ocr_translate', '', { sync: false });
 
     const { t } = useTranslation();
     const toastStyle = useToastStyle();
@@ -58,7 +62,7 @@ export default function Hotkey() {
     function keyDown(e, setKey) {
         e.preventDefault();
         if (e.keyCode === 8) {
-            setKey('');
+            setKey('', true);
         } else {
             let newValue = '';
             if (e.ctrlKey) {
@@ -90,11 +94,22 @@ export default function Hotkey() {
             } else {
                 code = '';
             }
-            setKey(`${newValue}${newValue.length > 0 && code.length > 0 ? '+' : ''}${code}`);
+            // 用户真的按了键（含 Backspace = 显式禁用），这里必须落盘：
+            // forceSync=true 是因为本页的 useConfig 用了 { sync: false }，
+            // 只有「用户明确的改键动作」才写配置（见 onFocus 的注释）。
+            setKey(`${newValue}${newValue.length > 0 && code.length > 0 ? '+' : ''}${code}`, true);
         }
     }
 
-    function registerHandler(name, key) {
+    /**
+     * 注册用户刚按下的组合键。
+     *
+     * `persist` 是配套的 setter：本页的 useConfig 用 `{ sync: false }`，
+     * 因此**只有在这里成功之后**才把新值写进配置。
+     * 这样「注册失败」（例如组合键已被别的程序占用）不会污染配置，
+     * 用户看到的输入框和磁盘上的值仍然一致。
+     */
+    function registerHandler(name, key, persist) {
         isRegistered(key).then((res) => {
             if (res) {
                 toast.error(t('config.hotkey.is_register'), { style: toastStyle });
@@ -104,6 +119,7 @@ export default function Hotkey() {
                     shortcut: key,
                 }).then(
                     () => {
+                        persist(key, true);
                         toast.success(t('config.hotkey.success'), { style: toastStyle });
                     },
                     (e) => {
@@ -131,6 +147,11 @@ export default function Hotkey() {
                                 keyDown(e, setSelectionTranslate);
                             }}
                             onFocus={() => {
+                                // 只为「接下来要按新键」腾出输入框：
+                                // 这里**不写配置**（本页 useConfig 为 sync:false）。
+                                // 修复前 sync 默认为 true，这个空串会被立刻落盘——
+                                // 用户只是点了一下输入框、随后点走，快捷键就被永久清掉，
+                                // 而且界面上看不出发生过什么（下次启动不再注册，日志也不报错）。
                                 unregister(selectionTranslate);
                                 setSelectionTranslate('');
                             }}
@@ -140,7 +161,11 @@ export default function Hotkey() {
                                     variant='flat'
                                     className={`${selectionTranslate === '' && 'hidden'}`}
                                     onPress={() => {
-                                        registerHandler('hotkey_selection_translate', selectionTranslate);
+                                        registerHandler(
+                                            'hotkey_selection_translate',
+                                            selectionTranslate,
+                                            setSelectionTranslate
+                                        );
                                     }}
                                 >
                                     {t('common.ok')}
@@ -162,6 +187,11 @@ export default function Hotkey() {
                                 keyDown(e, setClipboardTranslate);
                             }}
                             onFocus={() => {
+                                // 只为「接下来要按新键」腾出输入框：
+                                // 这里**不写配置**（本页 useConfig 为 sync:false）。
+                                // 修复前 sync 默认为 true，这个空串会被立刻落盘——
+                                // 用户只是点了一下输入框、随后点走，快捷键就被永久清掉，
+                                // 而且界面上看不出发生过什么（下次启动不再注册，日志也不报错）。
                                 unregister(clipboardTranslate);
                                 setClipboardTranslate('');
                             }}
@@ -171,7 +201,11 @@ export default function Hotkey() {
                                     variant='flat'
                                     className={`${clipboardTranslate === '' && 'hidden'}`}
                                     onPress={() => {
-                                        registerHandler('hotkey_clipboard_translate', clipboardTranslate);
+                                        registerHandler(
+                                            'hotkey_clipboard_translate',
+                                            clipboardTranslate,
+                                            setClipboardTranslate
+                                        );
                                     }}
                                 >
                                     {t('common.ok')}
@@ -193,6 +227,11 @@ export default function Hotkey() {
                                 keyDown(e, setInputTranslate);
                             }}
                             onFocus={() => {
+                                // 只为「接下来要按新键」腾出输入框：
+                                // 这里**不写配置**（本页 useConfig 为 sync:false）。
+                                // 修复前 sync 默认为 true，这个空串会被立刻落盘——
+                                // 用户只是点了一下输入框、随后点走，快捷键就被永久清掉，
+                                // 而且界面上看不出发生过什么（下次启动不再注册，日志也不报错）。
                                 unregister(inputTranslate);
                                 setInputTranslate('');
                             }}
@@ -202,7 +241,7 @@ export default function Hotkey() {
                                     variant='flat'
                                     className={`${inputTranslate === '' && 'hidden'}`}
                                     onPress={() => {
-                                        registerHandler('hotkey_input_translate', inputTranslate);
+                                        registerHandler('hotkey_input_translate', inputTranslate, setInputTranslate);
                                     }}
                                 >
                                     {t('common.ok')}
@@ -224,6 +263,11 @@ export default function Hotkey() {
                                 keyDown(e, setOcrRecognize);
                             }}
                             onFocus={() => {
+                                // 只为「接下来要按新键」腾出输入框：
+                                // 这里**不写配置**（本页 useConfig 为 sync:false）。
+                                // 修复前 sync 默认为 true，这个空串会被立刻落盘——
+                                // 用户只是点了一下输入框、随后点走，快捷键就被永久清掉，
+                                // 而且界面上看不出发生过什么（下次启动不再注册，日志也不报错）。
                                 unregister(ocrRecognize);
                                 setOcrRecognize('');
                             }}
@@ -233,7 +277,7 @@ export default function Hotkey() {
                                     variant='flat'
                                     className={`${ocrRecognize === '' && 'hidden'}`}
                                     onPress={() => {
-                                        registerHandler('hotkey_ocr_recognize', ocrRecognize);
+                                        registerHandler('hotkey_ocr_recognize', ocrRecognize, setOcrRecognize);
                                     }}
                                 >
                                     {t('common.ok')}
@@ -255,6 +299,11 @@ export default function Hotkey() {
                                 keyDown(e, setOcrTranslate);
                             }}
                             onFocus={() => {
+                                // 只为「接下来要按新键」腾出输入框：
+                                // 这里**不写配置**（本页 useConfig 为 sync:false）。
+                                // 修复前 sync 默认为 true，这个空串会被立刻落盘——
+                                // 用户只是点了一下输入框、随后点走，快捷键就被永久清掉，
+                                // 而且界面上看不出发生过什么（下次启动不再注册，日志也不报错）。
                                 unregister(ocrTranslate);
                                 setOcrTranslate('');
                             }}
@@ -264,7 +313,7 @@ export default function Hotkey() {
                                     variant='flat'
                                     className={`${ocrTranslate === '' && 'hidden'}`}
                                     onPress={() => {
-                                        registerHandler('hotkey_ocr_translate', ocrTranslate);
+                                        registerHandler('hotkey_ocr_translate', ocrTranslate, setOcrTranslate);
                                     }}
                                 >
                                     {t('common.ok')}
