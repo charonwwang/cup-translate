@@ -94,6 +94,10 @@ export async function translate(text, from, to, options = {}) {
                         temp += str;
                     }
                 }
+            } catch (e) {
+                // 流式解析出错（如 Gemini 返回畸形 JSON）给出可读错误，
+                // 而非裸抛 "Unexpected token" 等晦涩信息
+                throw `Gemini stream parse error: ${e}`;
             } finally {
                 reader.releaseLock();
             }
