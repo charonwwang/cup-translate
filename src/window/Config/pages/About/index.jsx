@@ -174,8 +174,12 @@ export default function About() {
                         className='my-[5px]'
                         size='sm'
                         onPress={async () => {
-                            const dir = await appLogDir();
-                            open(dir);
+                            try {
+                                const dir = await appLogDir();
+                                open(dir);
+                            } catch (e) {
+                                console.error('[about] open log dir failed:', e);
+                            }
                         }}
                     >
                         {t('config.about.view_log')}
@@ -185,8 +189,12 @@ export default function About() {
                         className='my-[5px]'
                         size='sm'
                         onPress={async () => {
-                            const dir = await appConfigDir();
-                            open(dir);
+                            try {
+                                const dir = await appConfigDir();
+                                open(dir);
+                            } catch (e) {
+                                console.error('[about] open config dir failed:', e);
+                            }
                         }}
                     >
                         {t('config.about.view_config')}

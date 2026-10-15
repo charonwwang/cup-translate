@@ -165,10 +165,12 @@ export default function ControlArea(props) {
                 startContent={<HiTranslate className='text-[16px]' />}
                 onPress={async () => {
                     if (text) {
-                        void fetch(`http://127.0.0.1:${serverPort}/translate`, {
+                        fetch(`http://127.0.0.1:${serverPort}/translate`, {
                             method: 'POST',
                             body: Body.text(text),
                             responseType: 2,
+                        }).catch((e) => {
+                            console.error('[recognize] translate request failed:', e);
                         });
                     }
                 }}
