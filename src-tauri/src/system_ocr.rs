@@ -84,11 +84,31 @@ pub fn system_ocr(app_handle: tauri::AppHandle, lang: &str) -> Result<String, St
         None => return Err("Failed to resolve ocr binary".to_string()),
     };
 
-    /// 确保随包分发的 OCR 二进制可执行。
+    ensure_executable(&bin_path)?;
+
+    let output = match std::process::Command::new(bin_path)
+        .arg(&app_cache_dir_path)
+        .arg(lang)
+        .output()
+    {
+        Ok(v) => v,
+        Err(e) => return Err(e.to_string()),
+    };
+
+    if output.status.success() {
+        let content = String::from_utf8(output.stdout).unwrap_or_default();
+        Ok(content)
+    } else {
+        let content = String::from_utf8(output.stderr).unwrap_or_default();
+        Err(content)
+    }
+}
+
+/// 确保随包分发的 OCR 二进制可执行（仅 macOS）。
 ///
 /// 仓库里该文件权限是 0644（见 `src-tauri/resources/ocr-*-apple-darwin`），
-/// 因此首次运行必须补上 +x。但原先每次 OCR 调用都会 spawn 一次 `chmod`，
-/// 属于无谓开销；这里按路径缓存结果，只补一次。
+/// 因此首次运行必须补上 `+x`。但每次 OCR 调用都 spawn 一次 `chmod` 属于无谓开销，
+/// 这里按路径缓存结果，每个路径只补一次。
 #[cfg(target_os = "macos")]
 fn ensure_executable(bin_path: &std::path::Path) -> Result<(), String> {
     use std::collections::HashSet;
@@ -100,10 +120,8 @@ fn ensure_executable(bin_path: &std::path::Path) -> Result<(), String> {
 
     let mut guard = match done.lock() {
         Ok(guard) => guard,
-        Err(_) => {
-            // 锁中毒时退回「每次都 chmod」，功能不受影响
-            return chmod_executable(bin_path);
-        }
+        // 锁中毒时退回「每次都 chmod」，功能不受影响
+        Err(_) => return chmod_executable(bin_path),
     };
     if guard.contains(bin_path) {
         return Ok(());
@@ -126,26 +144,6 @@ fn chmod_executable(bin_path: &std::path::Path) -> Result<(), String> {
             status.status
         )),
         Err(e) => Err(e.to_string()),
-    }
-}
-
-    ensure_executable(&bin_path)?;
-
-    let output = match std::process::Command::new(bin_path)
-        .arg(&app_cache_dir_path)
-        .arg(lang)
-        .output()
-    {
-        Ok(v) => v,
-        Err(e) => return Err(e.to_string()),
-    };
-
-    if output.status.success() {
-        let content = String::from_utf8(output.stdout).unwrap_or_default();
-        Ok(content)
-    } else {
-        let content = String::from_utf8(output.stderr).unwrap_or_default();
-        Err(content)
     }
 }
 
