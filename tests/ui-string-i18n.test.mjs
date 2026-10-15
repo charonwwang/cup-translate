@@ -18,6 +18,12 @@ import test from 'node:test';
 
 const LOCALE_DIR = 'src/i18n/locales';
 
+// 注意：本文件里的 key 都带 `translation.` 前缀，因为这里读的是**原始 JSON**，
+// 而 JSON 顶层就是 { "translation": {...} } 这层外壳。
+// 运行时 i18next 会把这层剥掉（defaultNS 默认即 'translation'），
+// 所以源码里 `t()` 写的是 `config.x` 而不是 `translation.config.x`。
+// 「源码 key 能否解析」由 tests/i18n-key-resolution.test.mjs 负责，那边用的是剥壳后的视图。
+
 async function loadLocale(name) {
     return JSON.parse(await readFile(`${LOCALE_DIR}/${name}.json`, 'utf8'));
 }

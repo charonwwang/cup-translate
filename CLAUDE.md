@@ -263,6 +263,13 @@ src-tauri/src/             Rust 后端（17 个模块）
 - `tests/locale-completeness.test.mjs` 守着这件事：完整度只增不减、
   近乎为空的语言必须显式登记、所选语言必须已在 i18n 中注册。
   **要下调某语言的 key 数基线，必须在改动里显式修改该测试的 `BASELINE`。**
+- **注意 locale JSON 有一层 i18next 外壳**：文件顶层是 `{ "translation": { ... } }`，
+  而 `src/i18n/index.jsx` 的 `resources: { en: en_US }` 把整个 JSON 当命名空间包，
+  i18next 的 `defaultNS` 默认就是 `translation`，**运行时这层会被剥掉**。
+  所以源码里写 `t('config.general.label')`，**不能**写成
+  `t('translation.config.general.label')`（会解析失败、界面直接显示 key 本身）。
+  读原始 JSON 写测试时要自己记得这层差异——`tests/i18n-key-resolution.test.mjs`
+  用的是剥壳后的视图，专管「源码里的 key 能否解析」。
 - **系统通知（Rust 侧）也必须走本地化**：文案集中在 `src-tauri/src/notification.rs`，
   按 `app_language` 取（目前只提供 `en` / `zh_cn`，其余回退英文，理由同上）。
   不要在调用点写死字符串——`notification.rs` 有一条扫描源码的护栏会拦下来，
@@ -318,7 +325,7 @@ ci: 收敛上游发布流水线，避免误用上游身份发布
 
 测试以**回归护栏**为主：断言源码/配置中的关键契约（服务白名单同步、品牌标识、
 打包元数据、快捷键改键语义、快捷键「聚焦不落盘」、Tauri 命令注册、前后端事件名、
-翻译引擎配置闸门、错误提示与 toast 走 i18n、系统通知文案随语言切换、端口输入不产生 NaN 等）。**新增修复时优先补一条会失败的回归用例**
+翻译引擎配置闸门、错误提示与 toast 走 i18n、i18n key 能被解析、系统通知文案随语言切换、端口输入不产生 NaN 等）。**新增修复时优先补一条会失败的回归用例**
 （先确认它在改前失败、改后通过，避免写出永真断言）。
 
 仍需手工验证的部分：
