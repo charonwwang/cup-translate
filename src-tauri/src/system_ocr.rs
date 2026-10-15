@@ -68,6 +68,26 @@ pub fn system_ocr(app_handle: tauri::AppHandle, lang: &str) -> Result<String, St
     }
 }
 
+/// 把随包 OCR 二进制的输出解释成识别结果（仅 macOS）。
+///
+/// 抽成纯函数是为了能单测：随包二进制在**出错时也返回 exit=0 且 stderr 为空**
+/// （实测 `ocr-aarch64-apple-darwin /tmp/nonexistent.png en-US`
+/// -> exit=0、stdout 空、stderr 空），于是原来的
+/// `if output.status.success() { Ok(...) }` 会把「文件不存在」这种真错误
+/// 报成 `Ok("")`。前端拿到空串后会 `setText('')` —— 界面一片空白、
+/// **没有任何错误提示**，用户无法分辨「图里本来就没字」和「识别根本没跑起来」。
+///
+/// 注意「空结果」本身是合法的：图片里确实没有文字时输出也为空。
+/// 因此这里**只看退出码**，不把空输出当成错误 —— 真正的歧义由调用方
+/// 在 spawn 之前用文件存在性检查消除（文件不存在时不存在「本来就没字」的解释）。
+fn interpret_ocr_output(status_success: bool, stdout: &[u8], stderr: &[u8]) -> Result<String, String> {
+    if status_success {
+        Ok(String::from_utf8_lossy(stdout).into_owned())
+    } else {
+        Err(String::from_utf8_lossy(stderr).into_owned())
+    }
+}
+
 #[tauri::command(async)]
 #[cfg(target_os = "macos")]
 pub fn system_ocr(app_handle: tauri::AppHandle, lang: &str) -> Result<String, String> {
@@ -84,6 +104,14 @@ pub fn system_ocr(app_handle: tauri::AppHandle, lang: &str) -> Result<String, St
         None => return Err("Failed to resolve ocr binary".to_string()),
     };
 
+    // 随包二进制对「文件不存在」也返回 exit=0 + 空输出，光看退出码无法与
+    // 「图里没有文字」区分。先做存在性检查：文件不在就一定不是「识别成功但没字」，
+    // 而是真错误，应明确报出来而不是让界面空白。
+    // 文件存在时本检查恒为真，正常路径行为完全不变。
+    if !app_cache_dir_path.exists() {
+        return Err("Screenshot file not found (was the screenshot taken?)".to_string());
+    }
+
     ensure_executable(&bin_path)?;
 
     let output = match std::process::Command::new(bin_path)
@@ -95,13 +123,7 @@ pub fn system_ocr(app_handle: tauri::AppHandle, lang: &str) -> Result<String, St
         Err(e) => return Err(e.to_string()),
     };
 
-    if output.status.success() {
-        let content = String::from_utf8(output.stdout).unwrap_or_default();
-        Ok(content)
-    } else {
-        let content = String::from_utf8(output.stderr).unwrap_or_default();
-        Err(content)
-    }
+    interpret_ocr_output(output.status.success(), &output.stdout, &output.stderr)
 }
 
 /// 确保随包分发的 OCR 二进制可执行（仅 macOS）。
@@ -169,10 +191,14 @@ pub fn system_ocr(app_handle: tauri::AppHandle, lang: &str) -> Result<String, St
         }
     };
     if output.status.success() {
-        let content = String::from_utf8(output.stdout).unwrap_or_default();
+        let content = String::from_utf8_lossy(&output.stdout).into_owned();
         Ok(content)
     } else {
-        let content = String::from_utf8(output.stderr).unwrap_or_default();
+        // 与 macOS 分支统一：用 lossy 解码而不是 `unwrap_or_default()`。
+        // 后者遇到非法 UTF-8 会返回**空串**，于是下面的 `content.contains("data")`
+        // 判断必然落空，用户只会看到一句空白的错误提示，失去了这里本来要给的
+        // 「请安装 tesseract-ocr-<lang>」这条可操作指引。
+        let content = String::from_utf8_lossy(&output.stderr).into_owned();
 
         if content.contains("data") {
             if lang == "auto" {
@@ -187,5 +213,76 @@ pub fn system_ocr(app_handle: tauri::AppHandle, lang: &str) -> Result<String, St
             }
         }
         Err(content)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // 说明：本模块按平台 `cfg` 出三份 `system_ocr`，仅 macOS 分支的
+    // `interpret_ocr_output` 是平台无关的纯函数，因此可以在这里直接单测。
+    // 其余平台分支依赖真实外部程序（tesseract / Windows OCR API），
+    // 本机无从实测，**没有**为它们编造断言。
+
+    #[test]
+    fn successful_nonempty_output_is_returned_as_is() {
+        let got = interpret_ocr_output(true, "你好世界\n".as_bytes(), b"");
+        assert_eq!(got, Ok("你好世界\n".to_string()));
+    }
+
+    /// 关键回归：随包二进制在「文件不存在」时也 exit=0 且输出全空。
+    /// 此时 `interpret_ocr_output` 只能如实返回空串（空结果本身合法），
+    /// 真正的歧义由调用方在 spawn 前的存在性检查消除 —— 这条测试固定住
+    /// 「退出码成功 + 空输出 => Ok(空串)」这一契约，避免有人把它改成 Err
+    /// 而误伤「图片里本来就没有文字」的正常情况。
+    #[test]
+    fn successful_empty_output_is_still_ok_not_an_error() {
+        let got = interpret_ocr_output(true, b"", b"");
+        assert_eq!(got, Ok(String::new()));
+        assert!(got.is_ok(), "an image with no text must not be reported as an error");
+    }
+
+    #[test]
+    fn failure_returns_stderr() {
+        let got = interpret_ocr_output(false, b"", b"something went wrong");
+        assert_eq!(got, Err("something went wrong".to_string()));
+    }
+
+    #[test]
+    fn failure_with_empty_stderr_returns_empty_error_not_ok() {
+        let got = interpret_ocr_output(false, b"", b"");
+        assert!(got.is_err(), "a nonzero exit must never be reported as success");
+    }
+
+    /// 修复前用的是 `String::from_utf8(..).unwrap_or_default()`：遇到非法 UTF-8
+    /// 会**静默变成空串**，把一段真实的识别结果丢掉且不报错。
+    /// 现已改为 `from_utf8_lossy`，非法字节被替换而不是整段丢弃。
+    #[test]
+    fn invalid_utf8_is_not_silently_dropped() {
+        // 合法 UTF-8 前缀 + 一个非法字节
+        let mut bytes = "你好".as_bytes().to_vec();
+        bytes.push(0xFF);
+        let got = interpret_ocr_output(true, &bytes, b"").expect("must be Ok");
+        assert!(
+            !got.is_empty(),
+            "invalid UTF-8 must not silently collapse the whole result to an empty string"
+        );
+        assert!(got.starts_with("你好"), "the valid prefix must be preserved, got {got:?}");
+        assert!(got.contains('\u{FFFD}'), "the bad byte should become U+FFFD, got {got:?}");
+
+        // 对照：旧行为（from_utf8 + unwrap_or_default）会得到空串
+        let old = String::from_utf8(bytes).unwrap_or_default();
+        assert!(old.is_empty(), "this documents the old, buggy behaviour");
+    }
+
+    #[test]
+    fn stderr_is_also_decoded_lossily() {
+        let mut bytes = "错误".as_bytes().to_vec();
+        bytes.push(0xFE);
+        let got = interpret_ocr_output(false, b"", &bytes);
+        let err = got.expect_err("must be Err");
+        assert!(err.starts_with("错误"), "got {err:?}");
+        assert!(!err.is_empty(), "a corrupt stderr must not become an empty error message");
     }
 }

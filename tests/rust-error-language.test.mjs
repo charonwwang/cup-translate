@@ -42,7 +42,18 @@ const ALLOWED = [];
  */
 function errorLines(source) {
     const out = [];
+    // `#[cfg(test)]` 之后的代码**永远不会进入用户可见的二进制**：
+    // 单测里的断言文本、用于喂给被测函数的夹具字符串都不是「给用户看的错误文案」。
+    // 不排除掉的话，一条 `assert_eq!(got, Ok("你好世界".to_string()))`
+    // 就会被误报成「面向用户的错误不是英文」（本轮实际发生）。
+    // 注意行号仍要在**原始全文**里数，否则报错位置会偏移。
+    const testModAt = source.indexOf('#[cfg(test)]');
+    const scanEnd = testModAt === -1 ? source.length : testModAt;
+    let offset = 0;
     source.split('\n').forEach((line, index) => {
+        const lineStart = offset;
+        offset += line.length + 1;
+        if (lineStart >= scanEnd) return; // 测试模块内的行，跳过
         const trimmed = line.trim();
         // 跳过注释：本项目用中文注释，不能误伤
         if (trimmed.startsWith('//') || trimmed.startsWith('///') || trimmed.startsWith('*')) return;
