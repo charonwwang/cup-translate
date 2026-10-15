@@ -1072,38 +1072,69 @@ mod tests {
         }
     }
 
+    /// 从**源码**里解析 `tray_event_handler` 的 `MenuItemClick` match 分支 id。
+    ///
+    /// 为什么必须读源码而不是用一份硬编码清单：本测试原先维护一个
+    /// `const HANDLED: &[&str]`，然后断言「菜单项 id ⊆ HANDLED」。
+    /// 但那份 `HANDLED` 只是**副本**——实测把真实的
+    /// `"view_log" => on_view_log_click(app),` 从 `tray_event_handler` 里删掉，
+    /// 由于 `HANDLED` 里仍然写着 "view_log"、菜单项也仍有 view_log，
+    /// 断言两边"一致"，**测试全绿**。也就是说这个测试从来没有真正读过
+    /// 它声称在守护的那个 match —— 「查看日志」项点了没反应而无人发现。
+    ///
+    /// 现在改为从本文件源码里提取真实分支，副本与权威来源才真正对上了。
+    fn handled_ids_from_source() -> Vec<String> {
+        let source = include_str!("tray.rs");
+        let start = source
+            .find("SystemTrayEvent::MenuItemClick")
+            .expect("tray_event_handler must still match on MenuItemClick");
+        let rest = &source[start..];
+        let end = rest.find("_ => {}").expect("the MenuItemClick match must keep a catch-all arm");
+        let body = &rest[..end];
+
+        // 抽取形如 `"view_log" =>` 的分支名。
+        // 跳过注释行，避免「注释里提到某个 id」被算成真实分支。
+        let mut ids = Vec::new();
+        for line in body.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("//") {
+                continue;
+            }
+            if let Some(after_quote) = trimmed.strip_prefix('"') {
+                if let Some(close) = after_quote.find('"') {
+                    let id = &after_quote[..close];
+                    if after_quote[close + 1..].trim_start().starts_with("=>") {
+                        ids.push(id.to_string());
+                    }
+                }
+            }
+        }
+        assert!(
+            ids.len() >= 13,
+            "expected at least 13 MenuItemClick arms in tray_event_handler, parsed {ids:?}"
+        );
+        ids
+    }
+
     #[test]
     fn every_menu_item_id_has_a_handler_and_vice_versa() {
         // 菜单项 id 与 tray_event_handler 的 match 分支一一对应：
         // 有菜单项没分支 -> 点了没反应；有分支没菜单项 -> 死代码。
         // 两边都是手写字符串，编译器不会帮忙。
-        const HANDLED: &[&str] = &[
-            "input_translate",
-            "copy_source",
-            "copy_target",
-            "copy_source_target",
-            "copy_disable",
-            "clipboard_monitor",
-            "ocr_recognize",
-            "ocr_translate",
-            "config",
-            "check_update",
-            "view_log",
-            "restart",
-            "quit",
-        ];
+        //
+        // ⚠️ 这里的 `handled` **不再是**手写副本，而是从真实源码解析出来的，
+        // 理由见 `handled_ids_from_source` 的注释（硬编码副本曾让本测试
+        // 对「删掉真实 handler」完全免疫）。
+        let handled = handled_ids_from_source();
 
         let built = ids_in(&tray_menu_of("en"));
-        let unhandled: Vec<_> = built.iter().filter(|id| !HANDLED.contains(&id.as_str())).collect();
+        let unhandled: Vec<_> = built.iter().filter(|id| !handled.contains(id)).collect();
         assert!(
             unhandled.is_empty(),
             "these tray items have no handler in tray_event_handler: {unhandled:?}"
         );
 
-        let orphaned: Vec<_> = HANDLED
-            .iter()
-            .filter(|id| !built.iter().any(|b| b == *id))
-            .collect();
+        let orphaned: Vec<_> = handled.iter().filter(|id| !built.contains(id)).collect();
         assert!(
             orphaned.is_empty(),
             "these handlers exist but no menu item uses their id: {orphaned:?}"

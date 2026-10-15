@@ -89,3 +89,57 @@ test('a placeholder locale is never silently promoted to a real menu', async () 
         );
     }
 });
+
+/**
+ * 每个托盘菜单项都必须有对应的点击处理分支。
+ *
+ * 背景（本轮实测）：现有的托盘测试只覆盖了**语言分发**
+ * （`tray_menu_xx` 是否被 dispatch、各语言菜单项是否一致），
+ * 而「菜单项 ID 与 `tray_event_handler` 里 `MenuItemClick` 分支是否一一对应」
+ * **无人守护**。实测把 `"view_log" => on_view_log_click(app),` 这一行删掉，
+ * `cargo test` 的 10 条 tray 测试**仍然全绿**，Node 侧 5 条也全绿 ——
+ * 结果是「查看日志」这一项照常显示，但用户点了**毫无反应**，且没有任何报错。
+ *
+ * 这与托盘历史上漏掉 `he` / `ta` 是同一类问题：断言的是「清单内部一致」，
+ * 而不是「清单与它的真实消费者一致」。
+ *
+ * 这里把两侧都从**真实源码**解析出来做交叉比对：
+ *   · 定义侧 = 所有 `CustomMenuItem::new("<id>", ...)` 的 id
+ *   · 消费侧 = `SystemTrayEvent::MenuItemClick` 那个 match 里的 `"<id>" =>`
+ */
+function trayMenuIds(source) {
+    const ids = new Set();
+    for (const m of source.matchAll(/CustomMenuItem::new\(\s*"([a-z_]+)"/g)) {
+        ids.add(m[1]);
+    }
+    return ids;
+}
+
+function trayHandledIds(source) {
+    const start = source.indexOf('SystemTrayEvent::MenuItemClick');
+    assert.notEqual(start, -1, 'the tray handler must still match on MenuItemClick');
+    const end = source.indexOf('_ => {}', start);
+    assert.notEqual(end, -1, 'the MenuItemClick match must keep a catch-all arm');
+    const ids = new Set();
+    for (const m of source.slice(start, end).matchAll(/"([a-z_]+)"\s*=>/g)) {
+        ids.add(m[1]);
+    }
+    return ids;
+}
+
+test('every tray menu item has a click handler', async () => {
+    const source = await readTraySource();
+    const defined = trayMenuIds(source);
+    const handled = trayHandledIds(source);
+
+    // 先确认解析到了合理规模，避免正则失配后「两边都是空集」而误判通过
+    assert.ok(defined.size >= 13, `expected at least 13 tray menu ids, parsed ${defined.size}`);
+    assert.ok(handled.size >= 13, `expected at least 13 handled tray ids, parsed ${handled.size}`);
+
+    const unhandled = [...defined].filter((id) => !handled.has(id)).sort();
+    assert.deepEqual(unhandled, [], `these tray items render but do nothing when clicked: ${unhandled.join(', ')}`);
+
+    // 反向：handler 里不应留下对应不到任何菜单项的死分支
+    const orphaned = [...handled].filter((id) => !defined.has(id)).sort();
+    assert.deepEqual(orphaned, [], `these handled ids have no matching menu item: ${orphaned.join(', ')}`);
+});
