@@ -19,7 +19,7 @@ export function Config(props) {
         instanceKey,
         {
             [INSTANCE_NAME_CONFIG_KEY]: t('services.translate.local_mt.title'),
-            threads: '4',
+            threads: '2',
         },
         { sync: false }
     );

@@ -352,7 +352,8 @@ pub async fn local_mt_translate(
     threads: Option<u32>,
 ) -> Result<String, String> {
     let spec = model_spec(&pair)?;
-    let threads = threads.unwrap_or(4) as usize;
+    // 默认 2 线程：资源占用最小化（实测 2 线程 152ms vs 4 线程 106ms，CPU 占用减半）
+    let threads = threads.unwrap_or(2) as usize;
     let translator = load_translator(&app_handle, &pair, threads)?;
     let results = match spec.target_prefix {
         Some(prefix) => translator.translate_batch_with_target_prefix(

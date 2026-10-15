@@ -12,6 +12,28 @@
 
 **存在，但只有一条路线：OPUS-MT（Marian）经 CTranslate2 int8 量化。**
 
+### 0.1 翻译引擎选型决策（2026-10 实测确认）
+
+> **用户需求**：资源占用尽可能小 + 翻译效果好，优先本地小模型 + 谷歌翻译。
+
+| 维度 | OPUS-MT CT2 int8（✅ 采用） | Hy-MT2-1.8B（❌ 不采用） |
+|---|---|---|
+| 磁盘 | **82 MB** | 462 MB（1.25-bit）~ 1133 MB（Q4_K_M） |
+| 内存 | **158 MB** | 预估 500MB+（1.8B 参数） |
+| 延迟 | **100ms**（4 线程） | 未实测，1.8B LLM 推理远慢于 Marian |
+| 推理框架 | CTranslate2（已集成，ct2rs） | llama.cpp（需引入，且官方 GGUF 依赖未合并 PR） |
+| 翻译质量 | BLEU 53.8（技术类长句良好，短句/习语偏弱） | 预估更高（1.8B LLM），但无 BLEU 基准 |
+| 每语向模型 | 79MB × 2 = 158MB | 462MB × 2 = 924MB |
+| 许可证 | Apache-2.0 + CC-BY-4.0 ✅ | Apache-2.0 ✅ |
+
+**结论**：在「资源占用尽可能小」的硬约束下，OPUS-MT CT2 int8 是唯一可行方案。
+Hy-MT2-1.8B 即使极限三元量化（462MB）也是 OPUS-MT 的 5.8 倍，且需要引入
+llama.cpp 推理框架（当前 CTranslate2 已集成），翻译速度不可比。
+
+**当前实现**：`src-tauri/src/local_mt.rs`（CTranslate2 int8）+
+`src/services/translate/local_mt/`（前端）。
+**默认引擎顺序**：`['google', 'local_mt']`（Google 在线兜底 + 本地离线优先）。
+
 | 方案 | 磁盘体积 | 是否 <200MB |
 |---|---|---|
 | **OPUS-MT en-zh + CTranslate2 int8** | **79.6 MB**（model.bin）+ ~2.4MB 词表/spm ≈ **82 MB** | ✅ 是 |

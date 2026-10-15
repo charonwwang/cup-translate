@@ -33,6 +33,7 @@ import useMeasure from 'react-use-measure';
 
 import * as builtinCollectionServices from '../../../../services/collection';
 import { isServiceConfigured } from '../../../../services/translate/required_config';
+import { invoke } from '@tauri-apps/api/tauri';
 import { sourceLanguageAtom, targetLanguageAtom } from '../LanguageArea';
 import { useConfig, useToastStyle, useVoice } from '../../../../hooks';
 import { sourceTextAtom, detectLanguageAtom } from '../SourceArea';
@@ -204,6 +205,21 @@ export default function TargetArea(props) {
                 setSkipped(true);
                 setHide(false);
                 return;
+            }
+            // local_mt 需要先下载模型：未下载时优雅跳过（显示提示），不报错
+            if (translateServiceName === 'local_mt') {
+                try {
+                    const status = await invoke('local_mt_model_status', { pair: 'en-zh' });
+                    if (!status.installed) {
+                        info(`[${currentTranslateServiceInstanceKey}]skipped: local_mt model not downloaded`);
+                        setIsLoading(false);
+                        setSkipped(true);
+                        setHide(false);
+                        return;
+                    }
+                } catch {
+                    // 状态检查失败不阻塞翻译，继续尝试
+                }
             }
         }
 
