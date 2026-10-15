@@ -1,4 +1,5 @@
 import { fetchWithTimeout as fetch } from '../../../utils/fetchWithTimeout';
+import { chunkText } from './chunkText';
 
 // Google TTS（免费、无需 API key、开箱即用）：
 // 使用 Google 翻译的 TTS 端点，返回 MP3 音频，无需本地安装任何 TTS 引擎。
@@ -34,23 +35,7 @@ export async function tts(text, lang, options = {}) {
     };
     const googleLang = langMap[lang] || 'en';
 
-    // Google TTS 限制单次 ~200 字符，超长需分段
-    const maxLen = 200;
-    const chunks = [];
-    let remaining = text.trim();
-    while (remaining.length > 0) {
-        if (remaining.length <= maxLen) {
-            chunks.push(remaining);
-            break;
-        }
-        // 在 200 字符内找最近的空格/标点断句
-        let cut = remaining.lastIndexOf(' ', maxLen);
-        if (cut < maxLen * 0.5) cut = remaining.lastIndexOf('。', maxLen);
-        if (cut < maxLen * 0.5) cut = remaining.lastIndexOf('.', maxLen);
-        if (cut < maxLen * 0.5) cut = maxLen;
-        chunks.push(remaining.slice(0, cut + 1));
-        remaining = remaining.slice(cut + 1);
-    }
+    const chunks = chunkText(text);
 
     // 逐段合成并拼接 MP3（MP3 帧可直接拼接）
     const parts = [];
