@@ -25,7 +25,38 @@ test('desktop CSP does not disable browser web security', async () => {
 
 test('selection translation ignores an empty selection', async () => {
     const source = await readFile('src-tauri/src/window.rs', 'utf8');
-    assert.match(source, /if text\.trim\(\)\.is_empty\(\) \{[\s\S]*?return;/);
+
+    // 修复前的判据是 /if text\.trim\(\)\.is_empty\(\) \{[\s\S]*?return;/ ——
+    // `[\s\S]*?` 会**跨块**匹配，实测一次匹配跨越 1053 个字符、
+    // 从第 410 行的空选区块一直吃到后面**别的逻辑**里的 return;。
+    // 于是它实际上只断言了「文件里某处有 is_empty、其后某处有 return」。
+    // 实测：把真正的兜底 `if text.trim().is_empty() { ... return; }` 改成
+    // `if false {`（空选区不再被忽略），本测试**仍然通过**。
+    //
+    // 现在改为精确锚定那个块：断言从 `if text.trim().is_empty()` 到它**自己**
+    // 的 `return;` 之间，必须依次出现 warn + 本地化通知 + return，
+    // 且这段区间内不得嵌套另一个 `if text.trim().is_empty()` 分支起点。
+    const start = source.indexOf(
+        'if text.trim().is_empty() {\n        warn!("selection_translate: no text selected");'
+    );
+    assert.notEqual(start, -1, 'the empty-selection bail-out must exist verbatim');
+
+    const block = source.slice(start, source.indexOf('\n    }\n', start) + 7);
+    // 1) 该块必须以 return; 结束（空选区不再继续往下走）
+    assert.match(block, /return;\s*\}\s*$/, 'the empty-selection block must return');
+    // 2) 通知文案必须走 notification.rs（本地化），不能硬编码
+    assert.match(
+        block,
+        /crate::notification::text\(/,
+        'the empty-selection notice must be localized through notification.rs'
+    );
+    // 3) 块内不得再出现第二个 is_empty 分支（那说明锚定跑偏了）
+    assert.equal(
+        block.split('is_empty()').length - 1,
+        1,
+        'the anchored block should contain exactly one is_empty() check'
+    );
+
     assert.match(source, /Failed to send selected text to translation window/);
 });
 
