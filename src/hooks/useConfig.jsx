@@ -46,16 +46,38 @@ export const useConfig = (key, defaultValue, options = {}) => {
             if (v !== null) {
                 setPropertyState(v);
             } else {
-                store.get(key).then((v) => {
-                    if (v === null) {
-                        const fallback = defaultValueRef.current;
-                        setPropertyState(fallback);
-                        store.set(key, fallback);
-                        store.save();
-                    } else {
-                        setPropertyState(v);
-                    }
-                });
+                store
+                    .get(key)
+                    .then((v) => {
+                        if (v === null) {
+                            const fallback = defaultValueRef.current;
+                            setPropertyState(fallback);
+                            store.set(key, fallback);
+                            store.save();
+                        } else {
+                            setPropertyState(v);
+                        }
+                    })
+                    // ⚠️ `store.get` 是 `await invoke('plugin:store|get')`，**会 reject**
+                    // （插件未注册 / IPC 失败 / 配置路径不可读；`utils/lang_detect.js:317`
+                    // 已经记录过这一点）。
+                    //
+                    // 原先这里没有 `.catch`，于是读失败时：
+                    //   · 上面的回调**从不执行** -> `setPropertyState` 一次都没被调用
+                    //   · 本 hook 返回的 property **永远是 `null`**
+                    //   · 同时留下一个**未处理的 Promise 拒绝**（仓库里没有任何
+                    //     `window.unhandledrejection` 兜底，已 grep 确认）
+                    // 本 hook 有 **140 处调用点**，全都依赖这个返回值渲染控件
+                    // （开关、下拉框、输入框），拿到 `null` 就是控件状态错乱。
+                    //
+                    // 失败时退回到默认值（**只写 state、不写盘**）：读失败不代表
+                    // 用户没配过，此时若照 `v === null` 分支去 `store.set` 落盘，
+                    // 等于用一个默认值**覆盖用户真实配置** —— 那是数据丢失，
+                    // 比显示默认值严重得多。写盘留给用户下次真实修改触发。
+                    .catch((e) => {
+                        console.error(`[useConfig] failed to read '${key}' from the store:`, e);
+                        setPropertyState(defaultValueRef.current);
+                    });
             }
         },
         [key]
