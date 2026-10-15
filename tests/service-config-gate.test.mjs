@@ -84,6 +84,69 @@ test('a non-string or empty value never counts as configured', async () => {
     assert.equal(isServiceConfigured('ollama', { requestPath: 'http://127.0.0.1:11434' }), true);
 });
 
+test('a whitespace-only value never counts as configured', async () => {
+    // round 48 实测的漏洞：闸门原先用 `config[key] !== ''` 精确比较空串，
+    // 于是**纯空白**（'   ' / '\t' / '\n'）会被判为「已配置」，
+    // 而全部 11 个登记引擎都会被骗过，进而发出注定失败的请求。
+    //
+    // 以 openai 为例的真实后果链（已实测）：
+    //   requestPath=''    -> configured=false -> 不发请求（正确）
+    //   requestPath='   ' -> configured=true  -> 归一化成 'https://   '
+    //                        -> new URL() 抛 Invalid URL
+    // 用户只看到「翻译失败」，不知道原因只是值里多了空格。
+    const blanks = [' ', '   ', '\t', '\n', ' \t\n ', '\r\n'];
+    const engines = {
+        alibaba: ['accesskey_id', 'accesskey_secret'],
+        baidu: ['appid', 'secret'],
+        baidu_field: ['appid', 'secret'],
+        caiyun: ['token'],
+        geminipro: ['apiKey', 'requestPath'],
+        niutrans: ['apikey'],
+        openai: ['requestPath', 'apiKey'],
+        ollama: ['requestPath'],
+        tencent: ['secret_id', 'secret_key'],
+        volcengine: ['appid', 'secret'],
+        youdao: ['appkey', 'key'],
+    };
+
+    for (const [engine, keys] of Object.entries(engines)) {
+        for (const blank of blanks) {
+            const config = Object.fromEntries(keys.map((k) => [k, blank]));
+            assert.equal(
+                isServiceConfigured(engine, config),
+                false,
+                `${engine} must reject ${JSON.stringify(blank)} in every required key`
+            );
+        }
+    }
+
+    // 混合情况：一项正常、一项纯空白，仍应判为未配置
+    assert.equal(isServiceConfigured('openai', { requestPath: '   ', apiKey: 'sk-real' }), false);
+    assert.equal(isServiceConfigured('openai', { requestPath: 'https://api.openai.com/v1', apiKey: ' ' }), false);
+});
+
+test('values with incidental surrounding whitespace are still accepted', async () => {
+    // 反过来不能误伤：从网页/文档复制密钥时尾部常带空格或换行，
+    // 那是真实且正确的操作，必须照常判为已配置。
+    assert.equal(isServiceConfigured('ollama', { requestPath: ' http://127.0.0.1:11434 ' }), true);
+    assert.equal(
+        isServiceConfigured('openai', { requestPath: '\nhttps://api.openai.com/v1\t', apiKey: ' sk-abc ' }),
+        true
+    );
+    assert.equal(isServiceConfigured('baidu', { appid: ' 12345 ', secret: 'abcdef\n' }), true);
+    // 普通值当然照旧
+    assert.equal(isServiceConfigured('ollama', { requestPath: 'http://127.0.0.1:11434' }), true);
+});
+
+test('the gate trims for comparison but does not rewrite the stored config', async () => {
+    // isFilledString 只读不写：不能因为判定就改动用户传进来的对象，
+    // 否则「我明明填了」会变成难以排查的困惑。
+    const config = { requestPath: ' http://127.0.0.1:11434 ', apiKey: ' sk-x ' };
+    const snapshot = JSON.stringify(config);
+    isServiceConfigured('openai', config);
+    assert.equal(JSON.stringify(config), snapshot, 'the gate must not mutate the config it inspects');
+});
+
 test('a missing or null instance config is handled without throwing', async () => {
     // 全新实例的配置可能还没落盘（null）；此处不能抛错
     assert.equal(isServiceConfigured('openai', null), false);
