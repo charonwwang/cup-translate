@@ -103,7 +103,8 @@ pnpm tauri build
 
 内部标识已改为 `com.cup-translate.app`；首次启动会迁移旧版配置目录。
 对外品牌使用 `cup-translate`，不主张上游商标「pot / 派了个萌」。仍保留
-`com.pot_app.pot.metainfo.xml` 这一历史应用元数据文件，后续发行时需核对其内容与标识。
+`packaging/cup-translate.metainfo.xml`（原 `com.pot_app.pot.metainfo.xml`）已重写为 cup-translate 品牌标识，
+历史 release 条目保留上游 `pot-app/pot-desktop` 出处链接以符合 GPL 署名要求。
 
 ---
 

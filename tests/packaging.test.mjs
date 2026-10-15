@@ -120,6 +120,20 @@ test('Rust service whitelists stay in sync with the frontend registries', async 
     assert.deepEqual(extractList('builtin_collection_list'), await extractExports('src/services/collection/index.jsx'));
 });
 
+test('AppStream metainfo carries cup-translate branding, not the upstream identity', async () => {
+    // CLAUDE.md §1.1: this fork must not claim the upstream pot/Pot trademark or identity.
+    const metainfo = await readFile('packaging/cup-translate.metainfo.xml', 'utf8');
+    assert.match(metainfo, /<id>com\.cup-translate\.app<\/id>/);
+    assert.match(metainfo, /<name>cup-translate<\/name>/);
+    assert.equal(metainfo.includes('Pylogmon'), false);
+    assert.equal(metainfo.includes('<name>Pot</name>'), false);
+    assert.equal(metainfo.includes('com.pot_app.pot'), false);
+    assert.equal(metainfo.includes('pot-app.com'), false);
+    // fork provenance must be stated, and upstream release links retained for GPL credit
+    assert.match(metainfo, /pot-app\/pot-desktop/);
+    assert.match(metainfo, /<launchable type="desktop-id">com\.cup-translate\.app\.desktop<\/launchable>/);
+});
+
 test('Tauri shell API permits opening links without its command execution feature', async () => {
     const config = JSON.parse(await readFile('src-tauri/tauri.conf.json', 'utf8'));
     assert.equal(config.tauri.allowlist.shell.all, false);

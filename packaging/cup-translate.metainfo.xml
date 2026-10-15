@@ -1,17 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-    <id>com.pot_app.pot</id>
-    <name>Pot</name>
-    <summary>A text translation and OCR app</summary>
-    <summary xml:lang="zh-Hans">一款跨平台的划词翻译和文字识别软件</summary>
-    <developer id="com.pot_app">
-        <name>Pylogmon</name>
+    <id>com.cup-translate.app</id>
+    <name>cup-translate</name>
+    <summary>A lightweight, selection-first translation and OCR tool</summary>
+    <summary xml:lang="zh-Hans">轻量划词翻译与文字识别工具</summary>
+    <developer id="com.cup-translate">
+        <name>charonwwang</name>
     </developer>
-    <url type="homepage">https://pot-app.com/</url>
-    <url type="bugtracker">https://github.com/pot-app/pot-desktop/issues</url>
+    <url type="homepage">https://github.com/charonwwang/cup-translate</url>
+    <url type="bugtracker">https://github.com/charonwwang/cup-translate/issues</url>
     <metadata_license>CC0-1.0</metadata_license>
     <project_license>GPL-3.0-only</project_license>
     <description>
+        <p>A community continuation (fork) of the archived pot-app/pot-desktop project, rebranded as cup-translate.</p>
+        <p xml:lang="zh-Hans">本项目是已归档的 pot-app/pot-desktop 的社区续版（fork），品牌已迁移为 cup-translate。</p>
         <p>A cross-platform software for text translation and recognition.</p>
         <p xml:lang="zh-Hans">一款跨平台的划词翻译和文字识别软件</p>
         <p>Features</p>
@@ -37,22 +39,27 @@
             <li xml:lang="zh-Hans">多语言支持</li>
         </ul>
     </description>
-    <launchable type="desktop-id">com.pot_app.pot.desktop</launchable>
+    <launchable type="desktop-id">com.cup-translate.app.desktop</launchable>
     <screenshots>
         <screenshot type="default">
-            <image>https://github.com/pot-app/pot-desktop/raw/2.7.10/asset/1.png</image>
+            <image>https://github.com/charonwwang/cup-translate/raw/master/asset/1.png</image>
             <caption>Dark Mode</caption>
         </screenshot>
         <screenshot>
-            <image>https://github.com/pot-app/pot-desktop/raw/2.7.10/asset/2.png</image>
+            <image>https://github.com/charonwwang/cup-translate/raw/master/asset/2.png</image>
             <caption>Dark/Light Mode</caption>
         </screenshot>
         <screenshot>
-            <image>https://github.com/pot-app/pot-desktop/raw/2.7.10/asset/3.png</image>
+            <image>https://github.com/charonwwang/cup-translate/raw/master/asset/3.png</image>
             <caption>Light Mode</caption>
         </screenshot>
     </screenshots>
     <releases>
+        <!-- Historical release entries below are inherited from the upstream pot-app/pot-desktop
+             project and retained for provenance/credit (GPL-3.0 requires keeping attribution).
+             The `url type="details"` links intentionally point at the upstream repo's tags where
+             these changes actually shipped; cup-translate's own future releases should add new
+             <release> entries here pointing at charonwwang/cup-translate instead. -->
         <release version="3.0.7" date="2025-5-10">
             <url type="details">https://github.com/pot-app/pot-desktop/releases/tag/3.0.7</url>
             <description>
