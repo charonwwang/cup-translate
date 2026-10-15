@@ -65,4 +65,6 @@ export enum LanguageFlag {
     nl = 'nl',
     uk = 'ua',
     he = 'il',
+    ta = 'in',
+    tk = 'tm',
 }

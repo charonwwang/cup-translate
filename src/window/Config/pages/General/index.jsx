@@ -66,6 +66,8 @@ export default function General() {
         uk: 'Українська',
         ar: 'العربية',
         he: 'עִבְרִית',
+        ta: 'தமிழ்',
+        tk: 'Türkmen',
     };
 
     useEffect(() => {
@@ -283,6 +285,18 @@ export default function General() {
                                         startContent={<span className={`fi fi-${LanguageFlag.he}`} />}
                                     >
                                         עִבְרִית
+                                    </DropdownItem>
+                                    <DropdownItem
+                                        key='ta'
+                                        startContent={<span className={`fi fi-${LanguageFlag.ta}`} />}
+                                    >
+                                        தமிழ்
+                                    </DropdownItem>
+                                    <DropdownItem
+                                        key='tk'
+                                        startContent={<span className={`fi fi-${LanguageFlag.tk}`} />}
+                                    >
+                                        Türkmen
                                     </DropdownItem>
                                 </DropdownMenu>
                             </Dropdown>
