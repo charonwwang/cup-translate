@@ -16,7 +16,10 @@ const LEGACY_IDENTIFIER: &str = "com.pot-app.desktop";
 pub fn init_config(app: &mut tauri::App) {
     let identifier = app.config().tauri.bundle.identifier.clone();
 
-    let config_path = config_dir().unwrap();
+    let Some(config_path) = config_dir() else {
+        log::warn!("init_config: cannot resolve config dir, config persistence disabled");
+        return;
+    };
     let config_dir_path = config_path.join(&identifier);
     let config_path = config_dir_path.join("config.json");
 
@@ -235,7 +238,7 @@ pub fn check_service_available() -> Result<(), Error> {
 }
 
 pub fn get_plugin_list(plugin_type: &str) -> Option<Vec<String>> {
-    let app_handle = APP.get().unwrap();
+    let app_handle = APP.get()?;
     let config_dir = dirs::config_dir()?;
     let config_dir = config_dir.join(app_handle.config().tauri.bundle.identifier.clone());
     let plugin_dir = config_dir.join("plugins");
@@ -263,8 +266,9 @@ pub fn get_plugin_list(plugin_type: &str) -> Option<Vec<String>> {
 }
 
 pub fn get(key: &str) -> Option<Value> {
-    let state = APP.get().unwrap().state::<StoreWrapper>();
-    let store = state.0.lock().unwrap();
+    let app_handle = APP.get()?;
+    let state = app_handle.state::<StoreWrapper>();
+    let store = state.0.lock().ok()?;
     store.get(key).cloned()
 }
 
@@ -300,16 +304,37 @@ fn coerce_i64(v: &Value) -> Option<i64> {
 }
 
 pub fn set<T: serde::ser::Serialize>(key: &str, value: T) {
-    let state = APP.get().unwrap().state::<StoreWrapper>();
-    let mut store = state.0.lock().unwrap();
-    store.insert(key.to_string(), json!(value)).unwrap();
-    store.save().unwrap();
+    let Some(app_handle) = APP.get() else {
+        log::warn!("set({key}): app not initialized, dropping write");
+        return;
+    };
+    let state = app_handle.state::<StoreWrapper>();
+    let mut store = match state.0.lock() {
+        Ok(v) => v,
+        Err(_) => {
+            log::warn!("set({key}): store mutex poisoned, dropping write");
+            return;
+        }
+    };
+    if let Err(e) = store.insert(key.to_string(), json!(value)) {
+        log::warn!("set({key}): insert failed: {e:?}");
+        return;
+    }
+    if let Err(e) = store.save() {
+        log::warn!("set({key}): save failed: {e:?}");
+    }
 }
 
 pub fn is_first_run() -> bool {
-    let state = APP.get().unwrap().state::<StoreWrapper>();
-    let store = state.0.lock().unwrap();
-    store.is_empty()
+    let Some(app_handle) = APP.get() else {
+        return true;
+    };
+    let state = app_handle.state::<StoreWrapper>();
+    let is_empty = match state.0.lock() {
+        Ok(store) => store.is_empty(),
+        Err(_) => true,
+    };
+    is_empty
 }
 
 #[cfg(test)]
