@@ -307,14 +307,34 @@ pub fn selection_translate() {
     // 兜底：用 CGEvent 模拟 Cmd+C 获取选中文本（不需要 Automation 权限）
     if text.trim().is_empty() {
         info!("selection_translate: trying CGEvent Cmd+C fallback");
+        // 模拟 Cmd+C 会**覆盖用户剪贴板**，属于副作用数据丢失：
+        // 用户只是想划词翻译，却发现自己刚复制的内容没了。
+        // 这里先备份剪贴板，取到选区文本后再还原（取不到也还原）。
         #[cfg(target_os = "macos")]
-        simulate_copy_with_cg_event();
-        std::thread::sleep(std::time::Duration::from_millis(100));
-        if let Ok(mut clipboard) = arboard::Clipboard::new() {
-            if let Ok(clip_text) = clipboard.get_text() {
-                if !clip_text.trim().is_empty() {
-                    info!("selection_translate: got text via CGEvent copy");
-                    text = clip_text;
+        {
+            let mut clipboard = arboard::Clipboard::new().ok();
+            let saved = clipboard
+                .as_mut()
+                .and_then(|c| c.get_text().ok())
+                .filter(|s| !s.is_empty());
+
+            simulate_copy_with_cg_event();
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            if let Some(c) = clipboard.as_mut() {
+                if let Ok(clip_text) = c.get_text() {
+                    if !clip_text.trim().is_empty() {
+                        info!("selection_translate: got text via CGEvent copy");
+                        text = clip_text;
+                    }
+                }
+            }
+
+            // 还原用户原有剪贴板内容（选区文本已复制到 text，不再依赖剪贴板）
+            if let (Some(c), Some(saved)) = (clipboard.as_mut(), saved) {
+                if let Err(e) = c.set_text(saved) {
+                    warn!("selection_translate: failed to restore clipboard: {e:?}");
+                } else {
+                    info!("selection_translate: clipboard restored after CGEvent copy");
                 }
             }
         }
