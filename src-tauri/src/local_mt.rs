@@ -88,11 +88,23 @@ fn model_spec(pair: &str) -> Result<ModelSpec, String> {
     }
 }
 
-/// 计算文件 SHA256（十六进制小写）
+/// 计算文件 SHA256（十六进制小写），流式读取避免大文件全量加载进内存
 fn file_sha256(path: &std::path::Path) -> Result<String, String> {
-    let bytes = std::fs::read(path).map_err(|e| format!("读取 {} 失败: {e}", path.display()))?;
+    use std::io::Read;
+    let file =
+        std::fs::File::open(path).map_err(|e| format!("读取 {} 失败: {e}", path.display()))?;
+    let mut reader = std::io::BufReader::new(file);
     let mut hasher = Sha256::new();
-    hasher.update(&bytes);
+    let mut buf = vec![0u8; 64 * 1024];
+    loop {
+        let n = reader
+            .read(&mut buf)
+            .map_err(|e| format!("读取 {} 失败: {e}", path.display()))?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
     let digest = hasher.finalize();
     Ok(digest.iter().map(|b| format!("{b:02x}")).collect())
 }
