@@ -51,7 +51,8 @@ export async function tts(text, lang, options = {}) {
             responseType: 3, // Binary
         });
         if (!res.ok) {
-            throw `Google TTS 请求失败: HTTP ${res.status}`;
+            // 与其余服务层错误保持一致，用英文（服务层拿不到 t，回退语言即英文）
+            throw `Google TTS request failed: HTTP ${res.status}`;
         }
         parts.push(new Uint8Array(res.data));
     }

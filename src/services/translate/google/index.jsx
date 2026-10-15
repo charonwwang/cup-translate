@@ -90,7 +90,12 @@ export async function translate(text, from, to, options = {}) {
     }
 
     if (!res || !res.ok) {
-        throw `Google 翻译请求失败\n${lastErr}\n\n提示：429 = 请求频率受限，请稍后再试或在设置中配置自定义翻译服务`;
+        // 服务层的错误文案统一用**英文**：全部 86 处 throw 里其余 85 处都是英文，
+        // 只有这里（以及 local_mt / google_tts）是中文，属例外。
+        // 服务层拿不到 `t`（不是 React 组件），而 i18next 的回退语言就是英文，
+        // 所以「英文原文 + 关键诊断信息」是这个项目里正确的约定；
+        // 需要本地化的用户可见文案放在 UI 层（见 TargetArea 的 language_not_supported）。
+        throw `Google translate request failed\n${lastErr}\n\nHint: HTTP 429 = rate limited. Please retry later, or configure a custom translate endpoint in Settings.`;
     }
 
     {

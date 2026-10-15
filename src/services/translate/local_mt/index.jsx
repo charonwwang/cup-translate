@@ -24,7 +24,8 @@ export async function translate(text, from, to, options = {}) {
     const toCode = to;
     const pair = `${fromCode}-${toCode}`;
     if (pair !== 'en-zh' && pair !== 'zh-en') {
-        throw '本地离线翻译仅支持中英互译（en→zh / zh→en）';
+        // 与其余 85 处服务层错误保持一致，用英文（服务层拿不到 t，回退语言即英文）
+        throw `Local offline translation only supports English <-> Chinese (en-zh / zh-en), got ${pair}`;
     }
     return await invoke('local_mt_translate', {
         pair,
