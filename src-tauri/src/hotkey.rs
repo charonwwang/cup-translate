@@ -41,7 +41,7 @@ where
 
 // Register global shortcuts
 pub fn register_shortcut(shortcut: &str) -> Result<(), String> {
-    let app_handle = APP.get().unwrap();
+    let app_handle = APP.get().ok_or("App is not initialized")?;
     match shortcut {
         "hotkey_selection_translate" => register(
             app_handle,
@@ -72,7 +72,7 @@ pub fn register_shortcut(shortcut: &str) -> Result<(), String> {
 
 #[tauri::command]
 pub fn register_shortcut_by_frontend(name: &str, shortcut: &str) -> Result<(), String> {
-    let app_handle = APP.get().unwrap();
+    let app_handle = APP.get().ok_or("App is not initialized")?;
     match name {
         "hotkey_selection_translate" => register(
             app_handle,

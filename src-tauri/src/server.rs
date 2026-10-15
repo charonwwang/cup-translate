@@ -26,11 +26,13 @@ pub fn start_server() {
         let server = match Server::http(format!("127.0.0.1:{port}")) {
             Ok(v) => v,
             Err(e) => {
-                let identifier = APP.get().unwrap().config().tauri.bundle.identifier.clone();
-                let _ = notification::Notification::new(&identifier)
-                    .title("Server start failed")
-                    .body("Please Change Server Port and restart the application")
-                    .show();
+                if let Some(app_handle) = APP.get() {
+                    let identifier = app_handle.config().tauri.bundle.identifier.clone();
+                    let _ = notification::Notification::new(&identifier)
+                        .title("Server start failed")
+                        .body("Please Change Server Port and restart the application")
+                        .show();
+                }
                 warn!("Server start failed: {}", e);
                 return;
             }
