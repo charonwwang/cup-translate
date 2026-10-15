@@ -48,10 +48,30 @@ export async function recognize(base64, language, options = {}) {
     });
     if (res.ok) {
         let result = res.data;
-        if (result.data['region']) {
+        // ⚠️ 必须先判断 `result.data` 是否存在，不能直接 `result.data['region']`。
+        //
+        // 讯飞在鉴权失败时返回的是**不带 `data` 字段**的响应。实测（伪造签名的
+        // 真实请求 `https://rest-api.xfyun.cn/v2/itr`）拿到的响应：
+        //     {"message":"HMAC signature cannot be verified: apikey not found"}
+        // 于是原来的 `result.data['region']` 会抛
+        //     TypeError: Cannot read properties of undefined (reading 'region')
+        // 而前端 `TextArea` 是 `setError(e.toString())` 原样展示，用户看到的
+        // 就是这句 TypeError —— 服务端明明已经说明「apikey 找不到」，这条真正
+        // 可操作的信息却被完全丢弃（与上一轮修掉的 tencent_img 是同一类缺陷）。
+        //
+        // 同目录的 `iflytek` 与 `iflytek_intsig` 本来就做了逐层判断
+        // （`if (!data) throw ...` / `if (!res_payload) throw ...`），
+        // 只有 latex 这一版漏了；这里补齐，文案与那两个保持一致。
+        let data = result && result['data'];
+        if (!data) {
+            throw `Result data not found\nResult:\n${JSON.stringify(result)}`;
+        }
+        if (data['region']) {
             let target = '';
-            for (let i of result.data['region']) {
-                target += i['recog']['content'] + '\n';
+            for (let i of data['region']) {
+                // `recog` 同样可能缺失（某块没有识别结果），缺了按空内容处理，
+                // 不要因为一块而让整次识别崩掉。
+                target += (i['recog'] ? i['recog']['content'] : '') + '\n';
             }
             target = target.replaceAll(' ifly-latex-begin ', '');
             target = target.replaceAll(' ifly-latex-end ', '');
