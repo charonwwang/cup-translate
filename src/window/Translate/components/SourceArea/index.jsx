@@ -94,9 +94,11 @@ export default function SourceArea(props) {
                             } else {
                                 newText = v.trim();
                             }
+                            // 空识别结果不追加，避免增量翻译累积空白
+                            if (newText === '') return;
                             if (incrementalTranslate) {
                                 setSourceText((old) => {
-                                    return old + ' ' + newText;
+                                    return old ? old + ' ' + newText : newText;
                                 });
                             } else {
                                 setSourceText(newText);
@@ -131,9 +133,11 @@ export default function SourceArea(props) {
                                 } else {
                                     newText = v.trim();
                                 }
+                                // 空识别结果不追加，避免增量翻译累积空白
+                                if (newText === '') return;
                                 if (incrementalTranslate) {
                                     setSourceText((old) => {
-                                        return old + ' ' + newText;
+                                        return old ? old + ' ' + newText : newText;
                                     });
                                 } else {
                                     setSourceText(newText);
@@ -158,9 +162,11 @@ export default function SourceArea(props) {
             } else {
                 newText = text.trim();
             }
+            // 空识别结果不追加，避免增量翻译累积空白
+            if (newText === '') return;
             if (incrementalTranslate) {
                 setSourceText((old) => {
-                    return old + ' ' + newText;
+                    return old ? old + ' ' + newText : newText;
                 });
             } else {
                 setSourceText(newText);
