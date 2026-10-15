@@ -3,6 +3,7 @@ use dirs::config_dir;
 use log::info;
 use reqwest_dav::{Auth, ClientBuilder, Depth};
 use std::io::{Cursor, Read, Seek, Write};
+use std::time::Duration;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 use zip::read::ZipArchive;
@@ -19,6 +20,10 @@ fn app_config_dir() -> Result<PathBuf, Error> {
         .identifier;
     Ok(base.join(identifier))
 }
+
+/// 备份/恢复操作的 HTTP 超时（秒）：上传/下载可能传输大文件，给较宽松的上限，
+/// 但仍避免网络卡死时永久挂起
+const BACKUP_HTTP_TIMEOUT: Duration = Duration::from_secs(300);
 
 fn backup_name(name: Option<&str>) -> Result<&str, Error> {
     name.filter(|value| {
@@ -213,7 +218,9 @@ pub async fn local(operate: &str, path: String) -> Result<String, Error> {
 pub async fn aliyun(operate: &str, path: String, url: String) -> Result<String, Error> {
     match operate {
         "put" => {
-            reqwest::Client::new()
+            reqwest::Client::builder()
+                .timeout(BACKUP_HTTP_TIMEOUT)
+                .build()?
                 .put(&url)
                 .body(std::fs::read(&path)?)
                 .send()
@@ -222,7 +229,9 @@ pub async fn aliyun(operate: &str, path: String, url: String) -> Result<String, 
             Ok("".to_string())
         }
         "get" => {
-            let res = reqwest::Client::new()
+            let res = reqwest::Client::builder()
+                .timeout(BACKUP_HTTP_TIMEOUT)
+                .build()?
                 .get(&url)
                 .send()
                 .await?
