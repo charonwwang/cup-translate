@@ -5,6 +5,7 @@ import React, { useEffect } from 'react';
 import { atom, useAtom, useAtomValue } from 'jotai';
 
 import { languageList } from '../../../../utils/language';
+import { getSystemTargetLanguage, getSmartTargetLanguage } from '../../../../utils/systemLanguage';
 import { detectLanguageAtom } from '../SourceArea';
 import { useConfig } from '../../../../hooks';
 
@@ -14,7 +15,8 @@ export const targetLanguageAtom = atom();
 export default function LanguageArea() {
     const [rememberLanguage] = useConfig('translate_remember_language', false);
     const [translateSourceLanguage, setTranslateSourceLanguage] = useConfig('translate_source_language', 'auto');
-    const [translateTargetLanguage, setTranslateTargetLanguage] = useConfig('translate_target_language', 'zh_cn');
+    // 目标语言默认为系统语言（中文系统→中文），而非硬编码 zh_cn
+    const [translateTargetLanguage, setTranslateTargetLanguage] = useConfig('translate_target_language', getSystemTargetLanguage());
     const [translateSecondLanguage] = useConfig('translate_second_language', 'en');
 
     const [sourceLanguage, setSourceLanguage] = useAtom(sourceLanguageAtom);
@@ -37,6 +39,16 @@ export default function LanguageArea() {
             setTranslateTargetLanguage(targetLanguage);
         }
     }, [sourceLanguage, targetLanguage, rememberLanguage]);
+
+    // 智能语言切换：检测到的源语言与目标语言相同时，自动切换目标为英语
+    // （如中文系统翻译中文文本 → 自动切换为中→英）
+    useEffect(() => {
+        if (sourceLanguage === 'auto' && detectLanguage && detectLanguage === targetLanguage) {
+            const systemLang = getSystemTargetLanguage();
+            const fallback = targetLanguage === 'en' ? systemLang : 'en';
+            setTargetLanguage(fallback);
+        }
+    }, [detectLanguage, sourceLanguage, targetLanguage]);
 
     return (
         <Card
