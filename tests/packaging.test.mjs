@@ -298,3 +298,153 @@ test('a fresh clone has no dist/ committed, so the build order genuinely matters
     const tracked = execFileSync('git', ['ls-files', 'dist'], { encoding: 'utf8' }).split('\n').filter(Boolean);
     assert.deepEqual(tracked, [], `dist/ must never be committed; git tracks: ${JSON.stringify(tracked.slice(0, 5))}`);
 });
+
+/**
+ * 更新器清单里的**每个平台键**都必须指向一个**真实会被 CI 产出的文件名**。
+ *
+ * 与既有那条 `productName, updater artifact names, and CI rename steps stay in sync`
+ * 的分工：那条只比对**前缀**（`cup-translate`）与 `productName` 是否一致；
+ * 本条比对**平台 → arch 后缀**的对应关系，两者不重叠。
+ *
+ * 为什么需要（已实测的覆盖缺口）：
+ *   把 `windows-x86_64` 的产物名从 `_x64-setup.nsis.zip` 误写成
+ *   `_x86_64-setup.nsis.zip`（很自然的复制粘贴错误）后，
+ *   **现有 21 条测试全部通过** —— 用户更新时会拿到 404，
+ *   而且只在真正发版后才暴露。故补上这条逐平台的交叉校验。
+ */
+test('every updater platform entry maps to an artifact name the CI actually builds', async () => {
+    const source = await readFile('updater/updater.mjs', 'utf8');
+
+    // updater.mjs 里 platforms 的每个条目：平台键 -> 产物文件名模板
+    const entries = new Map();
+    for (const m of source.matchAll(/'(?<platform>[a-z0-9_-]+)':\s*await entry\(`(?<name>[^`]+)`\)/g)) {
+        entries.set(m.groups.platform, m.groups.name);
+    }
+    assert.ok(entries.size >= 6, `expected the full platform matrix, found ${entries.size}`);
+
+    const workflow = await readFile('.github/workflows/package.yml', 'utf8');
+
+    // ---- Windows：三个 target 必须各自对应一个 updater 条目，后缀不能串 ----
+    const winExpect = {
+        'x86_64-pc-windows-msvc': ['windows-x86_64', '_x64-setup.nsis.zip'],
+        'i686-pc-windows-msvc': ['windows-i686', '_x86-setup.nsis.zip'],
+        'aarch64-pc-windows-msvc': ['windows-aarch64', '_arm64-setup.nsis.zip'],
+    };
+    for (const [target, [platform, suffix]] of Object.entries(winExpect)) {
+        assert.ok(workflow.includes(target), `CI must still build ${target}`);
+        assert.equal(
+            entries.get(platform),
+            `cup-translate_\${assetVersion}${suffix}`,
+            `${platform} must point at the artifact CI produces for ${target} (suffix ${suffix})`
+        );
+    }
+
+    // ---- Windows 的 target 集合与 updater 的平台集合必须一一对应 ----
+    // 少一个 => 该架构的用户收不到更新；多一个 => 指向不存在的文件（404）
+    const winTargets = [...workflow.matchAll(/(x86_64|i686|aarch64)-pc-windows-msvc/g)].map((m) => m[1]);
+    const winPlatforms = Object.keys(winExpect).map((t) => winExpect[t][0]);
+    assert.deepEqual(
+        [...new Set(winTargets)].sort(),
+        ['aarch64', 'i686', 'x86_64'],
+        'the Windows build matrix must keep all three architectures'
+    );
+    assert.deepEqual(
+        winPlatforms.sort(),
+        ['windows-aarch64', 'windows-i686', 'windows-x86_64'],
+        'updater.mjs must cover exactly the Windows architectures CI builds'
+    );
+
+    // ---- macOS：CI 的 rename 步骤产出 _aarch64 / _x64，updater 必须一致 ----
+    for (const [platform, suffix] of [
+        ['darwin-aarch64', '_aarch64.app.tar.gz'],
+        ['darwin-x86_64', '_x64.app.tar.gz'],
+    ]) {
+        assert.equal(
+            entries.get(platform),
+            `cup-translate_\${assetVersion}${suffix}`,
+            `${platform} must match the CI rename step output`
+        );
+        // 该后缀必须真的出现在 CI 的改名命令里
+        assert.match(
+            workflow,
+            new RegExp(
+                `cup-translate_\\$\\{\\{needs\\.change-version\\.outputs\\.version\\}\\}${suffix.replace(/\./g, '\\.')}`
+            ),
+            `CI must rename the macOS bundle to the ${suffix} form that ${platform} expects`
+        );
+    }
+
+    // ---- Linux：只保留 x86_64 的 AppImage ----
+    // 上游原版把 i686/aarch64/armv7 错误地指向 macOS 产物，会让用户下到装不上的包。
+    assert.equal(
+        entries.get('linux-x86_64'),
+        'cup-translate_${assetVersion}_amd64.AppImage.tar.gz',
+        'linux-x86_64 must point at the AppImage tarball'
+    );
+    for (const bogus of ['linux-i686', 'linux-aarch64', 'linux-armv7']) {
+        assert.ok(
+            !entries.has(bogus),
+            `${bogus} must NOT be present: Tauri's updater only supports AppImage self-replace on Linux, ` +
+                `and CI only builds x86_64 — a bogus entry makes users download an uninstallable package`
+        );
+    }
+
+    // ---- 平台键的形态：不允许出现 Tauri 不认识的 target triple ----
+    const knownPrefixes = ['darwin-', 'windows-', 'linux-'];
+    for (const platform of entries.keys()) {
+        assert.ok(
+            knownPrefixes.some((p) => platform.startsWith(p)),
+            `unexpected platform key in updater manifest: ${platform}`
+        );
+    }
+});
+
+/**
+ * `updater-for-fix-runtime.mjs` 生成的是**固定版本 WebView2 运行时**的清单。
+ * 它只有 Windows 条目（Linux/macOS 的 WebView2 概念不存在），
+ * 且产物名由 CI 的 `Rename-Item` 步骤改成带 `_fix_webview2_runtime` 的形态。
+ * 两者必须逐字对齐，否则该清单指向的文件不存在（404），
+ * 使用固定运行时版本的用户收不到更新。
+ */
+test('the fixed-runtime updater manifest matches the CI rename step and stays Windows-only', async () => {
+    const source = await readFile('updater/updater-for-fix-runtime.mjs', 'utf8');
+    const workflow = await readFile('.github/workflows/package.yml', 'utf8');
+
+    const entries = new Map();
+    for (const m of source.matchAll(/'(?<platform>[a-z0-9_-]+)':\s*await entry\(`(?<name>[^`]+)`\)/g)) {
+        entries.set(m.groups.platform, m.groups.name);
+    }
+
+    // 只应有 Windows 条目：WebView2 是 Windows 专有运行时
+    assert.deepEqual(
+        [...entries.keys()].sort(),
+        ['windows-aarch64', 'windows-i686', 'windows-x86_64'],
+        'the fixed-runtime manifest must contain exactly the three Windows architectures'
+    );
+
+    // 逐条对照 CI 的 Rename-Item 产物名
+    const archBySuffix = { 'windows-x86_64': 'x64', 'windows-i686': 'x86', 'windows-aarch64': 'arm64' };
+    for (const [platform, arch] of Object.entries(archBySuffix)) {
+        const expected = `cup-translate_\${assetVersion}_${arch}_fix_webview2_runtime-setup.nsis.zip`;
+        assert.equal(entries.get(platform), expected, `${platform} must match the CI rename target for arch ${arch}`);
+        // CI 的重命名命令必须是**参数化**的（用 ${{ matrix.arch }}），
+        // 而不是写死某个架构 —— 否则三个架构里只有一个会被改名，
+        // 另外两个仍是不带 _fix_webview2_runtime 的旧名，清单就会 404。
+        //
+        // 注意：CI 原文里是 `${{ matrix.arch }}`，**不是**字面量 `x64`；
+        // 本测试第一版按字面量匹配，因此永远匹配不上（假失败）。
+        assert.match(
+            workflow,
+            /cup-translate_\$\{\{needs\.change-version\.outputs\.version\}\}_\$\{\{ matrix\.arch \}\}_fix_webview2_runtime-setup\.nsis\.zip/,
+            'CI must rename the bundle to the _fix_webview2_runtime form using the matrix arch parameter'
+        );
+    }
+
+    // matrix.arch 的三个取值必须与上面的后缀集合一致
+    const archValues = new Set([...workflow.matchAll(/^\s+arch: (x64|x86|arm64)$/gm)].map((m) => m[1]));
+    assert.deepEqual(
+        [...archValues].sort(),
+        ['arm64', 'x64', 'x86'],
+        'the CI matrix must define exactly the three arches the manifest names'
+    );
+});
