@@ -15,14 +15,39 @@ async function normal_ocr(img_base64, appid, secret) {
     let res = await query(img_base64, 'OCRNormal', '2020-08-26', appid, secret);
     if (res.ok) {
         let result = res.data;
-        if (result['data']) {
-            let data = result['data'];
-            var texts = '';
-            for (let text of data['line_texts']) {
-                texts += text + '\n';
-            }
-            return texts;
+        let data = result && result['data'];
+        // ⚠️ 这里原来只有 `if (result['data']) { ... }`，**没有 else、也没有兜底
+        // return**。而火山引擎失败时返回的是**不含 `data` 字段**的响应，实测
+        // （伪造凭据请求 OCRNormal）拿到的结构是：
+        //   {"ResponseMetadata":{"RequestId":"...","Action":"OCRNormal",
+        //     "Error":{"CodeN":100009,"Code":"InvalidAccessKey",
+        //      "Message":"The security token[fake] included in the request is invalid."}}}
+        // 于是 `if (result['data'])` 为假 -> 整个 `if` 被跳过 ->
+        // 函数走到末尾**返回 `undefined`**（既不抛错、也不带回任何信息）。
+        //
+        // `undefined` 一路传到前端 `Recognize/TextArea`：
+        //     v = v.trim();   // index.jsx:128
+        // 直接抛 `TypeError: Cannot read properties of undefined (reading 'trim')`，
+        // 用户看到的既不是「凭据无效」也不是任何可操作的提示 —— 服务端那句
+        // `InvalidAccessKey` 被彻底丢弃。与上一轮 tencent_img / iflytek_latex
+        // 属同一类缺陷，但更隐蔽：那两处是抛 TypeError，这里是**静默返回
+        // undefined**，错误发生在离现场很远的地方。
+        //
+        // 修复：任何一层缺失都抛出带原始响应的错误，让服务端的说明能到用户眼前。
+        if (!data) {
+            throw JSON.stringify(result);
         }
+        // `line_texts` 同样可能缺失：那是非数组值，`for...of` 会抛
+        // `data.line_texts is not iterable`（文案与本地其它错误风格不符，
+        // 且不含服务端内容），这里一并给成可读的错误。
+        if (!Array.isArray(data['line_texts'])) {
+            throw JSON.stringify(result);
+        }
+        var texts = '';
+        for (let text of data['line_texts']) {
+            texts += text + '\n';
+        }
+        return texts;
     } else {
         throw `Http Request Error\nHttp Status: ${res.status}\n${JSON.stringify(res.data)}`;
     }

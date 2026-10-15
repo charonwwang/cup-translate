@@ -15,14 +15,27 @@ async function multi_lang_ocr(img_base64, appid, secret) {
     let res = await query(img_base64, 'MultiLanguageOCR', '2022-08-31', appid, secret);
     if (res.ok) {
         let result = res.data;
-        if (result['data']) {
-            let data = result['data'];
-            var texts = '';
-            for (let text of data['ocr_infos']) {
-                texts += text['text'] + '\n';
-            }
-            return texts;
+        let data = result && result['data'];
+        // 与 volcengine/index.jsx 的 normal_ocr 是同一处缺陷（那边有完整说明）：
+        // 原来只有 `if (result['data'])` 而没有 else / 兜底 return，
+        // 火山引擎失败时返回**不含 `data`** 的响应（错误在
+        // `ResponseMetadata.Error` 里），于是函数**静默返回 `undefined`**，
+        // 最终在前端 `TextArea` 的 `v.trim()` 处崩成
+        // `TypeError: Cannot read properties of undefined (reading 'trim')`，
+        // 服务端的 `InvalidAccessKey` 说明被丢弃。
+        if (!data) {
+            throw JSON.stringify(result);
         }
+        // 多语种接口的元素是对象，取 `text` 字段；同样要先确认是可迭代的数组，
+        // 否则 `for...of` 会抛出与本地风格不符且不含服务端内容的 TypeError。
+        if (!Array.isArray(data['ocr_infos'])) {
+            throw JSON.stringify(result);
+        }
+        var texts = '';
+        for (let text of data['ocr_infos']) {
+            texts += (text && text['text'] ? text['text'] : '') + '\n';
+        }
+        return texts;
     } else {
         throw `Http Request Error\nHttp Status: ${res.status}\n${JSON.stringify(res.data)}`;
     }
