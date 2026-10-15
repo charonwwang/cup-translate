@@ -81,9 +81,30 @@ export default function General() {
     const languageLabel = (key) => (incompleteLanguages.includes(key) ? `${languageName[key]} *` : languageName[key]);
 
     useEffect(() => {
-        isEnabled().then((v) => {
-            setAutoStart(v);
-        });
+        // `isEnabled` 是 `tauri-plugin-autostart-api` 的
+        // `await invoke('plugin:autostart|is_enabled')`（真实 IPC），**会 reject**
+        // （插件未注册 / 平台不支持 / 系统调用失败）。
+        //
+        // 原先只有一个 `.then()`，失败时：
+        //   · `setAutoStart` 从不执行 -> 开关停在初始值，可能与系统实际状态**相反**，
+        //     用户看到一个错误的状态且没有任何提示；
+        //   · 同时留下一个**未处理的 Promise 拒绝**（仓库里没有任何
+        //     `window.unhandledrejection` 兜底，已 grep 确认）。
+        //
+        // 本文件下面就有一处已经是 `.then(...).catch(...)` 的正确写法
+        // （读取系统字体列表的那次调用），这里补齐一致。
+        //
+        // 注意：上面刻意**不**把那次调用的字面文本写进注释 ——
+        // `tests/font-list-failure.test.mjs` 用 `indexOf` 在 effect 体内定位它，
+        // 注释里出现同样的字面量会让定位命中注释、抽出一段残句而报
+        // `SyntaxError: Unexpected end of input`（本轮就踩到过）。
+        isEnabled()
+            .then((v) => {
+                setAutoStart(v);
+            })
+            .catch((e) => {
+                info('Failed to read the auto-start status: ' + e);
+            });
         // `font_list` 的 Rust 签名是 `Result<Vec<String>, Error>`（font-kit 的
         // `SystemSource::all_families()`），**是会 reject 的**。原来只有一个
         // `.then()`，一旦失败：① 产生一个未处理的 Promise 拒绝；② `fontList`
@@ -120,14 +141,32 @@ export default function General() {
                             isSelected={autoStart}
                             onValueChange={(v) => {
                                 setAutoStart(v);
+                                // `enable` / `disable` 同样是
+                                // `await invoke('plugin:autostart|...')`（真实 IPC），**会 reject**。
+                                //
+                                // 这里的关键风险是**静默的假成功**：上面那行 `setAutoStart(v)`
+                                // 已经把开关切成用户点的位置，若 IPC 失败而无人处理，
+                                // 界面显示「已开启」，但系统层面根本没写进去 ——
+                                // 用户重启后才发现开机自启没生效，且全程没有任何提示。
+                                // 因此失败时必须**把开关拨回去**并打日志，让界面与系统状态一致。
                                 if (v) {
-                                    enable().then(() => {
-                                        info('Auto start enabled');
-                                    });
+                                    enable()
+                                        .then(() => {
+                                            info('Auto start enabled');
+                                        })
+                                        .catch((e) => {
+                                            info('Failed to enable auto start: ' + e);
+                                            setAutoStart(false);
+                                        });
                                 } else {
-                                    disable().then(() => {
-                                        info('Auto start disabled');
-                                    });
+                                    disable()
+                                        .then(() => {
+                                            info('Auto start disabled');
+                                        })
+                                        .catch((e) => {
+                                            info('Failed to disable auto start: ' + e);
+                                            setAutoStart(true);
+                                        });
                                 }
                             }}
                         />
