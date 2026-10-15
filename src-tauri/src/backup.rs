@@ -463,6 +463,112 @@ mod tests {
         std::fs::remove_dir_all(destination).unwrap();
     }
 
+    /// `make_archive` 的 plugins/ 遍历此前**没有任何测试**：既有的
+    /// `created_backup_round_trips_settings_and_history` 只建了 config.json 与
+    /// history.db，从不为源目录建 plugins/，于是 line 148-164 那段
+    /// （WalkDir 递归 + strip_prefix + start_file）从未真正执行过。
+    /// 这条补上「插件文件真的进了归档、且能原样恢复」的往返验证。
+    #[test]
+    fn plugins_are_included_in_the_backup_and_round_trip() {
+        let base = unique_temp_dir("cup-translate-backup-plugins-roundtrip");
+        let source = base.join("source");
+        let restored = base.join("restored");
+        let plugin_file = source.join("plugins/translate/plugin-demo/main.js");
+        let plugin_config = source.join("plugins/translate/plugin-demo/info.json");
+        std::fs::create_dir_all(plugin_file.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(&restored).unwrap();
+        std::fs::write(source.join("config.json"), r#"{"app_language":"en"}"#).unwrap();
+        std::fs::write(&plugin_file, b"export default { name: 'demo' };").unwrap();
+        std::fs::write(&plugin_config, br#"{"id":"demo"}"#).unwrap();
+
+        let data = make_archive(Cursor::new(Vec::new()), &source)
+            .unwrap()
+            .into_inner();
+
+        // 归档里必须**真的**有这两个条目，且路径是相对 source 的 POSIX 形式
+        let names: Vec<String> = ZipArchive::new(Cursor::new(data.clone()))
+            .unwrap()
+            .file_names()
+            .map(str::to_owned)
+            .collect();
+        assert!(
+            names.iter().any(|n| n == "plugins/translate/plugin-demo/main.js"),
+            "the plugin entry must be in the archive, got {names:?}"
+        );
+        assert!(
+            names.iter().any(|n| n == "plugins/translate/plugin-demo/info.json"),
+            "nested plugin files must all be included, got {names:?}"
+        );
+
+        restore_archive(ZipArchive::new(Cursor::new(data)).unwrap(), &restored).unwrap();
+        assert_eq!(
+            std::fs::read(restored.join("plugins/translate/plugin-demo/main.js")).unwrap(),
+            b"export default { name: 'demo' };"
+        );
+        assert_eq!(
+            std::fs::read(restored.join("plugins/translate/plugin-demo/info.json")).unwrap(),
+            br#"{"id":"demo"}"#
+        );
+        std::fs::remove_dir_all(base).unwrap();
+    }
+
+    /// 目录条目不该被写进归档（`is_file()` 过滤），否则恢复时会多出空目录。
+    /// 同时验证空 plugins/ 目录不会让备份失败。
+    #[test]
+    fn an_empty_plugins_directory_is_skipped_without_failing() {
+        let base = unique_temp_dir("cup-translate-backup-empty-plugins");
+        let source = base.join("source");
+        std::fs::create_dir_all(source.join("plugins")).unwrap();
+        std::fs::write(source.join("config.json"), r#"{"app_language":"en"}"#).unwrap();
+
+        let data = make_archive(Cursor::new(Vec::new()), &source)
+            .unwrap()
+            .into_inner();
+        let names: Vec<String> = ZipArchive::new(Cursor::new(data))
+            .unwrap()
+            .file_names()
+            .map(str::to_owned)
+            .collect();
+        assert!(
+            !names.iter().any(|n| n.ends_with('/')),
+            "directory entries must not be archived, got {names:?}"
+        );
+        std::fs::remove_dir_all(base).unwrap();
+    }
+
+    /// 没有 plugins/ 目录时也不能失败（全新安装、从未装过插件）。
+    #[test]
+    fn a_missing_plugins_directory_is_not_an_error() {
+        let base = unique_temp_dir("cup-translate-backup-no-plugins");
+        let source = base.join("source");
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::write(source.join("config.json"), r#"{"app_language":"en"}"#).unwrap();
+
+        let data = make_archive(Cursor::new(Vec::new()), &source)
+            .unwrap()
+            .into_inner();
+        let names: Vec<String> = ZipArchive::new(Cursor::new(data))
+            .unwrap()
+            .file_names()
+            .map(str::to_owned)
+            .collect();
+        assert_eq!(names, vec!["config.json".to_string()], "only config.json is expected");
+        std::fs::remove_dir_all(base).unwrap();
+    }
+
+    /// 生成一个唯一的临时目录（进程 id + 纳秒），避免并行测试互相踩。
+    fn unique_temp_dir(prefix: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!(
+            "{}-{}-{}",
+            prefix,
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ))
+    }
+
     #[test]
     fn created_backup_round_trips_settings_and_history() {
         let base = std::env::temp_dir().join(format!(
