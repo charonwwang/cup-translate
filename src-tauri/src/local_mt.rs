@@ -12,6 +12,7 @@ use std::time::Duration;
 use ct2rs::tokenizers::auto::Tokenizer as AutoTokenizer;
 use ct2rs::{ComputeType, Config as Ct2Config, Translator};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use tauri::AppHandle;
 
 type MtTranslator = Translator<AutoTokenizer>;
@@ -23,6 +24,8 @@ struct ModelSpec {
     /// 翻译目标需要的前缀 token：opus-mt-en-zh 必须给 `>>cmn_Hans<<`，zh-en 无前缀
     target_prefix: Option<&'static str>,
     license: &'static str,
+    /// 文件名 -> 期望 SHA256（十六进制）。下载后逐个校验，防止传输损坏或镜像被篡改。
+    expected_sha256: &'static [(&'static str, &'static str)],
 }
 
 /// 模型目录的完整文件清单（约 82MB，model.bin 占 79.6MB）
@@ -34,6 +37,22 @@ const MODEL_FILES: &[&str] = &[
     "model.bin",
 ];
 
+// 各文件的 SHA256（十六进制小写），下载后逐个硬校验，防止传输损坏或镜像被篡改：
+// - 大文件（model.bin / source.spm / target.spm）：取自 HuggingFace 官方 API `tree/main`
+//   返回的 `lfs.oid` 字段（即真实内容 SHA256）。
+// - 小文件（config.json / shared_vocabulary.json）：非 LFS，`oid` 是 git blob 哈希不是
+//   内容 SHA256，故改为实际下载后用 `shasum -a 256` 计算并硬编码。
+const EN_ZH_MODEL_BIN_SHA256: &str = "327584c20bb83c7e89d595bcfa30b6ef3771c10816f707e892c4bbb1f808a8fb";
+const EN_ZH_SOURCE_SPM_SHA256: &str = "5775ddc9e3ff2fae91554da56468ad35ff56edaba870fea74447bc7234bfdaa8";
+const EN_ZH_TARGET_SPM_SHA256: &str = "81dc94efa84e4025ef38d25d5d07429fe41e3eb29d44003f1db6fe98487b0052";
+const ZH_EN_MODEL_BIN_SHA256: &str = "e4955858cae9542bef37424a9b79720e3db2f32501fe62264c0cd3eac6319777";
+const ZH_EN_SOURCE_SPM_SHA256: &str = "e27a3a1b539f4959ec72ea60e453f49156289f95d4e6000b29332efc45616203";
+const ZH_EN_TARGET_SPM_SHA256: &str = "6a881f4717cd7265f53fea54fd3dc689c767c05338fac7a4590f3088cb2d7855";
+const EN_ZH_CONFIG_JSON_SHA256: &str = "364944c86bd38851bff4639366e23bd789cbf98e74a02ddfaa023e657ad5bc9e";
+const EN_ZH_SHARED_VOCAB_SHA256: &str = "2edd95e2e03576cada8ab464404922192aca27d854b753bf1c4807753633198b";
+const ZH_EN_CONFIG_JSON_SHA256: &str = "58d7a8a357fcc6e904a91de22692a021f3a9de42cd6710e21f9eea2c02d524fb";
+const ZH_EN_SHARED_VOCAB_SHA256: &str = "10f9aa68bb7983daeb276a48f484e19edf44aea6cbaefcf7508cbc219ea6af8a";
+
 fn model_spec(pair: &str) -> Result<ModelSpec, String> {
     match pair {
         "en-zh" => Ok(ModelSpec {
@@ -41,17 +60,58 @@ fn model_spec(pair: &str) -> Result<ModelSpec, String> {
             repo: "jiangzhuo9357/opus-mt-en-zh-ct2",
             target_prefix: Some(">>cmn_Hans<<"),
             license: "Apache-2.0 (Helsinki-NLP/opus-mt-en-zh)",
+            expected_sha256: &[
+                ("config.json", EN_ZH_CONFIG_JSON_SHA256),
+                ("shared_vocabulary.json", EN_ZH_SHARED_VOCAB_SHA256),
+                ("model.bin", EN_ZH_MODEL_BIN_SHA256),
+                ("source.spm", EN_ZH_SOURCE_SPM_SHA256),
+                ("target.spm", EN_ZH_TARGET_SPM_SHA256),
+            ],
         }),
         "zh-en" => Ok(ModelSpec {
             dir_name: "opus-mt-zh-en-ct2",
             repo: "jiangzhuo9357/opus-mt-zh-en-ct2",
             target_prefix: None,
             license: "CC-BY-4.0 (Helsinki-NLP/opus-mt-zh-en，译文需署名 Helsinki-NLP / OPUS-MT)",
+            expected_sha256: &[
+                ("config.json", ZH_EN_CONFIG_JSON_SHA256),
+                ("shared_vocabulary.json", ZH_EN_SHARED_VOCAB_SHA256),
+                ("model.bin", ZH_EN_MODEL_BIN_SHA256),
+                ("source.spm", ZH_EN_SOURCE_SPM_SHA256),
+                ("target.spm", ZH_EN_TARGET_SPM_SHA256),
+            ],
         }),
         _ => Err(format!(
             "不支持的语向: {pair}（本地离线翻译仅支持 en-zh / zh-en）"
         )),
     }
+}
+
+/// 计算文件 SHA256（十六进制小写）
+fn file_sha256(path: &std::path::Path) -> Result<String, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("读取 {} 失败: {e}", path.display()))?;
+    let mut hasher = Sha256::new();
+    hasher.update(&bytes);
+    let digest = hasher.finalize();
+    Ok(digest.iter().map(|b| format!("{b:02x}")).collect())
+}
+
+/// 校验模型目录中所有「有期望哈希」的文件；返回不匹配的文件列表（空表示全部通过）
+fn verify_model_checksums(dir: &std::path::Path, spec: &ModelSpec) -> Vec<String> {
+    spec.expected_sha256
+        .iter()
+        .filter_map(|(file, expected)| {
+            let path = dir.join(file);
+            if !path.is_file() {
+                return Some(format!("{file}: 文件缺失"));
+            }
+            match file_sha256(&path) {
+                Ok(actual) if actual.eq_ignore_ascii_case(expected) => None,
+                Ok(actual) => Some(format!("{file}: SHA256 不匹配（期望 {expected}，实际 {actual}）")),
+                Err(e) => Some(format!("{file}: {e}")),
+            }
+        })
+        .collect()
 }
 
 fn model_dir(app_handle: &AppHandle, pair: &str) -> Result<PathBuf, String> {
@@ -97,10 +157,23 @@ pub async fn local_mt_download_model(app_handle: AppHandle, pair: String) -> Res
         .timeout(Duration::from_secs(900))
         .build()
         .map_err(|e| e.to_string())?;
+    let expected: std::collections::HashMap<&str, &str> =
+        spec.expected_sha256.iter().copied().collect();
     for file in MODEL_FILES {
         let dest = dir.join(file);
+        // 已存在的文件也要校验：防止历史版本下载损坏或被篡改的旧文件被直接复用
         if dest.is_file() {
-            continue;
+            if let Some(sha) = expected.get(file) {
+                match file_sha256(&dest) {
+                    Ok(actual) if actual.eq_ignore_ascii_case(sha) => continue,
+                    Ok(_) | Err(_) => {
+                        log::warn!("[local_mt] {file} 已存在但校验失败，重新下载");
+                        let _ = std::fs::remove_file(&dest);
+                    }
+                }
+            } else {
+                continue;
+            }
         }
         // huggingface 直连与 hf-mirror 镜像二选一（中国大陆网络通常只有镜像可达）
         let mut last_err = String::new();
@@ -114,6 +187,24 @@ pub async fn local_mt_download_model(app_handle: AppHandle, pair: String) -> Res
                         std::fs::write(&dest, &bytes)
                             .map_err(|e| format!("写入 {file} 失败: {e}"))?;
                         log::info!("[local_mt] downloaded {} ({} bytes)", file, bytes.len());
+                        // 下载后立即校验 SHA256；不匹配则视为本次下载失败，尝试下一个镜像
+                        if let Some(sha) = expected.get(file) {
+                            match file_sha256(&dest) {
+                                Ok(actual) if actual.eq_ignore_ascii_case(sha) => {}
+                                Ok(actual) => {
+                                    last_err = format!(
+                                        "{url}: SHA256 不匹配（期望 {sha}，实际 {actual}），疑似镜像被篡改或传输损坏"
+                                    );
+                                    let _ = std::fs::remove_file(&dest);
+                                    continue;
+                                }
+                                Err(e) => {
+                                    last_err = format!("{url}: 校验失败: {e}");
+                                    let _ = std::fs::remove_file(&dest);
+                                    continue;
+                                }
+                            }
+                        }
                         done = true;
                         break;
                     }
@@ -128,6 +219,11 @@ pub async fn local_mt_download_model(app_handle: AppHandle, pair: String) -> Res
                 "下载 {file} 失败（huggingface.co / hf-mirror.com 均不可达）: {last_err}"
             ));
         }
+    }
+    // 全部文件就绪后做一次整目录终检，兜底「单文件校验通过但目录整体损坏」的边界情况
+    let bad = verify_model_checksums(&dir, &spec);
+    if !bad.is_empty() {
+        return Err(format!("模型完整性校验未通过: {}", bad.join("; ")));
     }
     Ok(())
 }
@@ -212,4 +308,73 @@ pub async fn local_mt_translate(
         .map(|(translated, _score)| translated)
         .ok_or_else(|| "本地翻译没有返回结果".to_string())?;
     Ok(first)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{file_sha256, model_spec, verify_model_checksums, ModelSpec};
+    use std::path::PathBuf;
+
+    #[test]
+    fn model_specs_pin_checksums_for_every_model_file() {
+        for pair in ["en-zh", "zh-en"] {
+            let spec = model_spec(pair).unwrap();
+            let pinned: Vec<&str> = spec.expected_sha256.iter().map(|(f, _)| *f).collect();
+            // 每个 MODEL_FILES 条目都必须有硬编码校验值，杜绝「下载后不校验」的缺口
+            for file in super::MODEL_FILES {
+                assert!(pinned.contains(file), "{pair} must pin {file}");
+            }
+            for (file, sha) in spec.expected_sha256 {
+                assert_eq!(sha.len(), 64, "{pair}/{file} sha256 must be 64 hex chars");
+            }
+        }
+    }
+
+    #[test]
+    fn checksum_verification_rejects_tampered_or_missing_files() {
+        let dir = std::env::temp_dir().join(format!("cup-translate-mt-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let spec = ModelSpec {
+            dir_name: "test",
+            repo: "test",
+            target_prefix: None,
+            license: "",
+            expected_sha256: &[("model.bin", "0000000000000000000000000000000000000000000000000000000000000000")],
+        };
+        // 缺文件 -> 报缺失
+        let bad = verify_model_checksums(&dir, &spec);
+        assert_eq!(bad.len(), 1);
+        assert!(bad[0].contains("缺失"));
+        // 写入内容但哈希不匹配 -> 报不匹配
+        std::fs::write(dir.join("model.bin"), b"tampered").unwrap();
+        let bad = verify_model_checksums(&dir, &spec);
+        assert_eq!(bad.len(), 1);
+        assert!(bad[0].contains("不匹配"));
+        // 修正为真实哈希 -> 通过
+        let real: &'static str = Box::leak(file_sha256(&dir.join("model.bin")).unwrap().into_boxed_str());
+        let pinned: &'static [(&'static str, &'static str)] = Box::leak(
+            vec![("model.bin", real)].into_boxed_slice(),
+        );
+        let spec = ModelSpec {
+            dir_name: "test",
+            repo: "test",
+            target_prefix: None,
+            license: "",
+            expected_sha256: pinned,
+        };
+        assert!(verify_model_checksums(&dir, &spec).is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn file_sha256_matches_known_digest() {
+        let path: PathBuf = std::env::temp_dir().join(format!("cup-translate-sha256-{}", std::process::id()));
+        std::fs::write(&path, b"hello").unwrap();
+        // SHA256("hello") 的已知值
+        assert_eq!(
+            file_sha256(&path).unwrap(),
+            "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+        );
+        let _ = std::fs::remove_file(&path);
+    }
 }
