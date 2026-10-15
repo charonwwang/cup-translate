@@ -1,7 +1,8 @@
 #[cfg(target_os = "macos")]
 use std::fs;
 
-use crate::config::get;
+use crate::config::get_i64;
+use crate::config::get_str;
 use crate::config::set;
 use crate::StringWrapper;
 use crate::APP;
@@ -157,15 +158,15 @@ fn translate_window() -> Window {
     }
     window.set_skip_taskbar(true).unwrap();
     // Get Translate Window Size
-    let width = match get("translate_window_width") {
-        Some(v) => v.as_i64().unwrap(),
+    let width = match get_i64("translate_window_width") {
+        Some(v) => v,
         None => {
             set("translate_window_width", 350);
             350
         }
     };
-    let height = match get("translate_window_height") {
-        Some(v) => v.as_i64().unwrap(),
+    let height = match get_i64("translate_window_height") {
+        Some(v) => v,
         None => {
             set("translate_window_height", 420);
             420
@@ -180,10 +181,7 @@ fn translate_window() -> Window {
         (height as f64) * dpi,
     ));
 
-    let position_type = match get("translate_window_position") {
-        Some(v) => v.as_str().unwrap_or("mouse").to_string(),
-        None => "mouse".to_string(),
-    };
+    let position_type = get_str("translate_window_position").unwrap_or_else(|| "mouse".to_string());
 
     match (position_type.as_str(), monitor) {
         ("mouse", Some(monitor)) => {
@@ -220,14 +218,8 @@ fn translate_window() -> Window {
                 .unwrap();
         }
         _ => {
-            let position_x = match get("translate_window_position_x") {
-                Some(v) => v.as_i64().unwrap(),
-                None => 0,
-            };
-            let position_y = match get("translate_window_position_y") {
-                Some(v) => v.as_i64().unwrap(),
-                None => 0,
-            };
+            let position_x = get_i64("translate_window_position_x").unwrap_or_default();
+            let position_y = get_i64("translate_window_position_y").unwrap_or_default();
             let _ = window.set_position(tauri::PhysicalPosition::new(
                 (position_x as f64) * dpi,
                 (position_y as f64) * dpi,
@@ -272,8 +264,8 @@ pub fn input_translate() {
         .unwrap()
         .replace_range(.., "[INPUT_TRANSLATE]");
     let window = translate_window();
-    let position_type = match get("translate_window_position") {
-        Some(v) => v.as_str().unwrap().to_string(),
+    let position_type = match get_str("translate_window_position") {
+        Some(v) => v,
         None => "mouse".to_string(),
     };
     if position_type == "mouse" {
@@ -310,15 +302,15 @@ pub fn recognize_window() {
         window.emit("new_image", "").unwrap();
         return;
     }
-    let width = match get("recognize_window_width") {
-        Some(v) => v.as_i64().unwrap(),
+    let width = match get_i64("recognize_window_width") {
+        Some(v) => v,
         None => {
             set("recognize_window_width", 800);
             800
         }
     };
-    let height = match get("recognize_window_height") {
-        Some(v) => v.as_i64().unwrap(),
+    let height = match get_i64("recognize_window_height") {
+        Some(v) => v,
         None => {
             set("recognize_window_height", 400);
             400

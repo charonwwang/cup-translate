@@ -268,6 +268,37 @@ pub fn get(key: &str) -> Option<Value> {
     store.get(key).cloned()
 }
 
+/// 安全读取字符串配置项。类型不符（如用户手改 config.json 写成数字/布尔）时
+/// 返回 None 而非 panic，调用方按「未配置」兜底。
+pub fn get_str(key: &str) -> Option<String> {
+    get(key).as_ref().and_then(coerce_str)
+}
+
+/// 安全读取布尔配置项。
+pub fn get_bool(key: &str) -> Option<bool> {
+    get(key).as_ref().and_then(coerce_bool)
+}
+
+/// 安全读取整数配置项（兼容 JSON number / 手改写成数字字符串的场景）。
+pub fn get_i64(key: &str) -> Option<i64> {
+    get(key).as_ref().and_then(coerce_i64)
+}
+
+/// 纯函数版本的字符串强转（便于单元测试），不依赖全局 store。
+fn coerce_str(v: &Value) -> Option<String> {
+    v.as_str().map(str::to_string)
+}
+
+/// 纯函数版本的布尔强转。
+fn coerce_bool(v: &Value) -> Option<bool> {
+    v.as_bool()
+}
+
+/// 纯函数版本的整数强转，兼容 JSON number 与数字字符串。
+fn coerce_i64(v: &Value) -> Option<i64> {
+    v.as_i64().or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+}
+
 pub fn set<T: serde::ser::Serialize>(key: &str, value: T) {
     let state = APP.get().unwrap().state::<StoreWrapper>();
     let mut store = state.0.lock().unwrap();
@@ -279,4 +310,36 @@ pub fn is_first_run() -> bool {
     let state = APP.get().unwrap().state::<StoreWrapper>();
     let store = state.0.lock().unwrap();
     store.is_empty()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{coerce_bool, coerce_i64, coerce_str};
+    use serde_json::json;
+
+    #[test]
+    fn string_coercion_rejects_non_string_values() {
+        assert_eq!(coerce_str(&json!("zh_cn")), Some("zh_cn".to_string()));
+        assert_eq!(coerce_str(&json!(350)), None);
+        assert_eq!(coerce_str(&json!(true)), None);
+        assert_eq!(coerce_str(&json!(null)), None);
+    }
+
+    #[test]
+    fn bool_coercion_rejects_non_bool_values() {
+        assert_eq!(coerce_bool(&json!(true)), Some(true));
+        assert_eq!(coerce_bool(&json!(false)), Some(false));
+        assert_eq!(coerce_bool(&json!("true")), None);
+        assert_eq!(coerce_bool(&json!(1)), None);
+    }
+
+    #[test]
+    fn int_coercion_accepts_numbers_and_numeric_strings() {
+        assert_eq!(coerce_i64(&json!(350)), Some(350));
+        assert_eq!(coerce_i64(&json!("350")), Some(350));
+        assert_eq!(coerce_i64(&json!("-5")), Some(-5));
+        assert_eq!(coerce_i64(&json!("abc")), None);
+        assert_eq!(coerce_i64(&json!(true)), None);
+        assert_eq!(coerce_i64(&json!(null)), None);
+    }
 }

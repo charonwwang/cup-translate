@@ -123,8 +123,8 @@ fn main() {
             if detect_engine == "local" {
                 init_lang_detect();
             }
-            let clipboard_monitor = match get("clipboard_monitor") {
-                Some(v) => v.as_bool().unwrap(),
+            let clipboard_monitor = match get_bool("clipboard_monitor") {
+                Some(v) => v,
                 None => {
                     set("clipboard_monitor", false);
                     false

@@ -1,4 +1,4 @@
-use crate::config::{get, set};
+use crate::config::{get_str, set};
 use crate::window::{input_translate, ocr_recognize, ocr_translate, selection_translate};
 use crate::APP;
 use log::{info, warn};
@@ -10,8 +10,8 @@ where
 {
     let hotkey = {
         if key.is_empty() {
-            match get(name) {
-                Some(v) => v.as_str().unwrap().to_string(),
+            match get_str(name) {
+                Some(v) => v,
                 None => {
                     set(name, "");
                     String::new()

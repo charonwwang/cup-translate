@@ -1,5 +1,5 @@
 #[cfg(updater)]
-use crate::config::{get, set};
+use crate::config::{get_bool, set};
 #[cfg(updater)]
 use crate::window::updater_window;
 #[cfg(updater)]
@@ -7,8 +7,8 @@ use log::{info, warn};
 
 #[cfg(updater)]
 pub fn check_update(app_handle: tauri::AppHandle) {
-    let enable = match get("check_update") {
-        Some(v) => v.as_bool().unwrap(),
+    let enable = match get_bool("check_update") {
+        Some(v) => v,
         None => {
             set("check_update", true);
             true

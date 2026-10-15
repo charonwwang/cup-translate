@@ -1,5 +1,5 @@
 use crate::clipboard::*;
-use crate::config::{get, set};
+use crate::config::{get_bool, get_str, set};
 use crate::window::config_window;
 use crate::window::input_translate;
 use crate::window::ocr_recognize;
@@ -19,8 +19,8 @@ pub fn update_tray(app_handle: tauri::AppHandle, mut language: String, mut copy_
     let tray_handle = app_handle.tray_handle();
 
     if language.is_empty() {
-        language = match get("app_language") {
-            Some(v) => v.as_str().unwrap().to_string(),
+        language = match get_str("app_language") {
+            Some(v) => v,
             None => {
                 // 必须与前端默认值 (src/App.jsx / General/index.jsx) 保持一致。
                 // 托盘初始化早于前端加载：此处若写入 'en'，前端 useConfig 的默认值
@@ -31,8 +31,8 @@ pub fn update_tray(app_handle: tauri::AppHandle, mut language: String, mut copy_
         };
     }
     if copy_mode.is_empty() {
-        copy_mode = match get("translate_auto_copy") {
-            Some(v) => v.as_str().unwrap().to_string(),
+        copy_mode = match get_str("translate_auto_copy") {
+            Some(v) => v,
             None => {
                 set("translate_auto_copy", "disable");
                 "disable".to_string()
@@ -68,8 +68,8 @@ pub fn update_tray(app_handle: tauri::AppHandle, mut language: String, mut copy_
         ))
         .unwrap();
 
-    let enable_clipboard_monitor = match get("clipboard_monitor") {
-        Some(v) => v.as_bool().unwrap(),
+    let enable_clipboard_monitor = match get_bool("clipboard_monitor") {
+        Some(v) => v,
         None => {
             set("clipboard_monitor", false);
             false
@@ -128,8 +128,8 @@ pub fn tray_event_handler(app: &AppHandle, event: SystemTrayEvent) {
 
 #[cfg(target_os = "windows")]
 fn on_tray_click() {
-    let event = match get("tray_click_event") {
-        Some(v) => v.as_str().unwrap().to_string(),
+    let event = match get_str("tray_click_event") {
+        Some(v) => v,
         None => {
             set("tray_click_event", "config");
             "config".to_string()
@@ -148,8 +148,8 @@ fn on_input_translate_click() {
     input_translate();
 }
 fn on_clipboard_monitor_click(app: &AppHandle) {
-    let enable_clipboard_monitor = match get("clipboard_monitor") {
-        Some(v) => v.as_bool().unwrap(),
+    let enable_clipboard_monitor = match get_bool("clipboard_monitor") {
+        Some(v) => v,
         None => {
             set("clipboard_monitor", false);
             false
