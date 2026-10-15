@@ -5,6 +5,16 @@ import { exists, removeFile } from '@tauri-apps/api/fs';
 import { nanoid } from 'nanoid';
 import { finishRestore } from './restore';
 
+// ⚠️ 每个请求的错误文案必须写**这个请求自己在做什么**。
+// 曾经有 7 个函数（driveId / createDir / createFile / getFileByPath /
+// getDownloadUrl / list / remove）在非 2xx 且响应体没有 message 字段时，
+// 统一抛出 `Get accessToken Error: ...` —— 那是从 accessToken() 复制过来的。
+// 这些消息会经 `toast.error(e.toString())` **原样显示给用户**
+// （见 AliyunModal/index.jsx:33），于是「列目录失败」被显示成
+// 「获取令牌失败」，把用户引向重新登录/扫码，而真正的原因（网络、权限、
+// 目录不存在）与令牌无关 —— 用户会反复重试且无从定位。
+// tests/aliyun-error-labels.test.mjs 会拦住这种张冠李戴。
+
 export async function backup(token, name) {
     const appConfigDirPath = await appConfigDir();
     const filePath = await join(appConfigDirPath, `aliyun-upload-${nanoid()}.zip`);
@@ -67,7 +77,7 @@ export async function list(token) {
         if (result['message']) {
             throw new Error(result['message']);
         } else {
-            throw new Error(`Get accessToken Error: ${JSON.stringify(result)}`);
+            throw new Error(`Get File List Error: ${JSON.stringify(result)}`);
         }
     }
 }
@@ -100,7 +110,7 @@ export async function remove(token, name) {
         if (result['message']) {
             throw new Error(result['message']);
         } else {
-            throw new Error(`Get accessToken Error: ${JSON.stringify(result)}`);
+            throw new Error(`Remove File Error: ${JSON.stringify(result)}`);
         }
     }
 }
@@ -217,7 +227,7 @@ async function driveId(token) {
         if (result['message']) {
             throw new Error(result['message']);
         } else {
-            throw new Error(`Get accessToken Error: ${JSON.stringify(result)}`);
+            throw new Error(`Get DriveId Error: ${JSON.stringify(result)}`);
         }
     }
 }
@@ -248,7 +258,7 @@ async function createDir(token, drive_id) {
         if (result['message']) {
             throw new Error(result['message']);
         } else {
-            throw new Error(`Get accessToken Error: ${JSON.stringify(result)}`);
+            throw new Error(`Create Dir Error: ${JSON.stringify(result)}`);
         }
     }
 }
@@ -282,7 +292,7 @@ async function createFile(token, drive_id, dir_id, name) {
         if (result['message']) {
             throw new Error(result['message']);
         } else {
-            throw new Error(`Get accessToken Error: ${JSON.stringify(result)}`);
+            throw new Error(`Create File Error: ${JSON.stringify(result)}`);
         }
     }
 }
@@ -310,7 +320,7 @@ async function getFileByPath(token, drive_id, name) {
         if (result['message']) {
             throw new Error(result['message']);
         } else {
-            throw new Error(`Get accessToken Error: ${JSON.stringify(result)}`);
+            throw new Error(`Get File By Path Error: ${JSON.stringify(result)}`);
         }
     }
 }
@@ -338,7 +348,7 @@ async function getDownloadUrl(token, drive_id, file_id) {
         if (result['message']) {
             throw new Error(result['message']);
         } else {
-            throw new Error(`Get accessToken Error: ${JSON.stringify(result)}`);
+            throw new Error(`Get DownloadUrl Error: ${JSON.stringify(result)}`);
         }
     }
 }
