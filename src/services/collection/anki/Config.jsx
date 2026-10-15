@@ -6,6 +6,7 @@ import { open } from '@tauri-apps/api/shell';
 import React, { useState } from 'react';
 
 import { useConfig } from '../../../hooks';
+import { nextPortValue } from '../../../utils/port';
 import { useToastStyle } from '../../../hooks';
 import { collection } from './index';
 
@@ -88,9 +89,16 @@ export function Config(props) {
                                 mainWrapper: 'max-w-[50%]',
                             }}
                             onValueChange={(value) => {
+                                // 与 General 页的 server_port 一致：只接受纯数字，
+                                // 非法中间态（'-' / '.' / 'e' / 超长数字）一律忽略，
+                                // 不把 NaN 或垃圾写进配置（NaN 经 JSON 会变成 null）。
+                                const next = nextPortValue(value);
+                                if (next === null) {
+                                    return;
+                                }
                                 setAnkiConfig({
                                     ...ankiConfig,
-                                    port: value,
+                                    port: next,
                                 });
                             }}
                         />

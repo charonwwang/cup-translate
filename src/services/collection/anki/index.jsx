@@ -1,5 +1,6 @@
 import { fetchWithTimeout as fetch, Body } from '../../../utils/fetchWithTimeout';
 import { store } from '../../../utils/store';
+import { resolveAnkiPort } from './port';
 
 export async function collection(source, target, options = {}) {
     const { config } = options;
@@ -8,7 +9,9 @@ export async function collection(source, target, options = {}) {
     if (config !== undefined) {
         ankiConfig = config;
     }
-    const port = ankiConfig['port'] ?? 8765;
+    // 用 resolveAnkiPort 而不是 `?? 8765`：`??` 只挡 null/undefined，
+    // 用户清空输入框得到的空串会穿过去，拼出 `http://127.0.0.1:`（详见 port.js）。
+    const port = resolveAnkiPort(ankiConfig['port']);
 
     async function ankiConnect(action, version, params = {}) {
         let res = await fetch(`http://127.0.0.1:${port}`, {
