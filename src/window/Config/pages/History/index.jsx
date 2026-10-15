@@ -296,10 +296,18 @@ export default function History() {
                                                                 ) {
                                                                     const pluginConfig =
                                                                         (await store.get(instanceKey)) ?? {};
-                                                                    let [func, utils] = await invoke_plugin(
-                                                                        'collection',
-                                                                        getServiceName(instanceKey)
-                                                                    );
+                                                                    let func, utils;
+                                                                    try {
+                                                                        [func, utils] = await invoke_plugin(
+                                                                            'collection',
+                                                                            getServiceName(instanceKey)
+                                                                        );
+                                                                    } catch (e) {
+                                                                        toast.error(e.toString(), {
+                                                                            style: toastStyle,
+                                                                        });
+                                                                        return;
+                                                                    }
                                                                     func(selectedItem.text, selectedItem.result, {
                                                                         config: pluginConfig,
                                                                         utils,

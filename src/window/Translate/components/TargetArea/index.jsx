@@ -209,7 +209,17 @@ export default function TargetArea(props) {
                 const instanceConfig = serviceInstanceConfigMap[currentTranslateServiceInstanceKey];
                 instanceConfig['enable'] = 'true';
                 const setHideOnce = invokeOnce(setHide);
-                let [func, utils] = await invoke_plugin('translate', translateServiceName);
+                let func, utils;
+                try {
+                    [func, utils] = await invoke_plugin('translate', translateServiceName);
+                } catch (e) {
+                    info(`[${currentTranslateServiceInstanceKey}]plugin load failed:` + e);
+                    if (translateID[index] !== id) return;
+                    setError(e.toString());
+                    setIsLoading(false);
+                    setHide(false);
+                    return;
+                }
                 func(sourceText.trim(), pluginInfo.language[sourceLanguage], pluginInfo.language[newTargetLanguage], {
                     config: instanceConfig,
                     detect: detectLanguage,
@@ -735,10 +745,21 @@ export default function TargetArea(props) {
                                                     serviceInstanceConfigMap[currentTranslateServiceInstanceKey];
                                                 instanceConfig['enable'] = 'true';
                                                 const setHideOnce = invokeOnce(setHide);
-                                                let [func, utils] = await invoke_plugin(
-                                                    'translate',
-                                                    getServiceName(currentTranslateServiceInstanceKey)
-                                                );
+                                                let func, utils;
+                                                try {
+                                                    [func, utils] = await invoke_plugin(
+                                                        'translate',
+                                                        getServiceName(currentTranslateServiceInstanceKey)
+                                                    );
+                                                } catch (e) {
+                                                    info(
+                                                        `[${currentTranslateServiceInstanceKey}]plugin load failed:` + e
+                                                    );
+                                                    setError(e.toString());
+                                                    setIsLoading(false);
+                                                    setHide(false);
+                                                    return;
+                                                }
                                                 func(
                                                     result.trim(),
                                                     pluginInfo.language[newSourceLanguage],
@@ -858,10 +879,16 @@ export default function TargetArea(props) {
                                                 ) {
                                                     const pluginConfig =
                                                         serviceInstanceConfigMap[collectionServiceInstanceName];
-                                                    let [func, utils] = await invoke_plugin(
-                                                        'collection',
-                                                        getServiceName(collectionServiceInstanceName)
-                                                    );
+                                                    let func, utils;
+                                                    try {
+                                                        [func, utils] = await invoke_plugin(
+                                                            'collection',
+                                                            getServiceName(collectionServiceInstanceName)
+                                                        );
+                                                    } catch (e) {
+                                                        toast.error(e.toString(), { style: toastStyle });
+                                                        return;
+                                                    }
                                                     func(sourceText.trim(), result.toString(), {
                                                         config: pluginConfig,
                                                         utils,

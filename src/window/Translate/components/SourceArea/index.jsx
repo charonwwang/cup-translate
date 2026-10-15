@@ -72,7 +72,13 @@ export default function SourceArea(props) {
                 if (recognizeLanguage in pluginList['recognize'][getServiceName(serviceInstanceKey)].language) {
                     const pluginConfig = serviceInstanceConfigMap[serviceInstanceKey];
 
-                    let [func, utils] = await invoke_plugin('recognize', getServiceName(serviceInstanceKey));
+                    let func, utils;
+                    try {
+                        [func, utils] = await invoke_plugin('recognize', getServiceName(serviceInstanceKey));
+                    } catch (e) {
+                        setSourceText(e.toString());
+                        return;
+                    }
                     func(
                         base64,
                         pluginList['recognize'][getServiceName(serviceInstanceKey)].language[recognizeLanguage],

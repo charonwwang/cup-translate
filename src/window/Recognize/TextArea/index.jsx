@@ -52,37 +52,44 @@ export default function TextArea(props) {
                     recognizeId = id;
                     const pluginConfig = serviceInstanceConfigMap[currentServiceInstanceKey] ?? {};
 
-                    invoke_plugin('recognize', getServiceName(currentServiceInstanceKey)).then(([func, utils]) => {
-                        func(base64, pluginList[getServiceName(currentServiceInstanceKey)].language[language], {
-                            config: pluginConfig,
-                            utils,
-                        }).then(
-                            (v) => {
-                                if (recognizeId !== id) return;
-                                v = v.trim();
-                                if (deleteNewline) {
-                                    v = v.replace(/\-\s+/g, '').replace(/\s+/g, ' ');
+                    invoke_plugin('recognize', getServiceName(currentServiceInstanceKey)).then(
+                        ([func, utils]) => {
+                            func(base64, pluginList[getServiceName(currentServiceInstanceKey)].language[language], {
+                                config: pluginConfig,
+                                utils,
+                            }).then(
+                                (v) => {
+                                    if (recognizeId !== id) return;
+                                    v = v.trim();
+                                    if (deleteNewline) {
+                                        v = v.replace(/\-\s+/g, '').replace(/\s+/g, ' ');
+                                    }
+                                    setText(v);
+                                    setLoading(false);
+                                    if (autoCopy) {
+                                        writeText(v).then(() => {
+                                            if (hideWindow) {
+                                                sendNotification({
+                                                    title: t('common.write_clipboard'),
+                                                    body: v,
+                                                });
+                                            }
+                                        });
+                                    }
+                                },
+                                (e) => {
+                                    if (recognizeId !== id) return;
+                                    setError(e.toString());
+                                    setLoading(false);
                                 }
-                                setText(v);
-                                setLoading(false);
-                                if (autoCopy) {
-                                    writeText(v).then(() => {
-                                        if (hideWindow) {
-                                            sendNotification({
-                                                title: t('common.write_clipboard'),
-                                                body: v,
-                                            });
-                                        }
-                                    });
-                                }
-                            },
-                            (e) => {
-                                if (recognizeId !== id) return;
-                                setError(e.toString());
-                                setLoading(false);
-                            }
-                        );
-                    });
+                            );
+                        },
+                        (e) => {
+                            if (recognizeId !== id) return;
+                            setError(e.toString());
+                            setLoading(false);
+                        }
+                    );
                 }
             } else {
                 const instanceConfig = serviceInstanceConfigMap[currentServiceInstanceKey] ?? {};
