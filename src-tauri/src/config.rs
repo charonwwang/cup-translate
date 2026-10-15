@@ -35,11 +35,7 @@ pub fn init_config(app: &mut tauri::App) {
                     "Migrating config from legacy location {:?} -> {:?}",
                     legacy_dir, config_dir_path
                 );
-                if let Err(e) = copy_dir_all(&legacy_dir, &config_dir_path) {
-                    warn!("Config migration failed: {:?}", e);
-                } else {
-                    info!("Config migration done");
-                }
+                migrate_config_dir(&legacy_dir, &config_dir_path);
             }
         }
     }
@@ -59,6 +55,63 @@ pub fn init_config(app: &mut tauri::App) {
         warn!("Service availability check failed: {:?}", e);
     }
     prune_unconfigured_dead_services();
+}
+
+/// 把旧配置目录**原子地**迁移到新位置。
+///
+/// 返回 `true` 表示迁移成功（目标目录已就绪）。
+///
+/// 为什么不能直接 copy 到目标目录（round 53 实测复现的真实缺陷）：
+/// `copy_dir_all` 逐个文件复制，而 `read_dir` 顺序不保证。只要
+/// `config.json` 先被复制成功、之后某个文件失败（实测：一个坏 symlink
+/// 排在 config.json 之后即可复现），就会留下「目标里已有 config.json、
+/// 但其它文件缺失」的半迁移状态。调用方只在 `!config_path.exists()` 时才迁移，
+/// 于是下次启动会**永久跳过**迁移——用户的部分设置丢失且再也恢复不了，
+/// 日志里只有一行 warn。
+///
+/// 做法：先复制到同级的 `<identifier>.migrating` 临时目录，全部成功后再
+/// `rename` 到目标。任何失败路径都会删掉临时目录，让目标目录保持不存在，
+/// 下次启动可以重试。这样「要么完整成功、要么不留痕迹」成为不变量。
+///
+/// staging 名字刻意**不用** `Path::with_extension`：identifier 本身含点
+/// （`com.cup-translate.app`），`with_extension("migrating")` 会得到
+/// `com.cup-translate.migrating`——把 `.app` 当成扩展名替换掉，
+/// 语义不明且可能与别的 identifier 目录相撞。
+fn migrate_config_dir(legacy_dir: &std::path::Path, config_dir_path: &std::path::Path) -> bool {
+    let staging = staging_dir_for(config_dir_path);
+    let _ = std::fs::remove_dir_all(&staging);
+    match copy_dir_all(legacy_dir, &staging) {
+        Ok(()) => match std::fs::rename(&staging, config_dir_path) {
+            Ok(()) => {
+                info!("Config migration done");
+                true
+            }
+            Err(e) => {
+                warn!("Config migration failed to move into place: {:?}", e);
+                let _ = std::fs::remove_dir_all(&staging);
+                false
+            }
+        },
+        Err(e) => {
+            warn!("Config migration failed: {:?}", e);
+            let _ = std::fs::remove_dir_all(&staging);
+            false
+        }
+    }
+}
+
+/// 迁移用的临时目录：`<完整 identifier>.migrating`。
+///
+/// 显式拼接而不是 `with_extension`——后者会把 identifier 最后一段当扩展名
+/// 替换掉（见 `migrate_config_dir` 的说明）。
+fn staging_dir_for(config_dir_path: &std::path::Path) -> std::path::PathBuf {
+    let mut staging = config_dir_path.to_path_buf();
+    let name = config_dir_path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    staging.set_file_name(format!("{name}.migrating"));
+    staging
 }
 
 /// 递归复制目录（用于旧配置迁移，不依赖额外 crate）
@@ -374,7 +427,200 @@ pub fn is_first_run() -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{coerce_bool, coerce_i64, coerce_str};
+    use super::{coerce_bool, coerce_i64, coerce_str, copy_dir_all, migrate_config_dir, staging_dir_for};
+
+    /// 生成唯一临时目录，避免并行测试互踩。
+    fn unique_dir(prefix: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!(
+            "{}-{}-{}",
+            prefix,
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ))
+    }
+
+    #[test]
+    fn copy_dir_all_copies_nested_files() {
+        let base = unique_dir("cup-translate-copydir");
+        let src = base.join("src");
+        let dst = base.join("dst");
+        std::fs::create_dir_all(src.join("plugins/translate/demo")).unwrap();
+        std::fs::write(src.join("config.json"), br#"{"app_language":"zh_cn"}"#).unwrap();
+        std::fs::write(src.join("plugins/translate/demo/main.js"), b"export default 1;").unwrap();
+
+        copy_dir_all(&src, &dst).unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(dst.join("config.json")).unwrap(),
+            r#"{"app_language":"zh_cn"}"#
+        );
+        assert_eq!(
+            std::fs::read(dst.join("plugins/translate/demo/main.js")).unwrap(),
+            b"export default 1;"
+        );
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn copy_dir_all_reports_failure_instead_of_silently_skipping() {
+        // 一个指向不存在目标的 symlink 会让 fs::copy 失败（unix 才可造）
+        #[cfg(unix)]
+        {
+            let base = unique_dir("cup-translate-copydir-fail");
+            let src = base.join("src");
+            let dst = base.join("dst");
+            std::fs::create_dir_all(&src).unwrap();
+            std::fs::write(src.join("config.json"), b"{}").unwrap();
+            std::os::unix::fs::symlink("/nonexistent/nope", src.join("zz_broken")).unwrap();
+
+            let result = copy_dir_all(&src, &dst);
+            assert!(result.is_err(), "a broken symlink must surface as an error, not be skipped");
+            let _ = std::fs::remove_dir_all(base);
+        }
+    }
+
+    /// 迁移必须原子：失败时**不能**在目标留下 `config.json`，
+    /// 否则下次启动的 `if !config_path.exists()` 为假，迁移永久不再执行。
+    ///
+    /// 这是 round 53 实测复现的真实缺陷：原先直接 copy 到目标目录，
+    /// 只要 `config.json` 先成功、之后某个文件失败，就留下半迁移状态。
+    /// 这里用「staging + rename」的等价流程验证修复后的不变量：
+    /// **任何失败路径下，目标目录都不存在 config.json**。
+    /// 原子性不变量：**任何失败路径下，目标目录都不能存在 config.json**，
+    /// 否则下次启动的 `!config_path.exists()` 为假，迁移永久不再执行。
+    ///
+    /// 这条**调用生产函数** `migrate_config_dir`（我第一版把迁移流程在测试里
+    /// 重抄了一遍，结果 4 个生产代码变异全部逃逸——等于没测）。
+    #[test]
+    fn a_failed_migration_never_leaves_a_partial_config_behind_in_the_real_code() {
+        #[cfg(unix)]
+        {
+            let base = unique_dir("cup-translate-migrate-real");
+            let legacy = base.join("com.pot-app.desktop");
+            let target = base.join("com.cup-translate.app");
+            std::fs::create_dir_all(&legacy).unwrap();
+            std::fs::write(legacy.join("config.json"), br#"{"app_language":"zh_cn"}"#).unwrap();
+            // 名字排在 config.json 之后 -> 复现「config.json 先成功、随后失败」
+            std::os::unix::fs::symlink("/nonexistent/nope", legacy.join("zz_broken")).unwrap();
+
+            let ok = migrate_config_dir(&legacy, &target);
+
+            assert!(!ok, "migration must report failure");
+            assert!(
+                !target.join("config.json").exists(),
+                "a failed migration must not leave config.json in the target, \
+                 otherwise the next launch skips migration forever"
+            );
+            assert!(
+                !staging_dir_for(&target).exists(),
+                "the staging directory must be cleaned up on failure"
+            );
+            let _ = std::fs::remove_dir_all(base);
+        }
+    }
+
+    /// 成功路径走生产函数：内容完整、staging 不残留。
+    #[test]
+    fn a_successful_migration_moves_the_whole_directory_into_place_in_the_real_code() {
+        let base = unique_dir("cup-translate-migrate-real-ok");
+        let legacy = base.join("com.pot-app.desktop");
+        let target = base.join("com.cup-translate.app");
+        std::fs::create_dir_all(legacy.join("plugins/demo")).unwrap();
+        std::fs::write(legacy.join("config.json"), br#"{"app_language":"zh_cn"}"#).unwrap();
+        std::fs::write(legacy.join("plugins/demo/main.js"), b"x").unwrap();
+
+        let ok = migrate_config_dir(&legacy, &target);
+
+        assert!(ok, "migration should succeed");
+        assert_eq!(
+            std::fs::read_to_string(target.join("config.json")).unwrap(),
+            r#"{"app_language":"zh_cn"}"#
+        );
+        assert_eq!(std::fs::read(target.join("plugins/demo/main.js")).unwrap(), b"x");
+        assert!(!staging_dir_for(&target).exists(), "staging must be gone after success");
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    /// staging 名字必须保留**完整** identifier。
+    /// `with_extension("migrating")` 会得到 `com.cup-translate.migrating`
+    /// （把 `.app` 当扩展名替换掉），语义不明且可能与别的 identifier 相撞。
+    #[test]
+    fn the_staging_directory_keeps_the_full_identifier() {
+        let target = std::path::PathBuf::from("/base/com.cup-translate.app");
+        let staging = staging_dir_for(&target);
+        assert_eq!(
+            staging.file_name().unwrap().to_string_lossy(),
+            "com.cup-translate.app.migrating",
+            "the staging name must retain the whole identifier"
+        );
+        assert_ne!(
+            staging,
+            target.with_extension("migrating"),
+            "with_extension would drop the trailing .app segment"
+        );
+        // 与旧 identifier 的 staging 不能相撞
+        let other = staging_dir_for(&std::path::PathBuf::from("/base/com.pot-app.desktop"));
+        assert_ne!(staging, other, "staging dirs for different identifiers must differ");
+    }
+
+    /// 残留的 staging 目录（上次崩溃留下）不该影响本次迁移。
+    #[test]
+    fn a_leftover_staging_directory_is_replaced() {
+        let base = unique_dir("cup-translate-migrate-leftover");
+        let legacy = base.join("com.pot-app.desktop");
+        let target = base.join("com.cup-translate.app");
+        std::fs::create_dir_all(&legacy).unwrap();
+        std::fs::write(legacy.join("config.json"), br#"{"a":1}"#).unwrap();
+        let staging = staging_dir_for(&target);
+        std::fs::create_dir_all(&staging).unwrap();
+        std::fs::write(staging.join("stale.txt"), b"stale").unwrap();
+
+        let ok = migrate_config_dir(&legacy, &target);
+
+        assert!(ok, "migration should succeed despite leftover staging");
+        assert!(!target.join("stale.txt").exists(), "stale staging content must not survive");
+        assert_eq!(std::fs::read_to_string(target.join("config.json")).unwrap(), r#"{"a":1}"#);
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    /// rename 失败路径**是可达的**：目标目录已存在且非空、但没有 config.json 时
+    /// （用户手动建过，或上次崩溃留下 history.db），Unix 的 `rename` 会返回
+    /// `DirectoryNotEmpty`（os error 66，实测确认）。此时同样必须清理 staging。
+    ///
+    /// 这条补上了最后一个未被覆盖的分支——没有它，
+    /// `no_cleanup_on_rename_fail` 变异会逃逸。
+    #[test]
+    fn a_failed_rename_also_cleans_up_the_staging_directory() {
+        let base = unique_dir("cup-translate-migrate-rename-fail");
+        let legacy = base.join("com.pot-app.desktop");
+        let target = base.join("com.cup-translate.app");
+        std::fs::create_dir_all(&legacy).unwrap();
+        std::fs::write(legacy.join("config.json"), br#"{"a":1}"#).unwrap();
+        // 目标已存在且非空，但**没有** config.json
+        std::fs::create_dir_all(&target).unwrap();
+        std::fs::write(target.join("history.db"), b"old").unwrap();
+
+        let ok = migrate_config_dir(&legacy, &target);
+
+        assert!(!ok, "the rename must fail and be reported");
+        assert!(
+            !staging_dir_for(&target).exists(),
+            "the staging directory must be cleaned up when the move fails"
+        );
+        // 用户原有的文件不能被破坏
+        assert_eq!(std::fs::read(target.join("history.db")).unwrap(), b"old");
+        // 目标仍不能有 config.json，否则下次启动会跳过迁移
+        assert!(
+            !target.join("config.json").exists(),
+            "a failed move must not leave a config.json behind"
+        );
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+
     use serde_json::json;
 
     #[test]
