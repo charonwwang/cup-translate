@@ -170,21 +170,48 @@ fn handle_input_translate(request: Request) {
 }
 
 fn handle_ocr_recognize(request: Request) {
-    if request.url().ends_with("false") {
-        recognize_window();
-    } else {
+    if ocr_uses_internal_screenshot(request.url()) {
         ocr_recognize();
+    } else {
+        recognize_window();
     }
     response_ok(request);
 }
 
 fn handle_ocr_translate(request: Request) {
-    if request.url().ends_with("false") {
-        image_translate();
-    } else {
+    if ocr_uses_internal_screenshot(request.url()) {
         ocr_translate();
+    } else {
+        image_translate();
     }
     response_ok(request);
+}
+
+/// 判断 OCR 请求是否应使用软件内截图。
+///
+/// 契约（UPSTREAM_README §API）：
+/// - `/ocr_recognize`（无参数）与 `?screenshot=true` → 应用自己截图
+/// - `?screenshot=false` → 外部工具已截好图，只做识别
+///
+/// 不能用 `url.ends_with("false")`：那样 `?x=notfalse`、`?foo=false`
+/// 这类无关参数会被误判为「不截图」，而 `?screenshot=false&extra=1`
+/// 又会被漏判。这里精确解析 `screenshot` 参数，未知取值按默认（截图）处理。
+fn ocr_uses_internal_screenshot(url: &str) -> bool {
+    let Some(query) = url.split_once('?').map(|(_, query)| query) else {
+        // 无查询串：默认走软件内截图
+        return true;
+    };
+    for pair in query.split('&') {
+        let (key, value) = match pair.split_once('=') {
+            Some((key, value)) => (key, value),
+            None => (pair, ""),
+        };
+        if key == "screenshot" {
+            // 只有显式 false 才交给外部截图；其余取值（含 true/空）按默认处理
+            return value != "false";
+        }
+    }
+    true
 }
 
 fn response_ok(request: Request) {
@@ -204,6 +231,33 @@ fn response(request: Request, status: StatusCode, body: &str) {
 #[cfg(test)]
 mod tests {
     use super::browser_request_is_local;
+    use super::ocr_uses_internal_screenshot;
+
+    #[test]
+    fn ocr_screenshot_parameter_is_parsed_exactly() {
+        // 契约：无参数 / screenshot=true → 软件内截图
+        assert!(ocr_uses_internal_screenshot("/ocr_recognize"));
+        assert!(ocr_uses_internal_screenshot("/ocr_translate"));
+        assert!(ocr_uses_internal_screenshot("/ocr_recognize?screenshot=true"));
+        assert!(ocr_uses_internal_screenshot("/ocr_translate?screenshot=true"));
+
+        // 契约：screenshot=false → 使用外部已截好的图
+        assert!(!ocr_uses_internal_screenshot("/ocr_recognize?screenshot=false"));
+        assert!(!ocr_uses_internal_screenshot("/ocr_translate?screenshot=false"));
+        // 参数顺序无关，附加参数不影响判定（旧 ends_with("false") 会漏判）
+        assert!(!ocr_uses_internal_screenshot(
+            "/ocr_recognize?screenshot=false&extra=1"
+        ));
+        assert!(!ocr_uses_internal_screenshot(
+            "/ocr_recognize?extra=1&screenshot=false"
+        ));
+
+        // 无关参数以 false 结尾不得误判为「外部截图」
+        // （旧 ends_with("false") 会把它们当成 screenshot=false）
+        assert!(ocr_uses_internal_screenshot("/ocr_recognize?x=notfalse"));
+        assert!(ocr_uses_internal_screenshot("/ocr_recognize?foo=false"));
+        assert!(ocr_uses_internal_screenshot("/ocr_recognize?other=notfalse"));
+    }
 
     #[test]
     fn browser_requests_cannot_trigger_local_actions_from_foreign_sites() {
