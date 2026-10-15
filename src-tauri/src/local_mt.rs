@@ -5,6 +5,7 @@
 //   zh→en 派生自 Helsinki-NLP/opus-mt-zh-en（CC-BY-4.0，界面已标注署名）
 // 基准（docs/research/translation-engine-benchmark-2026.md）：79MB / 158MB 内存 / 106ms@4 线程 / BLEU 53.8
 use std::collections::HashMap;
+use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
@@ -210,38 +211,54 @@ pub async fn local_mt_download_model(app_handle: AppHandle, pair: String) -> Res
         // huggingface 直连与 hf-mirror 镜像二选一（中国大陆网络通常只有镜像可达）
         let mut last_err = String::new();
         let mut done = false;
-        for base in ["https://huggingface.co", "https://hf-mirror.com"] {
+        'download_loop: for base in ["https://huggingface.co", "https://hf-mirror.com"] {
             let url = format!("{}/{}/resolve/main/{}", base, spec.repo, file);
             log::info!("[local_mt] downloading {url}");
             match client.get(&url).send().await {
-                Ok(resp) if resp.status().is_success() => match resp.bytes().await {
-                    Ok(bytes) => {
-                        std::fs::write(&dest, &bytes)
-                            .map_err(|e| format!("写入 {file} 失败: {e}"))?;
-                        log::info!("[local_mt] downloaded {} ({} bytes)", file, bytes.len());
-                        // 下载后立即校验 SHA256；不匹配则视为本次下载失败，尝试下一个镜像
-                        if let Some(sha) = expected.get(file) {
-                            match file_sha256(&dest) {
-                                Ok(actual) if actual.eq_ignore_ascii_case(sha) => {}
-                                Ok(actual) => {
-                                    last_err = format!(
-                                        "{url}: SHA256 不匹配（期望 {sha}，实际 {actual}），疑似镜像被篡改或传输损坏"
-                                    );
-                                    let _ = std::fs::remove_file(&dest);
-                                    continue;
-                                }
-                                Err(e) => {
-                                    last_err = format!("{url}: 校验失败: {e}");
-                                    let _ = std::fs::remove_file(&dest);
-                                    continue;
-                                }
+                Ok(mut resp) if resp.status().is_success() => {
+                    // 流式写入磁盘：resp.bytes() 会把整个文件（model.bin 80MB）
+                    // 加载进内存，用 chunk() 分块写入避免内存峰值
+                    let mut dest_file = std::fs::File::create(&dest)
+                        .map_err(|e| format!("创建 {file} 失败: {e}"))?;
+                    let mut total: u64 = 0;
+                    loop {
+                        match resp.chunk().await {
+                            Ok(Some(chunk)) => {
+                                dest_file
+                                    .write_all(&chunk)
+                                    .map_err(|e| format!("写入 {file} 失败: {e}"))?;
+                                total += chunk.len() as u64;
+                            }
+                            Ok(None) => break,
+                            Err(e) => {
+                                last_err = format!("{url}: {e}");
+                                let _ = std::fs::remove_file(&dest);
+                                continue 'download_loop;
                             }
                         }
-                        done = true;
-                        break;
                     }
-                    Err(e) => last_err = format!("{url}: {e}"),
-                },
+                    log::info!("[local_mt] downloaded {} ({} bytes)", file, total);
+                    // 下载后立即校验 SHA256；不匹配则视为本次下载失败，尝试下一个镜像
+                    if let Some(sha) = expected.get(file) {
+                        match file_sha256(&dest) {
+                            Ok(actual) if actual.eq_ignore_ascii_case(sha) => {}
+                            Ok(actual) => {
+                                last_err = format!(
+                                    "{url}: SHA256 不匹配（期望 {sha}，实际 {actual}），疑似镜像被篡改或传输损坏"
+                                );
+                                let _ = std::fs::remove_file(&dest);
+                                continue;
+                            }
+                            Err(e) => {
+                                last_err = format!("{url}: 校验失败: {e}");
+                                let _ = std::fs::remove_file(&dest);
+                                continue;
+                            }
+                        }
+                    }
+                    done = true;
+                    break;
+                }
                 Ok(resp) => last_err = format!("{url}: HTTP {}", resp.status()),
                 Err(e) => last_err = format!("{url}: {e}"),
             }
