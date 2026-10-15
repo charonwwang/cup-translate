@@ -35,11 +35,19 @@ fn get_daemon_window() -> Window {
     }
 }
 
-// Get monitor where the mouse is currently located
-fn get_current_monitor(x: i32, y: i32) -> Monitor {
+// Get monitor where the mouse is currently located.
+// Returns None when no monitor can be resolved (e.g. hot-plug races, headless
+// display edge cases) instead of panicking the whole app.
+fn get_current_monitor(x: i32, y: i32) -> Option<Monitor> {
     info!("Mouse position: {}, {}", x, y);
     let daemon_window = get_daemon_window();
-    let monitors = daemon_window.available_monitors().unwrap();
+    let monitors = match daemon_window.available_monitors() {
+        Ok(v) => v,
+        Err(e) => {
+            warn!("available_monitors failed: {e:?}, falling back to primary");
+            Vec::new()
+        }
+    };
 
     for m in monitors {
         let size = m.size();
@@ -51,12 +59,21 @@ fn get_current_monitor(x: i32, y: i32) -> Monitor {
             && y <= (position.y + size.height as i32)
         {
             info!("Current Monitor: {:?}", m);
-            return m;
+            return Some(m);
         }
     }
     warn!("Current Monitor not found, using primary monitor");
-    daemon_window.primary_monitor().unwrap().unwrap()
+    daemon_window.primary_monitor().ok().flatten()
 }
+
+/// 解析当前窗口所在显示器；无可用显示器时退回 DPI=1.0 的逻辑尺寸估算，
+/// 避免 monitor 查询失败直接 panic。
+fn window_monitor_or_default(window: &tauri::Window) -> Option<Monitor> {
+    window.current_monitor().ok().flatten()
+}
+
+/// 无可用显示器时的保守 DPI（逻辑坐标即物理坐标）
+const FALLBACK_DPI: f64 = 1.0;
 
 // Creating a window on the mouse monitor
 fn build_window(label: &str, title: &str) -> (Window, bool) {
@@ -69,8 +86,10 @@ fn build_window(label: &str, title: &str) -> (Window, bool) {
             Position { x: 0, y: 0 }
         }
     };
-    let current_monitor = get_current_monitor(mouse_position.x, mouse_position.y);
-    let position = current_monitor.position();
+    // 解析不到显示器（多屏热插拔竞态等）时退回 (0,0)，不 panic
+    let position = get_current_monitor(mouse_position.x, mouse_position.y)
+        .map(|m| *m.position())
+        .unwrap_or(tauri::PhysicalPosition { x: 0, y: 0 });
 
     let app_handle = APP.get().unwrap();
     match app_handle.get_window(label) {
@@ -153,23 +172,21 @@ fn translate_window() -> Window {
         }
     };
 
-    let monitor = window.current_monitor().unwrap().unwrap();
-    let dpi = monitor.scale_factor();
+    let monitor = window_monitor_or_default(&window);
+    let dpi = monitor.as_ref().map_or(FALLBACK_DPI, |m| m.scale_factor());
 
-    window
-        .set_size(tauri::PhysicalSize::new(
-            (width as f64) * dpi,
-            (height as f64) * dpi,
-        ))
-        .unwrap();
+    let _ = window.set_size(tauri::PhysicalSize::new(
+        (width as f64) * dpi,
+        (height as f64) * dpi,
+    ));
 
     let position_type = match get("translate_window_position") {
-        Some(v) => v.as_str().unwrap().to_string(),
+        Some(v) => v.as_str().unwrap_or("mouse").to_string(),
         None => "mouse".to_string(),
     };
 
-    match position_type.as_str() {
-        "mouse" => {
+    match (position_type.as_str(), monitor) {
+        ("mouse", Some(monitor)) => {
             // Adjust window position
             let monitor_size = monitor.size();
             let monitor_size_width = monitor_size.width as f64;
@@ -211,12 +228,10 @@ fn translate_window() -> Window {
                 Some(v) => v.as_i64().unwrap(),
                 None => 0,
             };
-            window
-                .set_position(tauri::PhysicalPosition::new(
-                    (position_x as f64) * dpi,
-                    (position_y as f64) * dpi,
-                ))
-                .unwrap();
+            let _ = window.set_position(tauri::PhysicalPosition::new(
+                (position_x as f64) * dpi,
+                (position_y as f64) * dpi,
+            ));
         }
     }
 
@@ -309,16 +324,14 @@ pub fn recognize_window() {
             400
         }
     };
-    let monitor = window.current_monitor().unwrap().unwrap();
-    let dpi = monitor.scale_factor();
-    window
-        .set_size(tauri::PhysicalSize::new(
-            (width as f64) * dpi,
-            (height as f64) * dpi,
-        ))
-        .unwrap();
-    window.center().unwrap();
-    window.emit("new_image", "").unwrap();
+    let monitor = window_monitor_or_default(&window);
+    let dpi = monitor.as_ref().map_or(FALLBACK_DPI, |m| m.scale_factor());
+    let _ = window.set_size(tauri::PhysicalSize::new(
+        (width as f64) * dpi,
+        (height as f64) * dpi,
+    ));
+    let _ = window.center();
+    let _ = window.emit("new_image", "");
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -328,10 +341,13 @@ fn screenshot_window() -> Window {
     window.set_skip_taskbar(true).unwrap();
     #[cfg(target_os = "macos")]
     {
-        let monitor = window.current_monitor().unwrap().unwrap();
-        let size = monitor.size();
-        window.set_decorations(false).unwrap();
-        window.set_size(*size).unwrap();
+        if let Some(monitor) = window_monitor_or_default(&window) {
+            let size = monitor.size();
+            let _ = window.set_decorations(false);
+            let _ = window.set_size(*size);
+        } else {
+            warn!("No monitor for screenshot window, keeping default size");
+        }
     }
 
     #[cfg(not(target_os = "macos"))]
