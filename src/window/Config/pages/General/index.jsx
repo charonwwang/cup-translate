@@ -84,9 +84,22 @@ export default function General() {
         isEnabled().then((v) => {
             setAutoStart(v);
         });
-        invoke('font_list').then((v) => {
-            setFontList(v);
-        });
+        // `font_list` 的 Rust 签名是 `Result<Vec<String>, Error>`（font-kit 的
+        // `SystemSource::all_families()`），**是会 reject 的**。原来只有一个
+        // `.then()`，一旦失败：① 产生一个未处理的 Promise 拒绝；② `fontList`
+        // 永远停在 `null`，而下面两处字体下拉框都带 `fontList !== null` 条件，
+        // 于是整个「应用字体 / 回退字体」选择器**静默消失**，用户看不到任何选项
+        // 也看不到任何提示，只会以为功能没了。
+        // 这里失败时把 fontList 置为空数组（而不是留在 null），让下拉框照常渲染、
+        // 至少保住「默认」等已有取值；同时记一条日志便于排查。
+        invoke('font_list')
+            .then((v) => {
+                setFontList(v);
+            })
+            .catch((e) => {
+                info('Failed to load the system font list: ' + e);
+                setFontList([]);
+            });
         return () => {
             // 组件卸载时清理未触发的 debounce 定时器
             if (timer) {
