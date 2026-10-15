@@ -348,8 +348,49 @@ sudo apt install libfuse2
 |---|---|
 | RPM 系（Fedora/RHEL）安装与依赖 | ❌ 已打包，但尚未在 Fedora/RHEL 上安装验证 |
 | CI 流水线 | ❌ 已收敛为仅 `v*` tag 触发，但从未打 tag，**从未真正运行过** |
-| Windows / macOS 构建与打包 | ❌ 仅在 Ubuntu 24.04 上验证过 |
+| Windows 构建与打包 | ❌ 仅在 Ubuntu 24.04 上验证过 |
+| macOS 构建与打包 | ✅ **2026-10 在 Apple Silicon Mac mini (M6, macOS 27) 实测**：见 §6.6 |
 | 自动化测试 | ✅ 已加入前端资源、截图几何与 Rust 边界测试；跨系统 GUI 验收仍需补齐 |
+
+
+---
+
+## 6.6 macOS（Apple Silicon）构建实测（2026-10, M6 Mac mini / macOS 27）
+
+### 6.6.1 前置工具（与 Linux 不同）
+
+```bash
+brew install cmake     # ct2rs/sentencepiece 的 build.rs 需要 cmake，缺失报 `is 'cmake' not installed?`
+rustup default stable  # 仅装 rustup 不装工具链时报 missing manifest，需要 `rustup default stable`
+```
+
+macOS 自带 Xcode Command Line Tools（clang/make），无 WebKitGTK 兼容层问题；`ct2rs`
+仍会静态编译内嵌 CTranslate2 源码，首次构建较慢（实测增量构建约 1 分钟）。
+
+### 6.6.2 标准命令
+
+```bash
+pnpm install --frozen-lockfile
+pnpm build
+cd src-tauri && cargo build --release --features custom-protocol   # 产物约 55MB arm64
+pnpm tauri build -b dmg                                             # 或 pnpm tauri build -b app
+```
+
+- `.app` 打包正常：`src-tauri/target/release/bundle/macos/cup-translate.app`，
+  `Contents/Resources/resources/ocr-{aarch64,x86_64}-apple-darwin`（macOS OCR helper）正确入包，
+  与 `system_ocr.rs::resolve_resource("resources/ocr-<arch>-apple-darwin")` 路径一致。
+- `.dmg` 打包在 Finder 装饰步骤需要向 Finder 发 AppleScript：在无 GUI 会话/无
+  「自动化-控制 Finder」授权的机器上会报 `Finder 遇到一个错误：AppleEvent 已超时 (-1712)`
+  并退出（**非编译问题**，直接 `open cup-translate.app` 即可运行；`tauri.conf.json`
+  已写死 `bundle.dmg` 的窗口/图标布局，CI 上的 macOS runner 可正常产出 `.dmg`）。
+
+### 6.6.3 macOS 上踩到的坑（已修复）
+
+| # | 坑 | 现状 | 回退会怎样 |
+|---|---|---|---|
+| 1 | `cmake` 缺失导致 ct2rs 构建失败 | 已装 cmake 并写入 §6.6.1 | `sentencepiece-sys` build.rs panic |
+| 2 | `bundle.dmg` 未写布局 → dmg 装饰布局随主机默认值漂移 | `tauri.conf.json` 显式声明 app/Applications 位置与窗口尺寸 | dmg 窗口布局不可复现 |
+| 3 | macOS bundle 资源必须在 `resources/` 目录 | `tauri.macos.conf.json` 用 `resources/*`，已加回归测试 | system_ocr 找不到 helper 二进制 |
 
 ---
 

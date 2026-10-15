@@ -14,6 +14,8 @@
 | `src-tauri/icons/icon.ico` | Windows | `pnpm tauri icon` |
 | `src-tauri/icons/icon.icns` | macOS | `pnpm tauri icon` |
 | `src-tauri/icons/Square*Logo.png` / `StoreLogo.png` | Windows Appx | `pnpm tauri icon` |
+| `src-tauri/icons_mac/*` | **macOS 专用**图标/托盘（`tauri.macos.conf.json` 的 `bundle.icon` 与 `systemTray.iconPath`） | `pnpm tauri icon` + 手动复制 |
+| `src-tauri/icons_mac/tray.ico` | macOS 系统托盘图标（`iconAsTemplate: true`） | 需手动生成/复制 |
 | `src-tauri/icons/icon_mac.ico` | （当前无引用，历史遗留） | ❌ 需手动生成 |
 | `public/icon.png` | 前端窗口 favicon（`index.html` 引用 `/icon.png`） | ❌ 需手动生成 |
 
@@ -48,7 +50,11 @@ python3 packaging/gen-icon.py app-icon.png
 # 2) 生成各平台图标（覆盖 src-tauri/icons/）
 pnpm tauri icon app-icon.png -o src-tauri/icons
 
-# 3) 补齐 tauri icon 不会生成的两个文件
+# 3) 补齐 macOS 专用目录（tauri.macos.conf.json 引用 icons_mac/）：
+#    将 src-tauri/icons/{32x32,128x128,128x128@2x}.png、icon.icns、icon.ico 复制到 src-tauri/icons_mac/，
+#    并单独准备 src-tauri/icons_mac/tray.ico（macOS 托盘模板图标）。
+
+# 4) 补齐 tauri icon 不会生成的两个文件
 python3 - <<'PY'
 from PIL import Image
 im = Image.open('app-icon.png').convert('RGBA')
@@ -59,7 +65,7 @@ im.save('src-tauri/icons/icon_mac.ico', format='ICO',
         sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)])
 PY
 
-# 4) 重新构建验证
+# 5) 重新构建验证
 pnpm build
 bash packaging/build-linux.sh deb
 ```

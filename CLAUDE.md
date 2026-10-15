@@ -105,7 +105,12 @@ readelf -d src-tauri/target/release/cup-translate | grep NEEDED   # 只有 4.1
 - **RPM 安装未验证**：`tauri.conf.json` 的 `bundle.rpm.depends` 已改为 Fedora
   的运行包名称，但**尚未在 RPM 系发行版上实际安装运行**，发版前仍需验证。
 - **CI 未验证**：`package.yml` 已收敛为仅 `v*` tag 触发，但**从未打过 tag，因此从未真正跑通**。
-- **Windows / macOS 打包未验证**：当前仅在 Ubuntu 24.04 上实测过。
+- **Windows 打包未验证**：当前仅在 Ubuntu 24.04 与 macOS (Apple Silicon) 上实测过。
+- **macOS 打包部分验证**（2026-10, M6 Mac mini / macOS 27）：`.app` 打包与启动实测通过，
+  `.dmg` 需要 Finder AppleScript 授权（无 GUI 会话/未授权会报 `AppleEvent 已超时 (-1712)`，
+  非编译问题；详见 `docs/BUILD.md` §6.6）。macOS 构建需要 `cmake`（ct2rs 静态编译），
+  且 macOS bundle 资源必须放在 `resources/` 目录（`tauri.macos.conf.json` 的 `resources/*`），
+  与 `system_ocr.rs` 的 `resolve_resource("resources/ocr-<arch>-apple-darwin")` 对应。
 
 ---
 

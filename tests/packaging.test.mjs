@@ -74,6 +74,52 @@ test('macOS OCR helpers are included as bundle resources', async () => {
     }
 });
 
+test('macOS dmg bundling declares explicit layout and OCR resource roots', async () => {
+    const config = JSON.parse(await readFile('src-tauri/tauri.conf.json', 'utf8'));
+    const bundle = config.tauri.bundle;
+    // dmg layout must be explicit so the installer window is deterministic on any host
+    assert.equal(typeof bundle.dmg, 'object');
+    assert.equal(typeof bundle.dmg.appPosition?.x, 'number');
+    assert.equal(typeof bundle.dmg.applicationFolderPosition?.x, 'number');
+    assert.equal(typeof bundle.dmg.windowSize?.width, 'number');
+
+    // macOS bundle resources must live under resources/ so system_ocr.rs resolves
+    // `resources/ocr-<arch>-apple-darwin` inside the .app bundle.
+    for (const resource of bundle.resources) {
+        assert.ok(resource.startsWith('resources/'), `${resource} must stay under resources/`);
+    }
+    const macosOverride = JSON.parse(await readFile('src-tauri/tauri.macos.conf.json', 'utf8'));
+    for (const resource of macosOverride.tauri.bundle.resources) {
+        assert.ok(resource.startsWith('resources/'), `${resource} must stay under resources/`);
+    }
+    // every icon referenced by the macOS override must exist
+    for (const icon of macosOverride.tauri.bundle.icon) {
+        await access(join('src-tauri', icon));
+    }
+    await access(join('src-tauri', macosOverride.tauri.systemTray.iconPath));
+});
+
+test('Rust service whitelists stay in sync with the frontend registries', async () => {
+    // Regression guard for CLAUDE.md §4.1: check_service_available() silently drops
+    // any translate/tts instance whose builtin name is missing from the Rust whitelist,
+    // so a frontend engine without a matching Rust entry dies after one restart.
+    const configSource = await readFile('src-tauri/src/config.rs', 'utf8');
+    const extractList = (name) => {
+        const match = configSource.match(new RegExp(`let ${name}: Vec<&str> = vec!\\[([^\\]]*)\\]`));
+        assert.ok(match, `${name} must exist in config.rs`);
+        return [...match[1].matchAll(/"([^"]+)"/g)].map((entry) => entry[1]).sort();
+    };
+
+    const extractExports = async (path) => {
+        const source = await readFile(path, 'utf8');
+        return [...source.matchAll(/^export const (\w+) = _\w+;/gm)].map((entry) => entry[1]).sort();
+    };
+
+    assert.deepEqual(extractList('builtin_translate_list'), await extractExports('src/services/translate/index.jsx'));
+    assert.deepEqual(extractList('builtin_tts_list'), await extractExports('src/services/tts/index.jsx'));
+    assert.deepEqual(extractList('builtin_collection_list'), await extractExports('src/services/collection/index.jsx'));
+});
+
 test('Tauri shell API permits opening links without its command execution feature', async () => {
     const config = JSON.parse(await readFile('src-tauri/tauri.conf.json', 'utf8'));
     assert.equal(config.tauri.allowlist.shell.all, false);
