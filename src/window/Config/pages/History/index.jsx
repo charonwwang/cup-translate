@@ -97,8 +97,11 @@ export default function History() {
             setTotal(0);
             setPage(1);
         } catch (e) {
+            // 日志保留原始错误（诊断用），但**给用户看的是本地化文案**。
+            // 修复前直接 toast 出 '[history] clear failed: ...'：
+            // 那是英文 + 内部标签，非英语用户看不懂，也泄露了实现细节。
             logError('[history] clear failed: ' + e);
-            toast.error('[history] clear failed: ' + e, { style: toastStyle });
+            toast.error(`${t('config.history.clear_failed')}: ${e}`, { style: toastStyle });
         }
     };
     const updateData = async () => {
@@ -112,7 +115,7 @@ export default function History() {
             await getData();
         } catch (e) {
             logError('[history] update failed: ' + e);
-            toast.error('[history] update failed: ' + e, { style: toastStyle });
+            toast.error(`${t('config.history.update_failed')}: ${e}`, { style: toastStyle });
         }
     };
 

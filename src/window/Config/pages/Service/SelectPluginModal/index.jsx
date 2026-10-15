@@ -125,7 +125,9 @@ export default function SelectPluginModal(props) {
                                             }).then(
                                                 (count) => {
                                                     setInstalling(false);
-                                                    toast.success('Installed ' + count + ' plugins', {
+                                                    // 修复前是硬编码英文 'Installed N plugins'，
+                                                    // 中文用户也会看到英文。改走 i18n 并支持复数插值。
+                                                    toast.success(t('config.service.installed_plugins', { count }), {
                                                         style: toastStyle,
                                                     });
                                                     emit('reload_plugin_list');

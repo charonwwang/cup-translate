@@ -176,11 +176,14 @@
                 "install_plugin": "Install Plugin",
                 "view_plugin_list": "View Plugin List",
                 "uninstall_success": "Plugin Uninstall Successfully",
-                "homepage": "Homepage"
+                "homepage": "Homepage",
+                "installed_plugins": "Installed {{count}} plugin(s)"
             },
             "history": {
                 "label": "History",
-                "title": "History"
+                "title": "History",
+                "clear_failed": "Failed to clear history",
+                "update_failed": "Failed to update the entry"
             },
             "backup": {
                 "label": "Backup",
