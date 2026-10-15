@@ -104,6 +104,16 @@ export default function Backup() {
     const onBackupListOpen = () => {
         switch (backupType) {
             case 'webdav':
+                // 与 aliyun 分支对称：地址/账号没填时先提示，不要打开弹窗。
+                // 修复前这里无校验，弹窗一打开就发请求（WebDavModal 的 useEffect
+                // 在 isOpen 时立即调用 webdav.list），用户看到的是 reqwest 的
+                // 原始报错 `relative URL without a base`。
+                // 注意 backup_type 的**默认值就是 'webdav'**，所以新用户点
+                // 「恢复」必然走到这里——不是罕见路径。
+                if (!isFilledString(davUrl) || !isFilledString(davUserName)) {
+                    toast.error(t('config.backup.webdav_not_configured'), { style: toastStyle });
+                    return;
+                }
                 onWebDavListOpen();
                 break;
             case 'local':
@@ -122,7 +132,6 @@ export default function Backup() {
                 } else {
                     onAliyunListOpen();
                 }
-
                 break;
             default:
                 warn('Unknown backup type');

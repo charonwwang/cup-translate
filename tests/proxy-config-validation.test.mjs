@@ -172,3 +172,111 @@ test('the WebDav prompt is a real localized string, not a key or an English copy
     assert.notEqual(enText, zhText, 'zh_CN must not simply reuse the English text');
     assert.ok(/[\u4e00-\u9fff]/.test(zhText), 'the Chinese prompt should actually contain Chinese characters');
 });
+/**
+ * 按 `case 'xxx':` 把 switch 的每个分支体切出来。
+ *
+ * 教训（round 51）：我第一版护栏只用 `indexOf` 找「第一个 isFilledString」
+ * 与「onWebDavListOpen」，于是「把恢复入口的校验挪到打开弹窗**之后**」
+ * 这种变异能逃逸——因为第一个匹配到的其实是**备份入口**的校验。
+ * 全局计数无法表达「哪个分支必须校验」，必须按分支体分别断言。
+ */
+function branchBody(code, caseName) {
+    const start = code.indexOf(`case '${caseName}':`);
+    assert.notEqual(start, -1, `branch '${caseName}' should exist`);
+    const rest = code.slice(start + 1);
+    const next = rest.search(/case '/);
+    const end = next === -1 ? code.length : start + 1 + next;
+    return code.slice(start, end);
+}
+
+test('every WebDav entry point validates before it does anything', async () => {
+    // 「备份」与「恢复」两个入口都必须校验。恢复入口尤其重要：
+    // WebDavModal 的 useEffect 在 isOpen 时**立即**发 webdav.list，
+    // 而 backup_type 的默认值就是 'webdav'（Backup/index.jsx:29），
+    // 新用户什么都没配就点「恢复」必然走到这里。
+    const source = await readFile('src/window/Config/pages/Backup/index.jsx', 'utf8');
+    const code = source.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+
+    // 找出所有 webdav 分支（备份 switch 与恢复 switch 各一个）
+    const bodies = [];
+    let from = 0;
+    while (true) {
+        const at = code.indexOf("case 'webdav':", from);
+        if (at === -1) break;
+        const rest = code.slice(at + 1);
+        const next = rest.search(/case '/);
+        bodies.push(code.slice(at, next === -1 ? code.length : at + 1 + next));
+        from = at + 1;
+    }
+    assert.equal(bodies.length, 2, `expected 2 webdav branches (backup + restore), found ${bodies.length}`);
+
+    for (const [i, body] of bodies.entries()) {
+        assert.match(body, /isFilledString\(davUrl\)/, `webdav branch #${i + 1} must validate the URL`);
+        assert.match(body, /isFilledString\(davUserName\)/, `webdav branch #${i + 1} must validate the account`);
+        assert.match(
+            body,
+            /t\('config\.backup\.webdav_not_configured'\)/,
+            `webdav branch #${i + 1} must show a localized prompt`
+        );
+        assert.match(body, /return;/, `webdav branch #${i + 1} must abort, not fall through`);
+    }
+
+    // 校验必须在该分支**实际动作之前**——逐个分支比较位置，
+    // 而不是比较全文里的第一个匹配（那正是上一版逃逸的原因）。
+    for (const [i, body] of bodies.entries()) {
+        const checkAt = body.indexOf('isFilledString(davUrl)');
+        const actionAt = Math.min(
+            ...[body.indexOf('webdav.backup('), body.indexOf('onWebDavListOpen()')].filter((v) => v !== -1)
+        );
+        assert.notEqual(actionAt, Infinity, `webdav branch #${i + 1} should have an action`);
+        assert.ok(checkAt < actionAt, `webdav branch #${i + 1}: the guard must precede the action`);
+    }
+});
+
+test('the aliyun branches keep their own login check', async () => {
+    // 修 webdav 时不能把 aliyun 的对照校验删掉——**两个 switch 各有一处**
+    const source = await readFile('src/window/Config/pages/Backup/index.jsx', 'utf8');
+    const code = source.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+
+    const bodies = [];
+    let from = 0;
+    while (true) {
+        const at = code.indexOf("case 'aliyun':", from);
+        if (at === -1) break;
+        const rest = code.slice(at + 1);
+        const next = rest.search(/case '/);
+        bodies.push(code.slice(at, next === -1 ? code.length : at + 1 + next));
+        from = at + 1;
+    }
+    assert.equal(bodies.length, 2, `expected 2 aliyun branches, found ${bodies.length}`);
+    for (const [i, body] of bodies.entries()) {
+        assert.match(body, /aliyun_login_first/, `aliyun branch #${i + 1} must keep its login-first prompt`);
+    }
+});
+
+test('the local branches are not given the WebDav credential check', async () => {
+    // local 是纯本地文件操作，不该继承 webdav 的校验（过度修正）
+    const source = await readFile('src/window/Config/pages/Backup/index.jsx', 'utf8');
+    const code = source.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+    // 两个 local 分支（备份 + 恢复）都要检查。
+    // 教训（round 51）：我第一版只看了 `branchBody(code, 'local')` 返回的**第一个**
+    // 分支，注释却写着「两个都检查」——于是「给恢复入口的 local 分支加上 webdav
+    // 校验」这个变异直接逃逸（pass 204 / fail 0）。注释与实现不符是护栏最常见的失效方式。
+    let from = 0;
+    const bodies = [];
+    while (true) {
+        const at = code.indexOf("case 'local':", from);
+        if (at === -1) break;
+        const rest = code.slice(at + 1);
+        const next = rest.search(/case '/);
+        bodies.push(code.slice(at, next === -1 ? code.length : at + 1 + next));
+        from = at + 1;
+    }
+    assert.equal(bodies.length, 2, `expected 2 local branches (backup + restore), found ${bodies.length}`);
+    for (const [i, body] of bodies.entries()) {
+        assert.ok(
+            !/davUrl|davUserName|webdav_not_configured/.test(body),
+            `local branch #${i + 1} must not inherit the WebDav credential check`
+        );
+    }
+});
