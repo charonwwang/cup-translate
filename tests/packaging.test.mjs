@@ -232,3 +232,69 @@ test('productName, updater artifact names, and CI rename steps stay in sync', as
         `CI rename steps must use package.productName "${productName}"`
     );
 });
+
+/**
+ * `tauri::generate_context!()` 在**编译期**读取 `build.distDir`，
+ * 该目录不存在会让整个 Rust 编译失败（`proc macro panicked`）。
+ *
+ * 为什么值得一条护栏：这个坑在**已有 `dist/` 的工作副本里不会暴露**
+ * —— 旧产物一直在，cargo 能正常通过。只有干净克隆 / 新机器 / CI 才会炸，
+ * 属于最容易被漏掉的一类环境依赖。
+ *
+ * 实测（干净克隆，无 dist/）：
+ *   error: proc macro panicked
+ *      --> src/main.rs:179:16
+ *       = help: message: The `distDir` configuration is set to `"../dist"`
+ *         but this path doesn't exist
+ * 先 `pnpm build` 生成 dist/ 后，Rust **141/141** 与 Node **333/333** 全通过。
+ */
+test('tauri build.distDir points at the frontend output the build commands produce', async () => {
+    const tauri = JSON.parse(await readFile('src-tauri/tauri.conf.json', 'utf8'));
+
+    // distDir 是相对 src-tauri/ 解析的，产物由 `pnpm build`（vite）写到仓库根的 dist/
+    const distDir = tauri.build.distDir;
+    assert.equal(
+        distDir,
+        '../dist',
+        `distDir must stay '../dist' (relative to src-tauri/), which is what pnpm build writes, got: ${distDir}`
+    );
+
+    // 该 feature 在 cargo build 时把 dist/ 嵌进二进制：改前端后必须先 pnpm build
+    // 再 cargo build，否则跑的是旧前端。这里固定住「嵌的就是 dist/」这一事实。
+    const cargoToml = await readFile('src-tauri/Cargo.toml', 'utf8');
+    assert.match(
+        cargoToml,
+        /^custom-protocol\s*=\s*\["tauri\/custom-protocol"\]/m,
+        'custom-protocol must remain wired to tauri/custom-protocol (it is what embeds dist/ into the binary)'
+    );
+
+    // 文档必须写明「新克隆要先 pnpm build」这个前置条件，否则照抄 §6 命令清单会踩坑
+    const claude = await readFile('CLAUDE.md', 'utf8');
+    assert.match(
+        claude,
+        /distDir/,
+        'CLAUDE.md must document the distDir prerequisite so a fresh clone does not fail the Rust build'
+    );
+    assert.match(
+        claude,
+        /pnpm build[\s\S]{0,200}(再|cargo)/,
+        'CLAUDE.md must state that pnpm build has to run before the cargo commands'
+    );
+});
+
+test('a fresh clone has no dist/ committed, so the build order genuinely matters', async () => {
+    // dist/ 是构建产物，必须被 gitignore —— 若有人误提交它，
+    // 上面那个「干净克隆会失败」的前提就不成立了，同时会把旧前端带进仓库。
+    const ignored = await readFile('.gitignore', 'utf8');
+    assert.match(ignored, /^\/?dist\/?$/m, 'dist/ must be gitignored (it is a build artifact)');
+
+    // 反向确认：git **索引**里没有 dist/ 下的任何文件。
+    //
+    // ⚠️ 这里必须查 git 索引，不能查文件系统：`dist/` 是本地构建产物，
+    // 在本机通常**存在**（`pnpm build` 刚生成过），用 globSync 查文件系统
+    // 会把「本地产物」误判成「已提交」。本测试第一版就是这么写错的 ——
+    // 它报出 `dist/index.html` 等「已跟踪」，而 `git ls-files dist/` 其实是空的。
+    const { execFileSync } = await import('node:child_process');
+    const tracked = execFileSync('git', ['ls-files', 'dist'], { encoding: 'utf8' }).split('\n').filter(Boolean);
+    assert.deepEqual(tracked, [], `dist/ must never be committed; git tracks: ${JSON.stringify(tracked.slice(0, 5))}`);
+});

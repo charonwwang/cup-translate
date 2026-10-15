@@ -369,6 +369,22 @@ ci: 收敛上游发布流水线，避免误用上游身份发布
   ./src-tauri/target/release/cup-translate                              # 能否启动（GUI 常驻，需 Ctrl-C）
   ```
 - **不要声称有端到端/GUI 自动化测试**，也不要声称 CI 会跑测试
+- **⚠️ 上面这个顺序对新克隆是「必需」而非「建议」**：`cargo test` / `cargo build`
+  会在**编译期**执行 `tauri::generate_context!()`，该宏要求 `build.distDir`
+  （`../dist`）**必须存在**，否则直接失败：
+
+  ```
+  error: proc macro panicked
+     --> src/main.rs:179:16
+      = help: message: The `distDir` configuration is set to `"../dist"` but this path doesn't exist
+  ```
+
+  即**全新克隆必须先 `pnpm install` + `pnpm build`，再跑 cargo 相关命令**。
+  在已有 `dist/` 的工作副本里这个问题**不会暴露**（旧产物一直在），
+  所以它只在干净克隆 / 新机器 / CI 上才出现 —— 属于最容易被漏掉的一类。
+  已实测：干净克隆直接 `cargo test` 失败；先 `pnpm build` 后
+  **141/141 Rust + 333/333 Node 全部通过**，且 asset 哈希与本地一致。
+  `tests/packaging.test.mjs` 有一条护栏守着「distDir 与 dist 产物路径的对应关系」。
 
 ---
 
