@@ -41,14 +41,13 @@ fn set_registered_accelerator(name: &str, accelerator: Option<String>) {
     }
 }
 
-/// 解绑某个配置键此前注册的快捷键（若有）。
-fn unregister_previous(app_handle: &AppHandle, name: &str) {
-    let Some(previous) = registered_accelerator(name) else {
-        return;
-    };
+/// 解绑某个配置键此前注册的快捷键（若有），返回被解绑的 accelerator。
+/// 调用方在「新键注册失败」时可据此回滚，避免用户两头落空。
+fn unregister_previous(app_handle: &AppHandle, name: &str) -> Option<String> {
+    let previous = registered_accelerator(name)?;
     set_registered_accelerator(name, None);
     if previous.is_empty() {
-        return;
+        return None;
     }
     if let Err(e) = app_handle
         .global_shortcut_manager()
@@ -56,9 +55,10 @@ fn unregister_previous(app_handle: &AppHandle, name: &str) {
     {
         // 旧绑定可能已被系统或其他模块释放，记日志但不阻断新键注册
         warn!("Failed to unregister previous shortcut {} for {}: {:?}", previous, name, e);
-    } else {
-        info!("Unregistered previous shortcut: {} for {}", previous, name);
+        return None;
     }
+    info!("Unregistered previous shortcut: {} for {}", previous, name);
+    Some(previous)
 }
 
 /// 清空记账表。用于「全部解绑」场景，避免记账与真实绑定状态不一致。
@@ -90,8 +90,11 @@ where
         }
     };
 
-    // 改键场景：先解绑该配置键的旧绑定，否则旧快捷键会一直生效
-    unregister_previous(app_handle, name);
+    // 改键场景：先解绑该配置键的旧绑定，否则旧快捷键会一直生效。
+    // 记下解绑掉的值，一旦新键注册失败就把它装回去——
+    // 否则用户会「旧键没了、新键也没生效」，等于凭空丢了一个快捷键
+    // （新键被别的功能或别的程序占用时很容易触发）。
+    let previous = unregister_previous(app_handle, name);
 
     if hotkey.is_empty() {
         return Ok(());
@@ -107,10 +110,45 @@ where
         }
         Err(e) => {
             warn!("Failed to register global shortcut: {} for {} {:?}", hotkey, name, e);
+            // 回滚：把旧快捷键重新注册回去，保证用户至少不丢原有绑定
+            if let Some(previous) = previous {
+                if let Some(handler) = handler_factory(name) {
+                    match app_handle
+                        .global_shortcut_manager()
+                        .register(previous.as_str(), handler)
+                    {
+                        Ok(()) => {
+                            set_registered_accelerator(name, Some(previous.clone()));
+                            info!(
+                                "Restored previous shortcut after failed rebind: {} for {}",
+                                previous, name
+                            );
+                        }
+                        Err(restore_error) => warn!(
+                            "Failed to restore previous shortcut {} for {}: {:?}",
+                            previous, name, restore_error
+                        ),
+                    }
+                }
+            }
             return Err(e.to_string());
         }
     };
     Ok(())
+}
+
+/// 按配置键返回对应的处理函数，用于注册失败后的回滚重注册。
+/// 与 `register_shortcut` 里的映射保持一致：新增快捷键时必须同步这里，
+/// 否则该键在回滚时会「恢复失败」（只记 warning，不影响主流程）。
+fn handler_factory(name: &str) -> Option<fn()> {
+    match name {
+        "hotkey_selection_translate" => Some(selection_translate as fn()),
+        "hotkey_clipboard_translate" => Some(clipboard_translate as fn()),
+        "hotkey_input_translate" => Some(input_translate as fn()),
+        "hotkey_ocr_recognize" => Some(ocr_recognize as fn()),
+        "hotkey_ocr_translate" => Some(ocr_translate as fn()),
+        _ => None,
+    }
 }
 
 // Register global shortcuts
@@ -187,4 +225,33 @@ pub fn register_shortcut_by_frontend(name: &str, shortcut: &str) -> Result<(), S
         _ => {}
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::handler_factory;
+
+    /// 所有可配置的快捷键名。`register_shortcut`、`register_shortcut_by_frontend`
+    /// 与 `handler_factory` 三处必须同时覆盖这些名字。
+    const HOTKEY_NAMES: [&str; 5] = [
+        "hotkey_selection_translate",
+        "hotkey_clipboard_translate",
+        "hotkey_input_translate",
+        "hotkey_ocr_recognize",
+        "hotkey_ocr_translate",
+    ];
+
+    #[test]
+    fn every_hotkey_name_can_be_restored_after_a_failed_rebind() {
+        // 回滚依赖 handler_factory 能找到处理函数。漏掉某个名字时，
+        // 该键在「新键被占用」的失败路径下无法恢复旧绑定，
+        // 用户会静默丢掉一个快捷键，且只留一条 warning 日志。
+        for name in HOTKEY_NAMES {
+            assert!(
+                handler_factory(name).is_some(),
+                "{name} must have a handler so a failed rebind can be rolled back"
+            );
+        }
+        assert!(handler_factory("not_a_hotkey").is_none());
+    }
 }
