@@ -112,7 +112,14 @@ async function translate_by_key(text, from, to, key) {
 
     if (res.ok) {
         const result = res.data;
-        if ((result.translations, result.translations[0])) {
+        // 注意这里必须是 `&&`，不能写成 `(result.translations, result.translations[0])`——
+        // 逗号运算符会先求值左边再**丢弃**，整个条件等价于只判断 `result.translations[0]`，
+        // 于是 translations 缺失时先抛 `TypeError: Cannot read properties of undefined`，
+        // 把服务端真正的报错内容（配额用尽等）盖掉。实测：
+        //   响应体 {"message":"Quota exceeded..."} ->
+        //     修复前: TypeError: Cannot read properties of undefined (reading '0')
+        //     修复后: {"message":"Quota exceeded. Check your usage limits."}
+        if (result.translations && result.translations[0]) {
             return result.translations[0].text.trim();
         } else {
             throw JSON.stringify(result);
