@@ -72,23 +72,36 @@ pub fn clear_registered_accelerators() {
     }
 }
 
+/// 决定某个配置键最终要注册的 accelerator。
+///
+/// `stored` 是 config 里的值，`default_key` 是调用点给的默认值：
+/// - `stored` 为 `Some`：一律以用户为准（**包括用户设置的 `""`，表示禁用**）。
+/// - `stored` 为 `None`（首次运行）：用 `default_key` 作为默认值。
+///
+/// 关键点：`default_key` 只是**默认值**，永远不能覆盖用户已保存的设置。
+/// 修复前 `default_key` 非空时会直接顶替 config 值，
+/// 导致「剪贴板翻译」的硬编码 "Alt+Shift+T" 把用户清空后的禁用状态顶回来。
+/// 抽成纯函数以便直接单测这套优先级。
+fn resolve_hotkey(stored: Option<String>, default_key: &str) -> String {
+    stored.unwrap_or_else(|| default_key.to_string())
+}
+
+/// 注册一个全局快捷键。
+///
+/// `key` 的语义是**默认值**，不是强制值——最终取值见 [`resolve_hotkey`]。
+/// 首次运行（config 中无该键）时会把默认值写回 config，
+/// 使设置页显示的内容与实际生效的快捷键一致。
 fn register<F>(app_handle: &AppHandle, name: &str, handler: F, key: &str) -> Result<(), String>
 where
     F: Fn() + Send + 'static,
 {
-    let hotkey = {
-        if key.is_empty() {
-            match get_str(name) {
-                Some(v) => v,
-                None => {
-                    set(name, "");
-                    String::new()
-                }
-            }
-        } else {
-            key.to_string()
-        }
-    };
+    let stored = get_str(name);
+    let is_first_run = stored.is_none();
+    let hotkey = resolve_hotkey(stored, key);
+    if is_first_run {
+        // 落地默认值，避免「界面显示为空、实际却已绑定」
+        set(name, hotkey.clone());
+    }
 
     // 改键场景：先解绑该配置键的旧绑定，否则旧快捷键会一直生效。
     // 记下解绑掉的值，一旦新键注册失败就把它装回去——
@@ -229,7 +242,42 @@ pub fn register_shortcut_by_frontend(name: &str, shortcut: &str) -> Result<(), S
 
 #[cfg(test)]
 mod tests {
-    use super::handler_factory;
+    use super::{handler_factory, resolve_hotkey};
+
+    #[test]
+    fn user_config_always_wins_over_the_default() {
+        // 核心不变量：默认值只在「config 里没有这个键」时才生效。
+        let stored = Some("Ctrl+Alt+K".to_string());
+        assert_eq!(resolve_hotkey(stored, "Alt+Shift+T"), "Ctrl+Alt+K");
+    }
+
+    #[test]
+    fn an_explicitly_empty_config_disables_the_hotkey() {
+        // 用户把快捷键清空 = 想禁用。这是修复的关键点：
+        // 旧实现里非空默认值会覆盖掉这个 ""，
+        // 导致「剪贴板翻译」清空后下次启动又被 Alt+Shift+T 顶回来，
+        // 界面显示为空却实际生效，且无法关闭。
+        let stored = Some(String::new());
+        assert_eq!(
+            resolve_hotkey(stored, "Alt+Shift+T"),
+            "",
+            "an empty stored value must disable the shortcut, not be overridden by the default"
+        );
+    }
+
+    #[test]
+    fn the_default_applies_only_on_first_run() {
+        assert_eq!(resolve_hotkey(None, "Alt+Shift+T"), "Alt+Shift+T");
+        assert_eq!(resolve_hotkey(None, ""), "");
+    }
+
+    #[test]
+    fn default_never_overrides_regardless_of_its_value() {
+        // 无论默认值多「像」用户会想要的键，都不能越过 config
+        for default in ["Alt+T", "Alt+Shift+T", "", "Ctrl+Q"] {
+            assert_eq!(resolve_hotkey(Some("F9".into()), default), "F9");
+        }
+    }
 
     /// 所有可配置的快捷键名。`register_shortcut`、`register_shortcut_by_frontend`
     /// 与 `handler_factory` 三处必须同时覆盖这些名字。
