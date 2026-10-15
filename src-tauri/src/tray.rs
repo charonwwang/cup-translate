@@ -916,6 +916,171 @@ mod tests {
         assert!(menu_for("klingon").is_none());
         assert!(menu_for("").is_none());
     }
+
+    // ---- 菜单项完整性：每个语言菜单必须含**同一套**菜单项 ----
+    //
+    // 动机：17 个 tray_menu_xx() 各自手写（每个 13 个 CustomMenuItem），
+    // 少写一个 `.add_item(...)` 不会编译报错，只是那个语言下**菜单里没有这一项**。
+    // 既有测试只覆盖「某语言有没有专属菜单」，覆盖不到「菜单里少了一项」——
+    // 实测确认：从 fr 菜单删掉 `add_item(clipboard_monitor)` 后，全部测试仍然通过。
+    //
+    // 做法：**真的把菜单建出来**，再解析它的 Debug 输出取 id_str / title，
+    // 而不是断言源码文本——后者只能证明「写了这行」，证明不了「真的加进去了」。
+    // （tauri 只 re-export 了 SystemTrayMenu，没导出 SystemTrayMenuEntry，
+    //   因此无法直接 match 枚举；Debug 是这些字段唯一的公开出口。）
+    fn tray_menu_of(language: &str) -> tauri::SystemTrayMenu {
+        match language {
+            "en" => tray_menu_en(),
+            "zh_cn" => tray_menu_zh_cn(),
+            "zh_tw" => tray_menu_zh_tw(),
+            "ja" => tray_menu_ja(),
+            "ko" => tray_menu_ko(),
+            "fr" => tray_menu_fr(),
+            "de" => tray_menu_de(),
+            "ru" => tray_menu_ru(),
+            "pt_br" => tray_menu_pt_br(),
+            "pt_pt" => tray_menu_pt_pt(),
+            "es" => tray_menu_es(),
+            "it" => tray_menu_it(),
+            "ar" => tray_menu_ar(),
+            "he" => tray_menu_he(),
+            "ta" => tray_menu_ta(),
+            "fa" => tray_menu_fa(),
+            "uk" => tray_menu_uk(),
+            other => panic!("no tray menu builder wired for '{other}'"),
+        }
+    }
+
+    const ALL_TRAY_MENUS: &[&str] = &[
+        "en", "zh_cn", "zh_tw", "ja", "ko", "fr", "de", "ru", "pt_br", "pt_pt", "es", "it", "ar", "he", "ta", "fa",
+        "uk",
+    ];
+
+    /// 从 Debug 输出里抽取所有 `id_str: "xxx"`（含子菜单内的项）。
+    fn ids_in(menu: &tauri::SystemTrayMenu) -> Vec<String> {
+        let debug = format!("{menu:?}");
+        debug
+            .split("id_str: \"")
+            .skip(1)
+            .filter_map(|rest| rest.split('"').next())
+            .map(|id| id.to_string())
+            .collect()
+    }
+
+    /// 从 Debug 输出里抽取所有 `title: "xxx"`。
+    fn titles_in(menu: &tauri::SystemTrayMenu) -> Vec<String> {
+        let debug = format!("{menu:?}");
+        debug
+            .split("title: \"")
+            .skip(1)
+            .filter_map(|rest| rest.split('"').next())
+            .map(|t| t.to_string())
+            .collect()
+    }
+
+    #[test]
+    fn every_language_menu_carries_the_same_items() {
+        let base = ids_in(&tray_menu_of("en"));
+        // 13 个菜单项（含 Auto Copy 子菜单里的 4 个）
+        assert_eq!(base.len(), 13, "the English tray menu should have 13 items, got {base:?}");
+
+        for language in ALL_TRAY_MENUS {
+            let ids = ids_in(&tray_menu_of(language));
+            let missing: Vec<_> = base.iter().filter(|id| !ids.contains(id)).collect();
+            assert!(
+                missing.is_empty(),
+                "the '{language}' tray menu is missing these items: {missing:?} (has {ids:?})"
+            );
+            assert_eq!(
+                ids.len(),
+                base.len(),
+                "the '{language}' tray menu has a different item count: {ids:?} vs en {base:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn every_menu_item_id_has_a_handler_and_vice_versa() {
+        // 菜单项 id 与 tray_event_handler 的 match 分支一一对应：
+        // 有菜单项没分支 -> 点了没反应；有分支没菜单项 -> 死代码。
+        // 两边都是手写字符串，编译器不会帮忙。
+        const HANDLED: &[&str] = &[
+            "input_translate",
+            "copy_source",
+            "copy_target",
+            "copy_source_target",
+            "copy_disable",
+            "clipboard_monitor",
+            "ocr_recognize",
+            "ocr_translate",
+            "config",
+            "check_update",
+            "view_log",
+            "restart",
+            "quit",
+        ];
+
+        let built = ids_in(&tray_menu_of("en"));
+        let unhandled: Vec<_> = built.iter().filter(|id| !HANDLED.contains(&id.as_str())).collect();
+        assert!(
+            unhandled.is_empty(),
+            "these tray items have no handler in tray_event_handler: {unhandled:?}"
+        );
+
+        let orphaned: Vec<_> = HANDLED
+            .iter()
+            .filter(|id| !built.iter().any(|b| b == *id))
+            .collect();
+        assert!(
+            orphaned.is_empty(),
+            "these handlers exist but no menu item uses their id: {orphaned:?}"
+        );
+    }
+
+    #[test]
+    fn every_menu_item_has_a_non_empty_title() {
+        // 空标题会在菜单里显示成一个无法辨认的空行
+        for language in ALL_TRAY_MENUS {
+            let menu = tray_menu_of(language);
+            let titles = titles_in(&menu);
+            assert!(!titles.is_empty(), "the '{language}' tray menu has no visible titles");
+            let empty: Vec<_> = titles.iter().filter(|t| t.trim().is_empty()).collect();
+            assert!(empty.is_empty(), "the '{language}' tray menu has empty titles: {empty:?}");
+        }
+    }
+
+    #[test]
+    fn the_copy_submenu_title_is_localized_per_language() {
+        // Auto Copy 子菜单的标题是**逐语言本地化**的（17 个语言各不相同），
+        // 不要在测试里写死 "Auto Copy"——那会把「本来正确的本地化」判成失败。
+        //
+        // 定位方式：子菜单在 Debug 输出里出现在**它被 add_submenu 的位置**，
+        // 即第 3 项（index 2，前两项是 input_translate / clipboard_monitor）。
+        // 最初这里用了 `titles.last()`，结果取到的是 "Quit"，断言形同虚设
+        // ——变异测试（把 de 的子菜单标题换成英文）没有失败，才发现取错了位置。
+        for language in ALL_TRAY_MENUS {
+            let titles = titles_in(&tray_menu_of(language));
+            let submenu = titles
+                .get(2)
+                .unwrap_or_else(|| panic!("the '{language}' menu has too few titles: {titles:?}"));
+            assert!(
+                !submenu.trim().is_empty(),
+                "the '{language}' copy submenu title must not be empty"
+            );
+            if *language != "en" {
+                assert_ne!(
+                    submenu, "Auto Copy",
+                    "the '{language}' copy submenu still uses the hardcoded English title"
+                );
+            }
+        }
+
+        // 英文基准必须是 "Auto Copy"，否则上面那条 `!=` 就失去了参照
+        assert_eq!(
+            titles_in(&tray_menu_of("en")).get(2).map(String::as_str),
+            Some("Auto Copy")
+        );
+    }
 }
 
 fn tray_menu_he() -> tauri::SystemTrayMenu {
