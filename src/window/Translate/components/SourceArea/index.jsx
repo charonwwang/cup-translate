@@ -291,15 +291,18 @@ export default function SourceArea(props) {
         setDetectLanguage(await detect(text));
     };
 
-    let sourceTextChangeTimer = null;
+    // 用 useRef 而非局部变量：局部变量每次调用 changeSourceText 都重建，
+    // 无法清理上一次调用留下的未触发定时器（连续输入时旧定时器会叠加触发）
+    const sourceTextChangeTimerRef = useRef(null);
     const changeSourceText = async (text) => {
         setDetectLanguage('');
         await setSourceText(text);
         if (dynamicTranslate) {
-            if (sourceTextChangeTimer) {
-                clearTimeout(sourceTextChangeTimer);
+            if (sourceTextChangeTimerRef.current) {
+                clearTimeout(sourceTextChangeTimerRef.current);
             }
-            sourceTextChangeTimer = setTimeout(() => {
+            sourceTextChangeTimerRef.current = setTimeout(() => {
+                sourceTextChangeTimerRef.current = null;
                 detect_language(text).then(() => {
                     syncSourceText();
                 });

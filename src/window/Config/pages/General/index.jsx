@@ -77,6 +77,13 @@ export default function General() {
         invoke('font_list').then((v) => {
             setFontList(v);
         });
+        return () => {
+            // 组件卸载时清理未触发的 debounce 定时器
+            if (timer) {
+                clearTimeout(timer);
+                timer = null;
+            }
+        };
     }, []);
 
     return (
