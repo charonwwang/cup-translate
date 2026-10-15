@@ -143,8 +143,19 @@ fn browser_request_is_local(
     fetch_site: Option<&str>,
     port: u16,
 ) -> bool {
-    if !matches!(host, Some(value) if value == format!("127.0.0.1:{port}") || value == format!("localhost:{port}"))
-    {
+    // Host 头按 RFC 7230 §5.4 是**不区分大小写**的（reg-name）。
+    // 实测修复前：`Localhost:{port}` / `LOCALHOST:{port}` 都被判为非本机而 403。
+    // 那是失败关闭（fail-closed），不构成安全漏洞，但会让「把 Host 规范化为
+    // 首字母大写」的客户端与代理无法使用本地端点。
+    // 只对 Host 放开大小写：Origin / Referer 是 **URL**，其 scheme、host 与路径
+    // 的大小写敏感性与 Host 头不同，放宽会削弱 CSRF 防护，故保持精确比较。
+    let host_ok = matches!(
+        host,
+        Some(value)
+            if value.eq_ignore_ascii_case(&format!("127.0.0.1:{port}"))
+                || value.eq_ignore_ascii_case(&format!("localhost:{port}"))
+    );
+    if !host_ok {
         return false;
     }
     if let Some(origin) = origin {
@@ -440,6 +451,92 @@ mod tests {
         assert!(ocr_uses_internal_screenshot("/ocr_recognize?x=notfalse"));
         assert!(ocr_uses_internal_screenshot("/ocr_recognize?foo=false"));
         assert!(ocr_uses_internal_screenshot("/ocr_recognize?other=notfalse"));
+    }
+
+    /// Host 头不区分大小写（RFC 7230 §5.4）。
+    /// 修复前 `Localhost:{port}` / `LOCALHOST:{port}` 会被判为非本机并 403——
+    /// 方向是安全的（fail-closed），但违反协议、且会让规范化 Host 的客户端不可用。
+    #[test]
+    fn host_header_is_matched_case_insensitively() {
+        let port = 60828;
+        for host in [
+            "127.0.0.1:60828",
+            "Localhost:60828",
+            "LOCALHOST:60828",
+            "LoCaLhOsT:60828",
+        ] {
+            assert!(
+                browser_request_is_local(Some(host), None, None, None, port),
+                "{host} should be accepted: the Host header is case-insensitive"
+            );
+        }
+        // 大小写放宽**只针对 Host**：Origin 是 URL，必须精确比较
+        assert!(
+            !browser_request_is_local(
+                Some("localhost:60828"),
+                Some("TAURI://LOCALHOST"),
+                None,
+                None,
+                port
+            ),
+            "Origin must stay case-sensitive — loosening it would widen the CSRF surface"
+        );
+        // 放宽大小写不能顺带放宽其它判定
+        assert!(!browser_request_is_local(Some("LOCALHOST:60829"), None, None, None, port));
+        assert!(!browser_request_is_local(Some("LOCALHOST:60828"), None, None, Some("cross-site"), port));
+        assert!(!browser_request_is_local(
+            Some("LOCALHOST:60828"),
+            Some("https://evil.example"),
+            None,
+            None,
+            port
+        ));
+    }
+
+    /// 对抗性输入：这些是实测确认当前实现就能挡住的绕过尝试，
+    /// 固定下来防止以后重写这段逻辑时被打开。
+    #[test]
+    fn host_and_referer_spoofing_attempts_are_rejected() {
+        let port = 60828;
+        let host = Some("localhost:60828");
+        // 后缀伪装：localhost:1420.evil.com 以合法前缀开头
+        assert!(!browser_request_is_local(
+            host,
+            None,
+            Some("http://localhost:1420.evil.com/"),
+            None,
+            port
+        ));
+        // userinfo 伪装：localhost:1420@evil.com
+        assert!(!browser_request_is_local(
+            host,
+            None,
+            Some("http://localhost:1420@evil.com/"),
+            None,
+            port
+        ));
+        // 沙箱 iframe 发出的 Origin: null
+        assert!(!browser_request_is_local(host, Some("null"), None, None, port));
+        // Origin 指向自身 IP 而非 tauri 协议
+        assert!(!browser_request_is_local(
+            host,
+            Some("http://127.0.0.1:60828"),
+            None,
+            None,
+            port
+        ));
+        // Host 后缀伪装：127.0.0.1:60828.evil.com
+        assert!(!browser_request_is_local(
+            Some("127.0.0.1:60828.evil.com"),
+            None,
+            None,
+            None,
+            port
+        ));
+        // same-site 不是 same-origin，同样要拒
+        assert!(!browser_request_is_local(host, None, None, Some("same-site"), port));
+        // 完全缺失 Host 头
+        assert!(!browser_request_is_local(None, None, None, None, port));
     }
 
     #[test]
