@@ -1,4 +1,11 @@
 // 本地离线翻译（可选功能，不进默认引擎列表）：
+//
+// ⚠️ 本文件里**返回给前端**的错误字符串一律用英文，理由同 tts.rs：
+// 它们会经 `toast.error(e.toString())` 原样弹给用户（例如模型下载失败），
+// 而项目默认/回退语言是英文，其余 Rust 模块也都是英文。
+// 需要本地化的文案请走前端的 `t()`。
+// 例外：`license` 字段是**许可证署名元数据**（法律要求，必须准确），
+// 且前端并不读它（用 `services.translate.local_mt.license_<pair>`），保留原文。
 // 用 CTranslate2（ct2rs，内嵌 CT2 源码静态编译）跑 OPUS-MT en↔zh 的 CT2 int8 模型。
 // 模型按需下载到 <app_config_dir>/models/<dir>/，不随包分发：
 //   en→zh 派生自 Helsinki-NLP/opus-mt-en-zh（Apache-2.0）
@@ -83,7 +90,7 @@ fn model_spec(pair: &str) -> Result<ModelSpec, String> {
             ],
         }),
         _ => Err(format!(
-            "不支持的语向: {pair}（本地离线翻译仅支持 en-zh / zh-en）"
+            "Unsupported language pair: {pair} (local offline translation only supports en-zh / zh-en)"
         )),
     }
 }
@@ -92,14 +99,14 @@ fn model_spec(pair: &str) -> Result<ModelSpec, String> {
 fn file_sha256(path: &std::path::Path) -> Result<String, String> {
     use std::io::Read;
     let file =
-        std::fs::File::open(path).map_err(|e| format!("读取 {} 失败: {e}", path.display()))?;
+        std::fs::File::open(path).map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
     let mut reader = std::io::BufReader::new(file);
     let mut hasher = Sha256::new();
     let mut buf = vec![0u8; 64 * 1024];
     loop {
         let n = reader
             .read(&mut buf)
-            .map_err(|e| format!("读取 {} 失败: {e}", path.display()))?;
+            .map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
         if n == 0 {
             break;
         }
@@ -116,11 +123,13 @@ fn verify_model_checksums(dir: &std::path::Path, spec: &ModelSpec) -> Vec<String
         .filter_map(|(file, expected)| {
             let path = dir.join(file);
             if !path.is_file() {
-                return Some(format!("{file}: 文件缺失"));
+                return Some(format!("{file}: file is missing"));
             }
             match file_sha256(&path) {
                 Ok(actual) if actual.eq_ignore_ascii_case(expected) => None,
-                Ok(actual) => Some(format!("{file}: SHA256 不匹配（期望 {expected}，实际 {actual}）")),
+                Ok(actual) => Some(format!(
+                    "{file}: SHA256 mismatch (expected {expected}, got {actual})"
+                )),
                 Err(e) => Some(format!("{file}: {e}")),
             }
         })
@@ -185,7 +194,9 @@ impl DownloadGuard {
     fn acquire(pair: &str) -> Result<Self, String> {
         let mut locks = download_lock().lock().map_err(|e| e.to_string())?;
         if locks.contains_key(pair) {
-            return Err(format!("{pair} 模型正在下载/删除中，请稍候再试"));
+            return Err(format!(
+            "{pair} model is being downloaded/removed, please retry shortly"
+        ));
         }
         locks.insert(pair.to_string(), ());
         Ok(Self { pair: pair.to_string() })
@@ -223,7 +234,7 @@ pub async fn local_mt_download_model(app_handle: AppHandle, pair: String) -> Res
     let _guard = DownloadGuard::acquire(&pair)?;
     let spec = model_spec(&pair)?;
     let dir = model_dir(&app_handle, &pair)?;
-    std::fs::create_dir_all(&dir).map_err(|e| format!("创建模型目录失败: {e}"))?;
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create the model directory: {e}"))?;
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(900))
         .build()
@@ -238,7 +249,7 @@ pub async fn local_mt_download_model(app_handle: AppHandle, pair: String) -> Res
                 match file_sha256(&dest) {
                     Ok(actual) if actual.eq_ignore_ascii_case(sha) => continue,
                     Ok(_) | Err(_) => {
-                        log::warn!("[local_mt] {file} 已存在但校验失败，重新下载");
+                        log::warn!("[local_mt] {file} exists but failed verification, re-downloading");
                         let _ = std::fs::remove_file(&dest);
                     }
                 }
@@ -257,14 +268,14 @@ pub async fn local_mt_download_model(app_handle: AppHandle, pair: String) -> Res
                     // 流式写入磁盘：resp.bytes() 会把整个文件（model.bin 80MB）
                     // 加载进内存，用 chunk() 分块写入避免内存峰值
                     let mut dest_file = std::fs::File::create(&dest)
-                        .map_err(|e| format!("创建 {file} 失败: {e}"))?;
+                        .map_err(|e| format!("Failed to create {file}: {e}"))?;
                     let mut total: u64 = 0;
                     loop {
                         match resp.chunk().await {
                             Ok(Some(chunk)) => {
                                 dest_file
                                     .write_all(&chunk)
-                                    .map_err(|e| format!("写入 {file} 失败: {e}"))?;
+                                    .map_err(|e| format!("Failed to write {file}: {e}"))?;
                                 total += chunk.len() as u64;
                             }
                             Ok(None) => break,
@@ -282,13 +293,13 @@ pub async fn local_mt_download_model(app_handle: AppHandle, pair: String) -> Res
                             Ok(actual) if actual.eq_ignore_ascii_case(sha) => {}
                             Ok(actual) => {
                                 last_err = format!(
-                                    "{url}: SHA256 不匹配（期望 {sha}，实际 {actual}），疑似镜像被篡改或传输损坏"
+                                    "{url}: SHA256 mismatch (expected {sha}, got {actual}); the mirror may be tampered with or the transfer corrupted"
                                 );
                                 let _ = std::fs::remove_file(&dest);
                                 continue;
                             }
                             Err(e) => {
-                                last_err = format!("{url}: 校验失败: {e}");
+                                last_err = format!("{url}: verification failed: {e}");
                                 let _ = std::fs::remove_file(&dest);
                                 continue;
                             }
@@ -303,14 +314,17 @@ pub async fn local_mt_download_model(app_handle: AppHandle, pair: String) -> Res
         }
         if !done {
             return Err(format!(
-                "下载 {file} 失败（huggingface.co / hf-mirror.com 均不可达）: {last_err}"
+                "Failed to download {file} (neither huggingface.co nor hf-mirror.com is reachable): {last_err}"
             ));
         }
     }
     // 全部文件就绪后做一次整目录终检，兜底「单文件校验通过但目录整体损坏」的边界情况
     let bad = verify_model_checksums(&dir, &spec);
     if !bad.is_empty() {
-        return Err(format!("模型完整性校验未通过: {}", bad.join("; ")));
+        return Err(format!(
+            "Model integrity check failed: {}",
+            bad.join("; ")
+        ));
     }
     Ok(())
 }
@@ -324,7 +338,7 @@ pub async fn local_mt_delete_model(app_handle: AppHandle, pair: String) -> Resul
         .map_err(|e| e.to_string())?
         .remove(&pair);
     if dir.is_dir() {
-        std::fs::remove_dir_all(&dir).map_err(|e| format!("删除模型目录失败: {e}"))?;
+        std::fs::remove_dir_all(&dir).map_err(|e| format!("Failed to remove the model directory: {e}"))?;
     }
     Ok(())
 }
@@ -350,7 +364,7 @@ fn load_translator(
         .collect();
     if !missing.is_empty() {
         return Err(format!(
-            "本地离线翻译模型未下载（缺 {}），请在 设置 → 翻译服务 → 本地离线翻译 中下载",
+            "Local offline translation model is not downloaded (missing {}). Please download it in Settings -> Translation Services -> Local Offline Translation.",
             missing.join(", ")
         ));
     }
@@ -361,7 +375,7 @@ fn load_translator(
         ..Ct2Config::default()
     };
     let translator =
-        Translator::new(&dir, &config).map_err(|e| format!("加载翻译模型失败: {e}"))?;
+        Translator::new(&dir, &config).map_err(|e| format!("Failed to load the translation model: {e}"))?;
     let translator = Arc::new(translator);
     translator_cache()
         .lock()
@@ -391,12 +405,12 @@ pub async fn local_mt_translate(
         ),
         None => translator.translate_batch(&[text.as_str()], &Default::default(), None),
     };
-    let results = results.map_err(|e| format!("本地翻译失败: {e}"))?;
+    let results = results.map_err(|e| format!("Local translation failed: {e}"))?;
     let first = results
         .into_iter()
         .next()
         .map(|(translated, _score)| translated)
-        .ok_or_else(|| "本地翻译没有返回结果".to_string())?;
+        .ok_or_else(|| "Local translation returned no result".to_string())?;
     Ok(first)
 }
 
@@ -471,15 +485,15 @@ mod tests {
             license: "",
             expected_sha256: &[("model.bin", "0000000000000000000000000000000000000000000000000000000000000000")],
         };
-        // 缺文件 -> 报缺失
+        // 缺文件 -> 报缺失（错误串是英文，见文件顶部约定）
         let bad = verify_model_checksums(&dir, &spec);
         assert_eq!(bad.len(), 1);
-        assert!(bad[0].contains("缺失"));
+        assert!(bad[0].contains("missing"));
         // 写入内容但哈希不匹配 -> 报不匹配
         std::fs::write(dir.join("model.bin"), b"tampered").unwrap();
         let bad = verify_model_checksums(&dir, &spec);
         assert_eq!(bad.len(), 1);
-        assert!(bad[0].contains("不匹配"));
+        assert!(bad[0].contains("mismatch"));
         // 修正为真实哈希 -> 通过
         let real: &'static str = Box::leak(file_sha256(&dir.join("model.bin")).unwrap().into_boxed_str());
         let pinned: &'static [(&'static str, &'static str)] = Box::leak(

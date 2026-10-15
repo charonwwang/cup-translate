@@ -1,4 +1,11 @@
 // 本地 TTS（开箱即用、零配置、离线）：
+//
+// ⚠️ 本文件里**返回给前端**的错误字符串一律用英文。
+// 它们会经 TargetArea 的 `toast.error(e.toString())` 原样弹给用户，
+// 而本项目的默认/回退语言就是英文；其余 11 个 Rust 模块（cmd/config/hotkey/
+// server/window/system_ocr/…）也都是英文，中文会成为一个前后不一致的例外。
+// 需要本地化的用户可见文案请走 `notification.rs`（系统通知有 i18n 机制）
+// 或前端的 `t()`，不要在错误字符串里写中文。
 // 优先用 espeak-ng / espeak 合成 WAV 返回前端播放；
 // 若系统只有 speech-dispatcher（spd-say），由它直接播报（此时返回空字节，前端解码为空即静默跳过）；
 // 三者都找不到时给出可操作的错误提示（安装任一引擎或改用其他 TTS 服务）。
@@ -78,16 +85,16 @@ pub async fn tts_speak(text: String, lang: String) -> Result<Vec<u8>, String> {
             let status = Command::new(engine)
                 .args(["-v", &voice, "-w", &wav_path.to_string_lossy(), &text])
                 .status()
-                .map_err(|e| format!("调用 {engine} 失败: {e}"))?;
+                .map_err(|e| format!("Failed to run {engine}: {e}"))?;
             if !status.success() {
                 // 失败时也要清掉可能残留的半成品文件，避免污染临时目录
                 let _ = std::fs::remove_file(&wav_path);
                 return Err(format!(
-                    "{engine} 合成语音失败（退出码 {:?}）",
+                    "{engine} failed to synthesize speech (exit code {:?})",
                     status.code()
                 ));
             }
-            let bytes = std::fs::read(&wav_path).map_err(|e| format!("读取合成音频失败: {e}"))?;
+            let bytes = std::fs::read(&wav_path).map_err(|e| format!("Failed to read the synthesized audio: {e}"))?;
             let _ = std::fs::remove_file(&wav_path);
             Ok(bytes)
         }
@@ -96,12 +103,13 @@ pub async fn tts_speak(text: String, lang: String) -> Result<Vec<u8>, String> {
             Command::new("spd-say")
                 .args(["-l", &voice, &text])
                 .spawn()
-                .map_err(|e| format!("调用 spd-say 失败: {e}"))?;
+                .map_err(|e| format!("Failed to run spd-say: {e}"))?;
             Ok(Vec::new())
         }
         None => Err(
-            "未找到本地 TTS 引擎（espeak-ng / espeak / speech-dispatcher）。\
-             请安装其中之一（如 sudo apt install espeak-ng），或在设置中改用其他 TTS 服务"
+            "No local TTS engine found (espeak-ng / espeak / speech-dispatcher). \
+             Please install one of them (e.g. sudo apt install espeak-ng), \
+             or switch to another TTS service in Settings."
                 .to_string(),
         ),
     }
