@@ -341,7 +341,8 @@
                 "app_language": "Lingua dell'applicazione",
                 "transparent": "Effetto trasparente",
                 "title": "Impostazioni Generali",
-                "app_fallback_font": "Font di riserva"
+                "app_fallback_font": "Font di riserva",
+                "incomplete_translation": "Questa traduzione è incompleta; parte del testo viene mostrata in inglese."
             },
             "recognize": {
                 "delete_newline": "Elimina automaticamente la nuova riga",

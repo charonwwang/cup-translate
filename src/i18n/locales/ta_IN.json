@@ -133,7 +133,8 @@
                     "disable": "முடக்கு",
                     "ocr_recognize": "உரை ஏற்பு",
                     "ocr_translate": "திரைக்காட்சி மொழிபெயர்ப்பு"
-                }
+                },
+                "incomplete_translation": "This translation is incomplete; some text falls back to English."
             },
             "hotkey": {
                 "label": "ஆட்ச்கி",

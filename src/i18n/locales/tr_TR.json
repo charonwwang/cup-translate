@@ -9,6 +9,11 @@
                     "title": "Lingva"
                 }
             }
+        },
+        "config": {
+            "general": {
+                "incomplete_translation": "This translation is incomplete; some text falls back to English."
+            }
         }
     }
 }

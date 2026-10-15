@@ -218,7 +218,7 @@ src/                       前端 (React 18, JSX)
 │   ├── tts/               语音合成
 │   └── collection/        生词本
 ├── utils/                 invoke_plugin.js / store.js 等
-└── i18n/locales/          21 个语言 JSON
+└── i18n/locales/          21 个语言 JSON（完整度差异很大，见 §4.2）
 
 src-tauri/src/             Rust 后端（17 个模块）
 ├── main.rs                入口
@@ -241,6 +241,28 @@ src-tauri/src/             Rust 后端（17 个模块）
    **不在名单里的服务会被静默清出 `translate_service_list`**（2026-09-23 实测：`local_mt`
    加了前端忘了加 Rust，用户配置活不过一次重启）。反之，代码已删除的服务要从名单移除，
    让残留配置项被自动清掉。
+
+### 4.2 语言文件的完整度很不均匀（务必先看再改）
+21 个语言文件**不是**都完整。以 `en_US`（362 个 key）为基准实测：
+
+| key 数 | 语言 |
+|---|---|
+| 362 | `en_US` `zh_CN`（基准） |
+| ~343 | `zh_TW` `ar_AE` `fr_FR` `pt_BR` `pt_PT` `ru_RU` `ta_IN` `uk_UA` |
+| ~310–330 | `de_DE` `it_IT` |
+| ~220–300 | `he_IL` `es_ES` `ko_KR` |
+| ~70–98 | `tk_TM` `ja_JP` `fa_IR`（缺 70% 以上） |
+| **3** | `tr_TR` `nb_NO` `nn_NO`（只有 `Ok` / `Lingva` / 新增的提示语） |
+
+- **千万不要**因为某个语言缺 key 就顺手「补翻译」：本项目没有母语校验能力，
+  机翻会产出错误文案，比留空回退英文更糟（也违反 §9 红线）。
+- 信息缺失时 i18next 会**回退英文**（`src/i18n/index.jsx` 的 `fallbackLng`
+  最终以 `default: ['en']` 兜底），因此不会崩、不会显示原始 key。
+- UI 上对未完成的语言已加 `*` 标注并给出说明文案；名单见
+  `General/index.jsx` 的 `incompleteLanguages`。
+- `tests/locale-completeness.test.mjs` 守着这件事：完整度只增不减、
+  近乎为空的语言必须显式登记、所选语言必须已在 i18n 中注册。
+  **要下调某语言的 key 数基线，必须在改动里显式修改该测试的 `BASELINE`。**
 
 ---
 

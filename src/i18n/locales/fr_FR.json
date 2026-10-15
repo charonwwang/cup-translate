@@ -315,7 +315,8 @@
                 },
                 "app_font": "Police de caractères",
                 "app_fallback_font": "Police de caractères secondaire",
-                "dev_mode": "Mode développeur"
+                "dev_mode": "Mode développeur",
+                "incomplete_translation": "Cette traduction est incomplète ; certains textes s’affichent en anglais."
             },
             "translate": {
                 "bing": "Bing",

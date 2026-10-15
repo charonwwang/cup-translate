@@ -88,7 +88,8 @@
                     "translate": "Traducir",
                     "config": "Ajuste",
                     "ocr_translate": "Traducción de captura de pantalla"
-                }
+                },
+                "incomplete_translation": "Esta traducción está incompleta; parte del texto se muestra en inglés."
             },
             "translate": {
                 "title": "Ajustes de traducción",

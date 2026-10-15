@@ -89,7 +89,8 @@
                     "16": "標準（16px）"
                 },
                 "default_font": "預設",
-                "dev_mode": "開發者模式"
+                "dev_mode": "開發者模式",
+                "incomplete_translation": "該語言翻譯尚未完成，部分文字將回退為英文。"
             },
             "translate": {
                 "label": "翻譯設定",

@@ -70,6 +70,14 @@ export default function General() {
         tk: 'Türkmen',
     };
 
+    // 翻译完整度远低于 en_US（361 个 key）的语言。以 en_US 为基准，这些语言的
+    // key 数分别是：tr_TR / nb_NO / nn_NO 各 2 个、tk_TM 68、ja_JP 93、fa_IR 97。
+    // 选中它们时界面大部分会回退到英文，若不提示，用户会以为是 bug。
+    // 这里只在名称后加星号标注，**不改动语言文件本身**——补齐翻译需要母语校验，
+    // 不是靠机翻可以交付的东西。该列表由 tests/locale-completeness.test.mjs 守着。
+    const incompleteLanguages = ['tr', 'nb_no', 'nn_no', 'tk', 'ja', 'fa'];
+    const languageLabel = (key) => (incompleteLanguages.includes(key) ? `${languageName[key]} *` : languageName[key]);
+
     useEffect(() => {
         isEnabled().then((v) => {
             setAutoStart(v);
@@ -167,7 +175,7 @@ export default function General() {
                                         variant='bordered'
                                         startContent={<span className={`fi fi-${LanguageFlag[appLanguage]}`} />}
                                     >
-                                        {languageName[appLanguage]}
+                                        {languageLabel(appLanguage)}
                                     </Button>
                                 </DropdownTrigger>
                                 <DropdownMenu
@@ -183,130 +191,137 @@ export default function General() {
                                         key='zh_cn'
                                         startContent={<span className={`fi fi-${LanguageFlag.zh_cn}`} />}
                                     >
-                                        简体中文
+                                        {languageLabel('zh_cn')}
                                     </DropdownItem>
                                     <DropdownItem
                                         key='zh_tw'
                                         startContent={<span className={`fi fi-${LanguageFlag.zh_cn}`} />}
                                     >
-                                        繁體中文
+                                        {languageLabel('zh_tw')}
                                     </DropdownItem>
                                     <DropdownItem
                                         key='en'
                                         startContent={<span className={`fi fi-${LanguageFlag.en}`} />}
                                     >
-                                        English
+                                        {languageLabel('en')}
                                     </DropdownItem>
                                     <DropdownItem
                                         key='ja'
                                         startContent={<span className={`fi fi-${LanguageFlag.ja}`} />}
                                     >
-                                        日本語
+                                        {languageLabel('ja')}
                                     </DropdownItem>
                                     <DropdownItem
                                         key='ko'
                                         startContent={<span className={`fi fi-${LanguageFlag.ko}`} />}
                                     >
-                                        한국어
+                                        {languageLabel('ko')}
                                     </DropdownItem>
                                     <DropdownItem
                                         key='fr'
                                         startContent={<span className={`fi fi-${LanguageFlag.fr}`} />}
                                     >
-                                        Français
+                                        {languageLabel('fr')}
                                     </DropdownItem>
                                     <DropdownItem
                                         key='de'
                                         startContent={<span className={`fi fi-${LanguageFlag.de}`} />}
                                     >
-                                        Deutsch
+                                        {languageLabel('de')}
                                     </DropdownItem>
                                     <DropdownItem
                                         key='es'
                                         startContent={<span className={`fi fi-${LanguageFlag.es}`} />}
                                     >
-                                        Español
+                                        {languageLabel('es')}
                                     </DropdownItem>
                                     <DropdownItem
                                         key='ru'
                                         startContent={<span className={`fi fi-${LanguageFlag.ru}`} />}
                                     >
-                                        Русский
+                                        {languageLabel('ru')}
                                     </DropdownItem>
                                     <DropdownItem
                                         key='it'
                                         startContent={<span className={`fi fi-${LanguageFlag.it}`} />}
                                     >
-                                        Italiano
+                                        {languageLabel('it')}
                                     </DropdownItem>
                                     <DropdownItem
                                         key='tr'
                                         startContent={<span className={`fi fi-${LanguageFlag.tr}`} />}
                                     >
-                                        Türkçe
+                                        {languageLabel('tr')}
                                     </DropdownItem>
                                     <DropdownItem
                                         key='pt_pt'
                                         startContent={<span className={`fi fi-${LanguageFlag.pt_pt}`} />}
                                     >
-                                        Português
+                                        {languageLabel('pt_pt')}
                                     </DropdownItem>
                                     <DropdownItem
                                         key='pt_br'
                                         startContent={<span className={`fi fi-${LanguageFlag.pt_br}`} />}
                                     >
-                                        Português (Brasil)
+                                        {languageLabel('pt_br')}
                                     </DropdownItem>
                                     <DropdownItem
                                         key='nb_no'
                                         startContent={<span className={`fi fi-${LanguageFlag.nb_no}`} />}
                                     >
-                                        Norsk Bokmål
+                                        {languageLabel('nb_no')}
                                     </DropdownItem>
                                     <DropdownItem
                                         key='nn_no'
                                         startContent={<span className={`fi fi-${LanguageFlag.nn_no}`} />}
                                     >
-                                        Norsk Nynorsk
+                                        {languageLabel('nn_no')}
                                     </DropdownItem>
                                     <DropdownItem
                                         key='fa'
                                         startContent={<span className={`fi fi-${LanguageFlag.fa}`} />}
                                     >
-                                        فارسی
+                                        {languageLabel('fa')}
                                     </DropdownItem>
                                     <DropdownItem
                                         key='uk'
                                         startContent={<span className={`fi fi-${LanguageFlag.uk}`} />}
                                     >
-                                        Українська
+                                        {languageLabel('uk')}
                                     </DropdownItem>
                                     <DropdownItem
                                         key='ar'
                                         startContent={<span className={`fi fi-${LanguageFlag.ar}`} />}
                                     >
-                                        العربية
+                                        {languageLabel('ar')}
                                     </DropdownItem>
                                     <DropdownItem
                                         key='he'
                                         startContent={<span className={`fi fi-${LanguageFlag.he}`} />}
                                     >
-                                        עִבְרִית
+                                        {languageLabel('he')}
                                     </DropdownItem>
                                     <DropdownItem
                                         key='ta'
                                         startContent={<span className={`fi fi-${LanguageFlag.ta}`} />}
                                     >
-                                        தமிழ்
+                                        {languageLabel('ta')}
                                     </DropdownItem>
                                     <DropdownItem
                                         key='tk'
                                         startContent={<span className={`fi fi-${LanguageFlag.tk}`} />}
                                     >
-                                        Türkmen
+                                        {languageLabel('tk')}
                                     </DropdownItem>
                                 </DropdownMenu>
                             </Dropdown>
+                        )}
+                        {/* 带 * 的语言翻译尚未完成，选中后部分界面会显示英文。
+                            这是如实提示，不是错误——详见 languageLabel 的说明。 */}
+                        {incompleteLanguages.includes(appLanguage) && (
+                            <p className='text-tiny text-default-400 mt-1'>
+                                * {t('config.general.incomplete_translation')}
+                            </p>
                         )}
                     </div>
                     <div className='config-item'>

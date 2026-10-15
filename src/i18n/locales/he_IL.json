@@ -88,7 +88,8 @@
                 "server_port": "יציאת האזנה",
                 "server_port_change": "יציאת ההאזנה שונתה, אנא הפעל מחדש את האפליקציה כדי שהשינויים ייכנסו לתוקף",
                 "tray_click_event": "בלחיצה על סמל המגש",
-                "app_fallback_font": "גופן חילופי"
+                "app_fallback_font": "גופן חילופי",
+                "incomplete_translation": "This translation is incomplete; some text falls back to English."
             },
             "hotkey": {
                 "ocr_translate": "תרגם צילום מסך",

@@ -89,7 +89,8 @@
                     "config": "تفضيل",
                     "ocr_recognize": "التعرف على النص"
                 },
-                "tray_click_event": "حدث نقر دُرج النظام"
+                "tray_click_event": "حدث نقر دُرج النظام",
+                "incomplete_translation": "This translation is incomplete; some text falls back to English."
             },
             "translate": {
                 "label": "الترجمة",

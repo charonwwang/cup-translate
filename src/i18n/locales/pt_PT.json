@@ -315,7 +315,8 @@
                 "transparent": "Efeito de Transparência",
                 "title": "Configurações Gerais",
                 "app_fallback_font": "Fonte Reserva",
-                "dev_mode": "Modo de Programador"
+                "dev_mode": "Modo de Programador",
+                "incomplete_translation": "Esta tradução está incompleta; parte do texto aparece em inglês."
             },
             "translate": {
                 "bing": "Bing",

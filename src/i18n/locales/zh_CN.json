@@ -90,7 +90,8 @@
                     "disable": "禁用",
                     "ocr_recognize": "文字识别",
                     "ocr_translate": "截图翻译"
-                }
+                },
+                "incomplete_translation": "该语言翻译尚未完成，部分文字将回退为英文。"
             },
             "translate": {
                 "label": "翻译设置",

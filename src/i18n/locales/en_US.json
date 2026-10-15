@@ -90,7 +90,8 @@
                     "disable": "Disable",
                     "ocr_recognize": "Text Recognition",
                     "ocr_translate": "Screenshot Translation"
-                }
+                },
+                "incomplete_translation": "This translation is incomplete; some text falls back to English."
             },
             "translate": {
                 "label": "Translate",

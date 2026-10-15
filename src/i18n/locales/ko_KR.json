@@ -134,7 +134,8 @@
                     "disable": "비활성화",
                     "ocr_recognize": "문자 인식",
                     "ocr_translate": "스크린샷 번역"
-                }
+                },
+                "incomplete_translation": "이 번역은 미완성이며 일부 텍스트는 영어로 표시됩니다."
             },
             "translate": {
                 "label": "번역",

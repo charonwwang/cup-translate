@@ -50,7 +50,8 @@
                 "server_port_change": "リスニング・ポートが変更されました。変更を有効にするにはアプリケーションを再起動してください",
                 "app_language": "表示言語",
                 "app_font": "フォント",
-                "server_port": "リスニング・ポート"
+                "server_port": "リスニング・ポート",
+                "incomplete_translation": "この翻訳は未完成です。一部のテキストは英語で表示されます。"
             },
             "hotkey": {
                 "label": "ホットキー",

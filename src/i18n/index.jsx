@@ -30,8 +30,13 @@ i18n.use(initReactI18next).init({
         zh_cn: ['zh_tw'],
         pt_pt: ['pt_br'],
         pt_br: ['pt_pt'],
-        nb_no: ['nn_no'],
-        nn_no: ['nb_no'],
+        // nb_no / nn_no 此前互相指向对方，但两者都只有 2 个 key（Ok / Lingva），
+        // 这种互指**提供不了任何回退**——查 nb_no 缺失后转到 nn_no，而 nn_no
+        // 同样缺失，白绕一圈才落到 default。两者都没有内容时，直接回退英文，
+        // 少一次无意义的查找（结果相同，链路更清晰）。
+        // 将来补齐任一挪威语翻译后，可以恢复互指。
+        nb_no: ['en'],
+        nn_no: ['en'],
         default: ['en'],
     },
     debug: false,

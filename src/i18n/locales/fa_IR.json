@@ -85,7 +85,8 @@
                     "title": "اندازه فونت"
                 },
                 "app_font": "فونت",
-                "app_fallback_font": "فونت جایگزین"
+                "app_fallback_font": "فونت جایگزین",
+                "incomplete_translation": "This translation is incomplete; some text falls back to English."
             },
             "translate": {
                 "target": "مقصد",
