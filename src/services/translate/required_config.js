@@ -10,7 +10,10 @@ const REQUIRED_CONFIG_KEYS = {
     caiyun: ['token'],
     geminipro: ['apiKey', 'requestPath'],
     niutrans: ['apikey'],
-    openai: ['requestPath'],
+    // apiKey 是必需的：service 只有 openai / azure 两档，都是托管服务，没有「本地免 key」这一项。
+    // 只要求 requestPath 时，默认新建实例（apiKey 为 ''）会被判为「已配置」并真的发请求，
+    // 实测得到 HTTP 401——正是本闸门要拦下的「无效请求」。
+    openai: ['requestPath', 'apiKey'],
     ollama: ['requestPath'],
     tencent: ['secret_id', 'secret_key'],
     volcengine: ['appid', 'secret'],

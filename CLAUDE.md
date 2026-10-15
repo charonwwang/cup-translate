@@ -236,7 +236,14 @@ src-tauri/src/             Rust 后端（17 个模块）
 2. 在 `src/services/translate/index.jsx` 中 **import + export**（两步都要，缺一不生效）
 3. 在 `src/i18n/locales/*.json` 补引擎显示名（**21 个语言文件**，至少补 `en_US` 和 `zh_CN`）
 4. 引擎配置项在 `src/window/Config/` 对应页面注册
-5. **同步 `src-tauri/src/config.rs` 的 `builtin_translate_list`**（TTS 对应 `builtin_tts_list`）——
+5. **同步 `src/services/translate/required_config.js`**：需要凭据的引擎必须在这里登记
+   必需配置项，否则 `isServiceConfigured()` 会把「只填了地址、没填密钥」的实例判为
+   **已配置**并真的发出请求（`TargetArea` 的注释明确写着要「不发无效请求」）。
+   实测过：openai 只登记 `requestPath` 时，空 apiKey 的请求返回 **HTTP 401**。
+   免 key 引擎（google/yandex/…）不要登记——登记了会让开箱即用变成开箱即错。
+   `tests/service-config-gate.test.mjs` 有两条结构性护栏守着这件事：
+   一条比对「引擎 index.jsx 读取的凭据键」与「登记表」，一条用默认值验证闸门确实拦截。
+6. **同步 `src-tauri/src/config.rs` 的 `builtin_translate_list`**（TTS 对应 `builtin_tts_list`）——
    每次启动 `check_service_available()` 都按该白名单校验服务列表，
    **不在名单里的服务会被静默清出 `translate_service_list`**（2026-09-23 实测：`local_mt`
    加了前端忘了加 Rust，用户配置活不过一次重启）。反之，代码已删除的服务要从名单移除，
@@ -325,7 +332,7 @@ ci: 收敛上游发布流水线，避免误用上游身份发布
 
 测试以**回归护栏**为主：断言源码/配置中的关键契约（服务白名单同步、品牌标识、
 打包元数据、快捷键改键语义、快捷键「聚焦不落盘」、Tauri 命令注册、前后端事件名、
-翻译引擎配置闸门、错误提示与 toast 走 i18n、i18n key 能被解析、系统通知文案随语言切换、端口输入不产生 NaN 等）。**新增修复时优先补一条会失败的回归用例**
+翻译引擎配置闸门（含凭据必须登记）、错误提示与 toast 走 i18n、i18n key 能被解析、系统通知文案随语言切换、端口输入不产生 NaN 等）。**新增修复时优先补一条会失败的回归用例**
 （先确认它在改前失败、改后通过，避免写出永真断言）。
 
 仍需手工验证的部分：

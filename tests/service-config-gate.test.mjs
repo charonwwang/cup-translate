@@ -36,7 +36,10 @@ test('engines that require credentials are rejected until fully configured', asy
         ['caiyun', ['token']],
         ['geminipro', ['apiKey', 'requestPath']],
         ['niutrans', ['apikey']],
-        ['openai', ['requestPath']],
+        // openai 必须同时要地址和密钥：它只有 openai / azure 两档托管服务，
+        // 没有「本地免 key」选项，缺 apiKey 时请求必然 401（已实测）。
+        ['openai', ['requestPath', 'apiKey']],
+        // ollama 则相反——它本来就是本地服务，requestPath 就是全部所需。
         ['ollama', ['requestPath']],
         ['tencent', ['secret_id', 'secret_key']],
         ['volcengine', ['appid', 'secret']],
@@ -72,19 +75,21 @@ test('a non-string or empty value never counts as configured', async () => {
     // 空配置就会通过闸门并发出无效请求。
     for (const value of ['', 0, 123, true, false, {}, [], null, undefined]) {
         assert.equal(
-            isServiceConfigured('openai', { requestPath: value }),
+            isServiceConfigured('ollama', { requestPath: value }),
             false,
-            `openai.requestPath = ${JSON.stringify(value)} must not count as configured`
+            `ollama.requestPath = ${JSON.stringify(value)} must not count as configured`
         );
     }
     // 非空字符串才算配置
-    assert.equal(isServiceConfigured('openai', { requestPath: 'http://127.0.0.1:11434' }), true);
+    assert.equal(isServiceConfigured('ollama', { requestPath: 'http://127.0.0.1:11434' }), true);
 });
 
 test('a missing or null instance config is handled without throwing', async () => {
     // 全新实例的配置可能还没落盘（null）；此处不能抛错
     assert.equal(isServiceConfigured('openai', null), false);
     assert.equal(isServiceConfigured('openai', undefined), false);
+    assert.equal(isServiceConfigured('ollama', null), false);
+    assert.equal(isServiceConfigured('ollama', undefined), false);
     assert.equal(isServiceConfigured('google', null), true);
     assert.equal(isServiceConfigured('google', undefined), true);
 });
@@ -210,5 +215,90 @@ test('the engine list contains no leftover files from deleted engines', async ()
     const names = dirs.filter((d) => d.isDirectory()).map((d) => d.name);
     for (const dead of ['bing', 'ecdict', 'lingva']) {
         assert.ok(!names.includes(dead), `the deleted engine directory '${dead}' is back`);
+    }
+});
+
+test('no engine reads a credential that the gate does not require', async () => {
+    // 这条护栏针对本轮发现的缺口：openai 的 index.jsx 用 apiKey 组装
+    // `Authorization: Bearer ${apiKey}`，但登记表只要求 requestPath，
+    // 于是空密钥的实例被判为「已配置」并真的发请求（实测 401）——
+    // 正是 TargetArea 注释里写的「不发无效请求」要避免的情况。
+    //
+    // 做法：从每个已登记引擎的 index.jsx 里抽出它**解构出来的配置键**，
+    // 凡是名字看起来是凭据的（key/token/secret/password…），
+    // 就必须出现在该引擎的必需项里（或者显式列在下面的豁免表中）。
+    const CREDENTIAL_LIKE = /^(?:.*(?:apiKey|authKey|token|secret|password|apikey|accesskey|appid|appkey|key))$/i;
+    const source = await readFile('src/services/translate/required_config.js', 'utf8');
+    const listBody = source.slice(
+        source.indexOf('const REQUIRED_CONFIG_KEYS'),
+        source.indexOf('};', source.indexOf('const REQUIRED_CONFIG_KEYS'))
+    );
+    const registered = new Map(
+        [...listBody.matchAll(/(\w+):\s*\[([^\]]*)\]/g)].map((m) => [
+            m[1],
+            new Set([...m[2].matchAll(/'([^']+)'/g)].map((k) => k[1])),
+        ])
+    );
+
+    // 某些引擎的凭据是可选的（空值时走免认证路径），这些需要显式豁免并说明理由。
+    const OPTIONAL_CREDENTIALS = new Set([
+        'transmart.username', // 空时匿名可用
+        'transmart.token',
+    ]);
+
+    const offenders = [];
+    for (const [engine, required] of registered) {
+        const impl = await readFile(`src/services/translate/${engine}/index.jsx`, 'utf8');
+        // 取 `let { a, b, c } = config;` / `const { ... } = config` 里的键
+        const names = new Set();
+        for (const m of impl.matchAll(/(?:const|let|var)\s*\{([^}]*)\}\s*=\s*config/g)) {
+            for (const raw of m[1].split(',')) {
+                const name = raw.trim().split(/[:=]/)[0].trim();
+                if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) names.add(name);
+            }
+        }
+        for (const name of names) {
+            if (!CREDENTIAL_LIKE.test(name)) continue;
+            if (required.has(name)) continue;
+            if (OPTIONAL_CREDENTIALS.has(`${engine}.${name}`)) continue;
+            offenders.push(`${engine} reads config.${name} but the gate does not require it`);
+        }
+    }
+
+    assert.deepEqual(
+        offenders,
+        [],
+        `these engines can send unauthenticated requests because the gate lets them through:\n${offenders.join('\n')}`
+    );
+});
+
+test('every registered engine really rejects the default instance config', async () => {
+    // 端到端一点：对每个登记了必需项的引擎，用它的 Config.jsx 默认值构造配置，
+    // 断言闸门判为「未配置」。默认值 = 用户新建实例后、什么都还没填的状态。
+    const source = await readFile('src/services/translate/required_config.js', 'utf8');
+    const listBody = source.slice(
+        source.indexOf('const REQUIRED_CONFIG_KEYS'),
+        source.indexOf('};', source.indexOf('const REQUIRED_CONFIG_KEYS'))
+    );
+    const engines = [...listBody.matchAll(/(\w+):\s*\[/g)].map((m) => m[1]);
+
+    for (const engine of engines) {
+        const configSource = await readFile(`src/services/translate/${engine}/Config.jsx`, 'utf8');
+        // 抽出 useConfig 的默认值对象里的 `key: ''` 形式（空串即未填写）
+        const emptyKeys = new Set([...configSource.matchAll(/(\w+):\s*''/g)].map((m) => m[1]));
+        const required = new Set(
+            (listBody.match(new RegExp(`${engine}:\\s*\\[([^\\]]*)\\]`))?.[1] ?? '').matchAll(/'([^']+)'/g)
+        );
+        const requiredKeys = [...required].map((m) => m[1]);
+        if (requiredKeys.length === 0) continue;
+
+        // 只要其中任一必需项在默认值里是空串，默认实例就必须被判为未配置
+        const hasEmptyRequired = requiredKeys.some((k) => emptyKeys.has(k));
+        if (!hasEmptyRequired) continue;
+        assert.equal(
+            isServiceConfigured(engine, Object.fromEntries(requiredKeys.map((k) => [k, '']))),
+            false,
+            `'${engine}' has empty defaults for its required keys but the gate accepts them`
+        );
     }
 });
