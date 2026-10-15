@@ -125,3 +125,50 @@ test('the proxy host and port are required together, matching the Rust guard', a
     assert.match(body, /u16::try_from/, 'set_proxy must bound the port to u16');
     assert.match(body, /\*value != 0/, 'set_proxy must reject port 0');
 });
+
+test('the WebDav backup button refuses to run without a URL and account', async () => {
+    // 修复前 webdav 分支**没有任何前置校验**：空 url 被原样传给 Rust，
+    // 最终用户看到的是 reqwest 的原始报错（用真实 url crate 实测过）：
+    //   url=''    -> `relative URL without a base`
+    //   url='   ' -> `invalid international domain name`
+    // 对「忘了填地址」这件事毫无提示作用；而 aliyun 分支早就有对照的
+    // aliyun_login_first 提示。
+    const source = await readFile('src/window/Config/pages/Backup/index.jsx', 'utf8');
+    const code = source.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+
+    assert.match(code, /isFilledString\s*\(\s*davUrl\s*\)/, 'the WebDav URL must be validated');
+    assert.match(code, /isFilledString\s*\(\s*davUserName\s*\)/, 'the WebDav account must be validated');
+    assert.match(
+        code,
+        /t\('config\.backup\.webdav_not_configured'\)/,
+        'the user must get a localized explanation, not a raw reqwest error'
+    );
+    assert.match(
+        source,
+        /import \{[^}]*isFilledString[^}]*\} from '[^']*utils\/configValue'/,
+        'the helper must be imported'
+    );
+
+    // 校验必须发生在真正发起请求之前
+    const checkAt = code.indexOf('isFilledString(davUrl)');
+    const callAt = code.indexOf('webdav.backup(');
+    assert.notEqual(checkAt, -1, 'the check must exist');
+    assert.notEqual(callAt, -1, 'the backup call must exist');
+    assert.ok(checkAt < callAt, 'the guard must run before the request is sent');
+});
+
+test('the WebDav prompt is a real localized string, not a key or an English copy', async () => {
+    // 新增 key 必须真的存在于两个基准语言里，且两边文案不同
+    // （zh_CN 复用英文属于「假本地化」，locale 相关测试会拦，这里就近断言一次）。
+    const en = JSON.parse(await readFile('src/i18n/locales/en_US.json', 'utf8'));
+    const zh = JSON.parse(await readFile('src/i18n/locales/zh_CN.json', 'utf8'));
+    const key = 'webdav_not_configured';
+    const enText = en.translation.config.backup[key];
+    const zhText = zh.translation.config.backup[key];
+    assert.equal(typeof enText, 'string', `en_US must define config.backup.${key}`);
+    assert.equal(typeof zhText, 'string', `zh_CN must define config.backup.${key}`);
+    assert.ok(enText.trim() !== '', 'the English prompt must not be empty');
+    assert.ok(zhText.trim() !== '', 'the Chinese prompt must not be empty');
+    assert.notEqual(enText, zhText, 'zh_CN must not simply reuse the English text');
+    assert.ok(/[\u4e00-\u9fff]/.test(zhText), 'the Chinese prompt should actually contain Chinese characters');
+});

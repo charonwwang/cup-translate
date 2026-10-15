@@ -15,6 +15,7 @@ import { Avatar, Tooltip } from '@nextui-org/react';
 import React, { useEffect, useState } from 'react';
 
 import { useConfig, useToastStyle } from '../../../../hooks';
+import { isFilledString } from '../../../../utils/configValue';
 import { osType } from '../../../../utils/env';
 import * as webdav from './utils/webdav';
 import WebDavModal from './WebDavModal';
@@ -57,6 +58,18 @@ export default function Backup() {
         let result;
         switch (backupType) {
             case 'webdav':
+                // 与 aliyun 分支同样的前置校验：WebDav 地址/账号没填时直接拦下。
+                // 修复前这里**没有任何校验**，空 url 会被原样传给 Rust，
+                // 最终用户看到的是 reqwest 的原始报错
+                // `relative URL without a base`（纯空白 url 则是
+                // `invalid international domain name`）——对「忘了填地址」这件事
+                // 毫无提示作用。
+                // 用 isFilledString 而不是 `=== ''`：纯空白同样要被拦下。
+                if (!isFilledString(davUrl) || !isFilledString(davUserName)) {
+                    toast.error(t('config.backup.webdav_not_configured'), { style: toastStyle });
+                    setUploading(false);
+                    return;
+                }
                 result = webdav.backup(davUrl, davUserName, davPassword, fileName + '.zip');
                 break;
             case 'local':

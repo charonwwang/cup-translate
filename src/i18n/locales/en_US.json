@@ -197,6 +197,7 @@
                 "username": "Username",
                 "password": "Password",
                 "logout": "Logout",
+                "webdav_not_configured": "Please fill in the WebDav URL and account first.",
                 "aliyun_login_first": "Please scan the code to log in first.",
                 "login_success": "Login Success",
                 "backup": "Backup",
