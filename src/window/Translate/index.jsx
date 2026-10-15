@@ -47,6 +47,21 @@ const unlistenBlur = () => {
     });
 };
 
+// 插件列表变更监听（独立变量）。
+// 注意：listen() 返回 Promise（恒为真值），**不能**用 `if (!unlisten)` 之类
+// 的判空来防重复订阅——那条件永远为假，会导致订阅从未建立。
+// 这里用独立的模块级变量保存，卸载时显式取消。
+let unlistenReloadPluginList = null;
+const unlistenReloadPluginListEvent = () => {
+    const pending = unlistenReloadPluginList;
+    unlistenReloadPluginList = null;
+    if (pending) {
+        pending.then((f) => {
+            f();
+        });
+    }
+};
+
 // 监听 focus 事件取消 blurTimeout 时间之内的关闭窗口
 void listen('tauri://focus', () => {
     info('Focus');
@@ -206,9 +221,13 @@ export default function Translate() {
 
     useEffect(() => {
         loadPluginList();
-        if (!unlisten) {
-            unlisten = listen('reload_plugin_list', loadPluginList);
-        }
+        // 每次挂载都重新订阅：listen() 返回 Promise（恒真值），
+        // 旧写法 `if (!unlisten)` 永远不成立，导致插件安装/卸载后
+        // 翻译窗口的 pluginList 一直停留在旧数据。
+        unlistenReloadPluginList = listen('reload_plugin_list', loadPluginList);
+        return () => {
+            unlistenReloadPluginListEvent();
+        };
     }, []);
 
     const loadServiceInstanceConfigMap = async () => {

@@ -61,7 +61,11 @@ export default function SourceArea(props) {
             setWindowType('[INPUT_TRANSLATE]');
             appWindow.show();
             appWindow.setFocus();
-            setSourceText('', true);
+            // setSourceText 来自 useSyncAtom，是普通 useState setter（只接受一个参数），
+            // 且不会自动写回 sourceTextAtom。必须显式 syncSourceText()，
+            // 否则界面清空了、atom 里还留着上一次的文本，TargetArea 会继续显示旧译文。
+            setSourceText('');
+            syncSourceText();
         } else if (text === '[IMAGE_TRANSLATE]') {
             setWindowType('[IMAGE_TRANSLATE]');
             const base64 = await invoke('get_base64');
