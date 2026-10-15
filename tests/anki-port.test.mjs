@@ -124,12 +124,25 @@ test('the settings input validates before writing to config', async () => {
     assert.ok(!/port:\s*value,/.test(source), 'Config.jsx must not write the raw input value into the config');
 });
 
-test('the fallback constant matches Anki Connect s actual default port', async () => {
-    // 8765 是 Anki Connect 的默认端口；同时确认设置页的默认值也一致，
-    // 否则「清空输入框」与「从未设置过」会连到不同端口。
+test('the fallback constant matches Anki Connect s actual default port', () => {
+    // 8765 是 Anki Connect 的默认端口。
     assert.equal(ANKI_DEFAULT_PORT, 8765);
+});
+
+test('the settings page reuses ANKI_DEFAULT_PORT instead of repeating 8765', async () => {
+    // 修复前 Config.jsx 直接写 `port: 8765`，与 port.js 的 ANKI_DEFAULT_PORT
+    // 是**同一语义的两份字面量**。原护栏只断言 `port: 8765` 出现，
+    // 于是它同时做两件坏事：既把 8765 又写了一遍（改默认值时要改三处），
+    // 也**无法阻止**有人重新引入字面量。
+    // 现在改为断言「用的是共享常量」——这才是真正要守的契约。
     const source = await readFile('src/services/collection/anki/Config.jsx', 'utf8');
-    assert.match(source, /port:\s*8765/, "Config.jsx's default must match ANKI_DEFAULT_PORT");
+    assert.match(source, /port:\s*ANKI_DEFAULT_PORT/, 'Config.jsx must use the shared ANKI_DEFAULT_PORT constant');
+    assert.ok(!/port:\s*\d+/.test(source), 'Config.jsx must not hard-code a numeric port again');
+    assert.match(
+        source,
+        /import\s*\{[^}]*ANKI_DEFAULT_PORT[^}]*\}\s*from\s*'\.\/port'/,
+        'ANKI_DEFAULT_PORT must be imported from the anki port module'
+    );
 });
 
 test('the empty-string and trim branches are equivalent redundancy, not load-bearing', () => {

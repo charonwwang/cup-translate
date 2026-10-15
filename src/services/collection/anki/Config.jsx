@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 
 import { useConfig } from '../../../hooks';
 import { nextPortValue } from '../../../utils/port';
+import { ANKI_DEFAULT_PORT } from './port';
 import { useToastStyle } from '../../../hooks';
 import { collection } from './index';
 
@@ -18,7 +19,7 @@ export function Config(props) {
         instanceKey,
         {
             [INSTANCE_NAME_CONFIG_KEY]: t('services.collection.anki.title'),
-            port: 8765,
+            port: ANKI_DEFAULT_PORT,
         },
         { sync: false }
     );
