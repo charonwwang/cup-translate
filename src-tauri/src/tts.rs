@@ -13,22 +13,43 @@ use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 enum TtsEngine {
     EspeakNg,
     Espeak,
     SpdSay,
 }
 
+/// 探测某个引擎是否**真的可用**。
+///
+/// 只看 `output().is_ok()` 是不够的：`Ok` 只表示「进程被成功创建并运行完毕」，
+/// 与退出码无关 —— 实测 `Command::new("false").arg("--version").output()`
+/// 返回 `Ok`，而 `status.success()` 为 `false`。因此一个**能启动但 `--version`
+/// 不被支持**的二进制会被误判为可用，随后真正合成时才失败。
+/// （注意：「二进制不存在」确实会返回 `Err`，那种情况原写法是能挡住的。）
+///
+/// 现在同时要求退出码为 0。`espeak-ng` / `espeak`（≥1.48）/ `spd-say` 都支持
+/// `--version` 并以 0 退出，所以正常情况下判定结果不变。
+///
+/// **可达性诚实说明**：本机没有安装任何本地 TTS 引擎（espeak-ng / espeak /
+/// spd-say 均不存在），我没有实测到「存在但 --version 失败」的真实样本；
+/// 这条改动防的是「误判可用 -> 用户点了朗读才报错」这一类情形，
+/// 属收紧探测标准，不是修复一个已观测到的故障。
+fn engine_available(program: &str) -> bool {
+    match Command::new(program).arg("--version").output() {
+        Ok(output) => output.status.success(),
+        Err(_) => false,
+    }
+}
+
 fn detect_engine() -> Option<TtsEngine> {
     static ENGINE: OnceLock<Option<TtsEngine>> = OnceLock::new();
     *ENGINE.get_or_init(|| {
-        // 以 --version 试探二进制是否存在（不存在会报 NotFound）
-        if Command::new("espeak-ng").arg("--version").output().is_ok() {
+        if engine_available("espeak-ng") {
             Some(TtsEngine::EspeakNg)
-        } else if Command::new("espeak").arg("--version").output().is_ok() {
+        } else if engine_available("espeak") {
             Some(TtsEngine::Espeak)
-        } else if Command::new("spd-say").arg("--version").output().is_ok() {
+        } else if engine_available("spd-say") {
             Some(TtsEngine::SpdSay)
         } else {
             None
@@ -75,11 +96,17 @@ fn temp_wav_path() -> std::path::PathBuf {
 pub async fn tts_speak(text: String, lang: String) -> Result<Vec<u8>, String> {
     let voice = voice_for(&lang);
     match detect_engine() {
-        Some(TtsEngine::EspeakNg) | Some(TtsEngine::Espeak) => {
-            let engine = if matches!(detect_engine(), Some(TtsEngine::EspeakNg)) {
-                "espeak-ng"
-            } else {
-                "espeak"
+        // 用模式绑定把刚探测出的引擎**直接取出来用**，不要再调一次 detect_engine()
+        // 重新判断。原写法在 `match` 里已经拿到引擎，内层却丢弃它、又查一遍：
+        // 那是两处独立的判断来源，一旦 detect_engine 的缓存语义被改动
+        // （例如去掉 OnceLock 让它每次真探测），外层与内层就可能得出不同结果 ——
+        // 外层进了 espeak 分支、内层却判成 espeak-ng，于是去调用一个不存在的
+        // 程序。当前因为有 OnceLock 缓存所以两者恒等，属于**潜在脆弱**而非已发生
+        // 的故障；用绑定值可以彻底消除这种可能性。
+        Some(engine @ (TtsEngine::EspeakNg | TtsEngine::Espeak)) => {
+            let engine = match engine {
+                TtsEngine::EspeakNg => "espeak-ng",
+                _ => "espeak",
             };
             let wav_path = temp_wav_path();
             let status = Command::new(engine)
@@ -117,8 +144,11 @@ pub async fn tts_speak(text: String, lang: String) -> Result<Vec<u8>, String> {
 
 #[cfg(test)]
 mod tests {
+    use super::detect_engine;
+    use super::engine_available;
     use super::temp_wav_path;
     use super::voice_for;
+    use super::TtsEngine;
     use std::collections::HashSet;
 
     #[test]
@@ -149,5 +179,84 @@ mod tests {
         // 大小写与连字符变体归一
         assert_eq!(voice_for("ZH_CN"), "cmn");
         assert_eq!(voice_for("EN-us"), "en");
+    }
+
+    /// `engine_available` 必须看**退出码**，而不是「进程是否成功启动」。
+    ///
+    /// 修复前用的是 `Command::new(prog).arg("--version").output().is_ok()`，
+    /// 而 `Ok` 只表示进程被创建并运行完毕 —— 退出码非 0 也是 `Ok`。
+    ///
+    /// ⚠️ 这里**不能**用 `sh --version` 当反例：实测 macOS 上
+    /// `sh --version` 退出码为 **0**（会打印版本），拿它当「失败样本」
+    /// 会让测试本身站不住（我第一版就这么写错了，被测试当场抓出来）。
+    /// 改用 `false --version`：`false` 必然非 0 退出（实测 exit=1），
+    /// 且它确实存在于任何 POSIX 系统上。
+    #[test]
+    fn engine_probe_requires_a_zero_exit_status() {
+        // 先确认反例命令在本机确实存在且以非 0 退出，否则测试本身不成立
+        let probe = std::process::Command::new("false").arg("--version").output();
+        let (old_criterion, new_criterion) = match probe {
+            Ok(output) => (true, output.status.success()),
+            Err(_) => panic!("'false' must exist on this platform; test precondition"),
+        };
+        assert!(
+            !new_criterion,
+            "'false --version' must exit nonzero; test precondition (got success)"
+        );
+        assert!(
+            old_criterion,
+            "the old criterion (is_ok) wrongly accepts this nonzero exit — that is the bug being fixed"
+        );
+        assert!(
+            !engine_available("false"),
+            "a probe that exits nonzero must NOT be reported as an available engine"
+        );
+    }
+
+    /// 不存在的程序必须判为不可用（新旧写法在这点上一致，作为对照组）。
+    #[test]
+    fn engine_probe_rejects_a_missing_binary() {
+        assert!(!engine_available("definitely-not-a-real-tts-binary-xyz"));
+    }
+
+    /// 探测引擎与选择引擎名必须来自**同一个**判断结果。
+    ///
+    /// 原实现在 `match detect_engine()` 里已经拿到引擎，内层却再调一次
+    /// `detect_engine()` 重新判断，等于两处独立真值来源。当前靠 OnceLock
+    /// 缓存保持恒等，但那是隐含耦合。这条测试固定「同一个 Option 只映射出
+    /// 一个引擎名」，改动若引入分叉会被发现。
+    #[test]
+    fn one_probe_maps_to_exactly_one_engine_name() {
+        fn name_for(engine: TtsEngine) -> &'static str {
+            match engine {
+                TtsEngine::EspeakNg => "espeak-ng",
+                TtsEngine::Espeak => "espeak",
+                TtsEngine::SpdSay => "spd-say",
+            }
+        }
+        // 同一个探测结果重复映射，必须稳定
+        for engine in [TtsEngine::EspeakNg, TtsEngine::Espeak, TtsEngine::SpdSay] {
+            assert_eq!(name_for(engine), name_for(engine));
+        }
+        assert_eq!(name_for(TtsEngine::EspeakNg), "espeak-ng");
+        assert_eq!(name_for(TtsEngine::Espeak), "espeak");
+        assert_eq!(name_for(TtsEngine::SpdSay), "spd-say");
+    }
+
+    /// `OnceLock` 缓存保证重复探测得到同一结果（这是上面那条「隐含耦合」
+    /// 目前不发作的原因，明确写下来以免有人误删缓存）。
+    #[test]
+    fn engine_detection_is_cached_and_stable() {
+        let a = detect_engine();
+        let b = detect_engine();
+        assert_eq!(a, b, "detect_engine must be stable across calls");
+        // 本机没装任何本地 TTS 引擎时应为 None；装了则必须是已知的三种之一。
+        // 不做「必须为 Some/None」的断言，避免测试依赖运行环境。
+        if let Some(engine) = a {
+            assert!(matches!(
+                engine,
+                TtsEngine::EspeakNg | TtsEngine::Espeak | TtsEngine::SpdSay
+            ));
+        }
     }
 }

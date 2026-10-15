@@ -200,3 +200,85 @@ test('voice_for normalization matches the Rust implementation', async () => {
     assert.equal(enumByKey.has('yue'), false, 'local_tts intentionally has no yue key');
     assert.equal(voiceFor('yue'), 'cmn');
 });
+
+// ── 本轮新增：TTS 引擎探测的两条护栏（源码级，因为需要真实外部程序才可运行）──
+
+/**
+ * 背景（实测）：`tts.rs` 的 `detect_engine()` 原来用
+ * `Command::new(prog).arg("--version").output().is_ok()` 判断引擎是否可用。
+ * 但 `Ok` 只表示「进程被成功创建并运行完毕」，**与退出码无关** ——
+ * 实测 `Command::new("false").arg("--version").output()` 返回 `Ok`，
+ * 而 `status.success()` 为 `false`。于是一个能启动、但 `--version`
+ * 不被支持（或任何以非 0 退出）的二进制会被误判为可用，
+ * 用户点「朗读」时才真正失败。
+ * （对照：「二进制不存在」会返回 `Err`，原写法能挡住那一种。）
+ *
+ * 修复：新增 `engine_available()`，要求退出码为 0。
+ * 行为契约由 Rust 单测 `engine_probe_requires_a_zero_exit_status` 覆盖；
+ * 这里只锁「不再退回 is_ok()」这条源码形态。
+ */
+test('tts engine probing checks the exit status, not merely that the process spawned', async () => {
+    const source = await readFile(RUST_TTS, 'utf8');
+    const code = source
+        .replace(/^\s*\/\/\/.*$/gm, '')
+        .replace(/^\s*\/\/.*$/gm, '')
+        .split(/#\[cfg\(test\)\]/)[0];
+
+    assert.doesNotMatch(
+        code,
+        /\.output\(\)\s*\.is_ok\(\)/,
+        'is_ok() ignores the exit code: a binary that exits nonzero would count as available'
+    );
+    assert.match(code, /fn engine_available\(program: &str\) -> bool/, 'must funnel all probes through one helper');
+    assert.match(code, /output\.status\.success\(\)/, 'the probe must require a zero exit status');
+    // 三个候选引擎都必须走同一条判据，不允许某个分支偷偷用别的写法
+    for (const engine of ['espeak-ng', 'espeak', 'spd-say']) {
+        assert.match(code, new RegExp(`engine_available\\("${engine}"\\)`), `${engine} must use engine_available`);
+    }
+    // 反向自检：确认剥注释后仍有实质内容
+    assert.ok(code.length > 2000, `stripped source looks too small: ${code.length} bytes`);
+});
+
+/**
+ * 背景：原实现在 `match detect_engine()` 里**已经拿到**引擎，内层却再调一次
+ * `detect_engine()` 重新判断：
+ *
+ *     match detect_engine() {
+ *         Some(TtsEngine::EspeakNg) | Some(TtsEngine::Espeak) => {
+ *             let engine = if matches!(detect_engine(), Some(TtsEngine::EspeakNg)) { ... }
+ *
+ * 这是两处独立的真值来源。当前 `OnceLock` 缓存让两者恒等，所以**没有**已知故障；
+ * 但这属隐含耦合 —— 一旦缓存语义被改动（例如去掉 OnceLock 让它每次真探测），
+ * 外层可能进 espeak 分支而内层判成 espeak-ng，于是去调用一个不存在的程序。
+ * 现在改用模式绑定 `Some(engine @ (...))`，从根上消除这种可能。
+ *
+ * 诚实说明：本机没有安装任何本地 TTS 引擎，无法构造出真实的分叉场景；
+ * 这条防的是脆弱性，不是已观测到的故障。
+ */
+test('tts_speak uses the engine it just probed instead of probing again', async () => {
+    const source = await readFile(RUST_TTS, 'utf8');
+    const code = source
+        .replace(/^\s*\/\/\/.*$/gm, '')
+        .replace(/^\s*\/\/.*$/gm, '')
+        .split(/#\[cfg\(test\)\]/)[0];
+
+    // 生产代码里 detect_engine() 只应出现两次：定义处 + tts_speak 里那一次
+    const calls = code.match(/detect_engine\(\)/g) ?? [];
+    assert.equal(
+        calls.length,
+        2,
+        `detect_engine() should be defined once and called once in production code, found ${calls.length}`
+    );
+    // 必须用模式绑定取出引擎
+    assert.match(
+        code,
+        /Some\(engine @ \(TtsEngine::EspeakNg \| TtsEngine::Espeak\)\)/,
+        'the match must bind the engine so there is a single source of truth'
+    );
+    // 不允许再出现「用 matches! 重新判断探测结果」的写法
+    assert.doesNotMatch(
+        code,
+        /matches!\(detect_engine\(\)/,
+        're-probing inside the match discards the value already bound by it'
+    );
+});
