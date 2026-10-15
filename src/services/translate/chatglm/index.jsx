@@ -90,7 +90,12 @@ export async function translate(text, from, to, options = {}) {
             }
         };
 
-        await processChatStream(response.body.getReader(), new TextDecoder());
+        const reader = response.body.getReader();
+        try {
+            await processChatStream(reader, new TextDecoder());
+        } finally {
+            reader.releaseLock();
+        }
     } catch (error) {
         return Promise.reject(error);
     }
