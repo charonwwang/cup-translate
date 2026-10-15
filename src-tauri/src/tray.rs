@@ -44,29 +44,29 @@ pub fn update_tray(app_handle: tauri::AppHandle, mut language: String, mut copy_
         "Update tray with language: {}, copy mode: {}",
         language, copy_mode
     );
-    tray_handle
-        .set_menu(match language.as_str() {
-            "en" => tray_menu_en(),
-            "zh_cn" => tray_menu_zh_cn(),
-            "zh_tw" => tray_menu_zh_tw(),
-            "ja" => tray_menu_ja(),
-            "ko" => tray_menu_ko(),
-            "fr" => tray_menu_fr(),
-            "de" => tray_menu_de(),
-            "ru" => tray_menu_ru(),
-            "pt_br" => tray_menu_pt_br(),
-            "fa" => tray_menu_fa(),
-            "uk" => tray_menu_uk(),
-            _ => tray_menu_en(),
-        })
-        .unwrap();
+    if let Err(e) = tray_handle.set_menu(match language.as_str() {
+        "en" => tray_menu_en(),
+        "zh_cn" => tray_menu_zh_cn(),
+        "zh_tw" => tray_menu_zh_tw(),
+        "ja" => tray_menu_ja(),
+        "ko" => tray_menu_ko(),
+        "fr" => tray_menu_fr(),
+        "de" => tray_menu_de(),
+        "ru" => tray_menu_ru(),
+        "pt_br" => tray_menu_pt_br(),
+        "fa" => tray_menu_fa(),
+        "uk" => tray_menu_uk(),
+        _ => tray_menu_en(),
+    }) {
+        log::warn!("Failed to set tray menu: {e:?}");
+    }
     #[cfg(not(target_os = "linux"))]
-    tray_handle
-        .set_tooltip(&format!(
-            "cup-translate {}",
-            app_handle.package_info().version
-        ))
-        .unwrap();
+    if let Err(e) = tray_handle.set_tooltip(&format!(
+        "cup-translate {}",
+        app_handle.package_info().version
+    )) {
+        log::warn!("Failed to set tray tooltip: {e:?}");
+    }
 
     let enable_clipboard_monitor = match get_bool("clipboard_monitor") {
         Some(v) => v,
@@ -76,29 +76,24 @@ pub fn update_tray(app_handle: tauri::AppHandle, mut language: String, mut copy_
         }
     };
 
-    tray_handle
+    if let Err(e) = tray_handle
         .get_item("clipboard_monitor")
         .set_selected(enable_clipboard_monitor)
-        .unwrap();
+    {
+        log::warn!("Failed to set tray clipboard_monitor state: {e:?}");
+    }
 
-    match copy_mode.as_str() {
-        "source" => tray_handle
-            .get_item("copy_source")
-            .set_selected(true)
-            .unwrap(),
-        "target" => tray_handle
-            .get_item("copy_target")
-            .set_selected(true)
-            .unwrap(),
-        "source_target" => tray_handle
-            .get_item("copy_source_target")
-            .set_selected(true)
-            .unwrap(),
-        "disable" => tray_handle
-            .get_item("copy_disable")
-            .set_selected(true)
-            .unwrap(),
-        _ => {}
+    let copy_item = match copy_mode.as_str() {
+        "source" => Some("copy_source"),
+        "target" => Some("copy_target"),
+        "source_target" => Some("copy_source_target"),
+        "disable" => Some("copy_disable"),
+        _ => None,
+    };
+    if let Some(id) = copy_item {
+        if let Err(e) = tray_handle.get_item(id).set_selected(true) {
+            log::warn!("Failed to set tray copy mode {id}: {e:?}");
+        }
     }
 }
 
@@ -160,24 +155,29 @@ fn on_clipboard_monitor_click(app: &AppHandle) {
     set("clipboard_monitor", current);
     // Update State and Start Monitor
     let state = app.state::<ClipboardMonitorEnableWrapper>();
-    state
-        .0
-        .lock()
-        .unwrap()
-        .replace_range(.., &current.to_string());
+    if let Ok(mut guard) = state.0.lock() {
+        guard.replace_range(.., &current.to_string());
+    } else {
+        log::warn!("Clipboard monitor state mutex poisoned, skipping state update");
+    }
     if current {
         start_clipboard_monitor(app.app_handle());
     }
     // Update Tray Menu Status
-    app.tray_handle()
+    if let Err(e) = app
+        .tray_handle()
         .get_item("clipboard_monitor")
         .set_selected(current)
-        .unwrap();
+    {
+        log::warn!("Failed to update tray clipboard_monitor state: {e:?}");
+    }
 }
 fn on_auto_copy_click(app: &AppHandle, mode: &str) {
     info!("Set copy mode to: {}", mode);
     set("translate_auto_copy", mode);
-    app.emit_all("translate_auto_copy_changed", mode).unwrap();
+    if let Err(e) = app.emit_all("translate_auto_copy_changed", mode) {
+        log::warn!("Failed to emit translate_auto_copy_changed: {e:?}");
+    }
     update_tray(app.app_handle(), "".to_string(), mode.to_string());
 }
 fn on_ocr_recognize_click() {
@@ -196,15 +196,32 @@ fn on_check_update_click() {
 }
 fn on_view_log_click(app: &AppHandle) {
     use tauri::api::path::app_log_dir;
-    let log_path = app_log_dir(&app.config()).unwrap();
-    tauri::api::shell::open(&app.shell_scope(), log_path.to_str().unwrap(), None).unwrap();
+    let log_path = match app_log_dir(&app.config()) {
+        Some(v) => v,
+        None => {
+            log::warn!("Cannot resolve app log dir, skipping view_log");
+            return;
+        }
+    };
+    let log_path_str = match log_path.to_str() {
+        Some(v) => v,
+        None => {
+            log::warn!("App log dir path is not valid UTF-8, skipping view_log");
+            return;
+        }
+    };
+    if let Err(e) = tauri::api::shell::open(&app.shell_scope(), log_path_str, None) {
+        log::warn!("Failed to open log dir: {e:?}");
+    }
 }
 fn on_restart_click(app: &AppHandle) {
     info!("============== Restart App ==============");
     app.restart();
 }
 fn on_quit_click(app: &AppHandle) {
-    app.global_shortcut_manager().unregister_all().unwrap();
+    if let Err(e) = app.global_shortcut_manager().unregister_all() {
+        log::warn!("Failed to unregister global shortcuts on quit: {e:?}");
+    }
     info!("============== Quit App ==============");
     app.exit(0);
 }
