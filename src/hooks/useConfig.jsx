@@ -42,7 +42,7 @@ export const useConfig = (key, defaultValue, options = {}) => {
         isSync && syncToStore(v);
     }, []);
 
-    // 初始化
+    // 初始化（key 变化时重新订阅：serviceInstanceKey 等动态 key 的场景）
     useEffect(() => {
         syncToState(null);
         const eventKey = key.replaceAll('.', '_').replaceAll('@', ':');
@@ -54,7 +54,7 @@ export const useConfig = (key, defaultValue, options = {}) => {
                 f();
             });
         };
-    }, []);
+    }, [key]);
 
     return [property, setProperty, getProperty];
 };
