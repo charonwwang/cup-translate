@@ -45,7 +45,15 @@ export default function Updater() {
                     eventId = e.id;
                 }
                 if (e.id === eventId) {
-                    setTotal(e.payload.contentLength);
+                    // contentLength 可能为 null：Tauri 的 DownloadProgressEvent 把
+                    // content_length 定义为 Option<u64>，值取自响应头的 Content-Length；
+                    // 服务器用分块传输（chunked）不带该头时即为 None，经 serde 序列化成
+                    // JSON null（tauri 1.8.1 src/updater/core.rs:663-667 取值、
+                    // src/updater/mod.rs:124-129 定义）。
+                    // 直接写进 total 会让 `downloaded / total` 变成 Infinity。
+                    if (typeof e.payload.contentLength === 'number' && e.payload.contentLength > 0) {
+                        setTotal(e.payload.contentLength);
+                    }
                     setDownloaded((a) => {
                         return a + e.payload.chunkLength;
                     });
@@ -136,7 +144,9 @@ export default function Updater() {
                 <Progress
                     aria-label='Downloading...'
                     label={t('updater.progress')}
-                    value={(downloaded / total) * 100}
+                    // total 为 0 时不要做除法：服务器未给出 Content-Length 时
+                    // 我们不知道总量，此时显示不确定进度（0）而不是 Infinity。
+                    value={total > 0 ? (downloaded / total) * 100 : 0}
                     classNames={{
                         base: 'w-full px-[80px]',
                         track: 'drop-shadow-md border border-default',
@@ -168,7 +178,7 @@ export default function Updater() {
                     }}
                 >
                     {downloaded !== 0
-                        ? downloaded > total
+                        ? total > 0 && downloaded > total
                             ? t('updater.installing')
                             : t('updater.downloading')
                         : t('updater.update')}
