@@ -1,4 +1,4 @@
-import { fetch } from '@tauri-apps/api/http';
+import { fetchWithTimeout as fetch } from '../../../utils/fetchWithTimeout';
 const DISPLAY_FORMAT_DEFAULT = '发音, 快速释义, 变形';
 
 export async function translate(text, from, to) {

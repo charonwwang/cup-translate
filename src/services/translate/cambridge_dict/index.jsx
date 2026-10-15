@@ -1,4 +1,4 @@
-import { fetch } from '@tauri-apps/api/http';
+import { fetchWithTimeout as fetch } from '../../../utils/fetchWithTimeout';
 import { Language } from './info';
 
 class Pronunciation {

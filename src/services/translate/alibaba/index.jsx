@@ -1,4 +1,4 @@
-import { fetch } from '@tauri-apps/api/http';
+import { fetchWithTimeout as fetch } from '../../../utils/fetchWithTimeout';
 import HmacSHA1 from 'crypto-js/hmac-sha1';
 import base64 from 'crypto-js/enc-base64';
 

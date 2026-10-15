@@ -1,4 +1,4 @@
-import { fetch, Body } from '@tauri-apps/api/http';
+import { fetchWithTimeout as fetch, Body } from '../../../utils/fetchWithTimeout';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function translate(text, from, to) {
