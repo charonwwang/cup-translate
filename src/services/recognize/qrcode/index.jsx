@@ -17,7 +17,12 @@ export async function recognize(base64, language, options = {}) {
             const data = ctx.getImageData(0, 0, width, height);
             if (height !== 0 && width !== 0) {
                 resolve({ data, height, width });
+            } else {
+                reject('Image has zero width or height');
             }
+        };
+        img.onerror = () => {
+            reject('Failed to load image (corrupt or unsupported format)');
         };
     });
 
