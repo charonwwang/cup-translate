@@ -43,6 +43,31 @@ fn get_daemon_window() -> Option<Window> {
     }
 }
 
+/// 判断点 (x, y) 是否落在某个显示器的矩形内。
+///
+/// 显示器覆盖的是**半开区间** `[position, position + size)`：
+/// 宽 1920、起点 0 的屏幕占用像素 0..=1919，像素 1920 属于右边那块屏。
+/// 因此右边界必须用 `<` 而不是 `<=`。
+///
+/// 修复前用的是 `x <= position.x + size.width`，会把**下一块屏幕的第一个像素**
+/// 也算进当前屏幕。左右并排双屏时，鼠标停在这条共用边界上
+/// （例如左屏 `x=0,w=1920`、右屏 `x=1920`，鼠标 `x=1920`）
+/// 会因遍历顺序先命中左屏，于是翻译窗口显示在左屏右缘，而不是鼠标所在的右屏。
+///
+/// 用 i64 做加法：`position.x + size.width` 在 i32 下可能回绕
+/// （release 静默、debug panic）。现实中多屏坐标远达不到 i32 上限，
+/// 但用 i64 可让回绕在结构上不可能发生，代价为零。
+fn point_in_monitor(x: i32, y: i32, position_x: i32, position_y: i32, width: u32, height: u32) -> bool {
+    let left = position_x as i64;
+    let top = position_y as i64;
+    let right = left + width as i64;
+    let bottom = top + height as i64;
+    let px = x as i64;
+    let py = y as i64;
+
+    px >= left && px < right && py >= top && py < bottom
+}
+
 // Get monitor where the mouse is currently located.
 // Returns None when no monitor can be resolved (e.g. hot-plug races, headless
 // display edge cases) instead of panicking the whole app.
@@ -61,11 +86,7 @@ fn get_current_monitor(x: i32, y: i32) -> Option<Monitor> {
         let size = m.size();
         let position = m.position();
 
-        if x >= position.x
-            && x <= (position.x + size.width as i32)
-            && y >= position.y
-            && y <= (position.y + size.height as i32)
-        {
+        if point_in_monitor(x, y, position.x, position.y, size.width, size.height) {
             info!("Current Monitor: {:?}", m);
             return Some(m);
         }
@@ -642,7 +663,71 @@ pub fn updater_window() {
 
 #[cfg(all(test, target_os = "macos"))]
 mod tests {
-    use super::{restore_action, RestoreAction};
+    use super::{point_in_monitor, restore_action, RestoreAction};
+
+    // 左右并排双屏：左屏起点 0、宽 1920；右屏起点 1920、宽 1920
+    const LEFT_X: i32 = 0;
+    const RIGHT_X: i32 = 1920;
+    const W: u32 = 1920;
+    const H: u32 = 1080;
+
+    #[test]
+    fn a_point_well_inside_a_monitor_belongs_to_it() {
+        assert!(point_in_monitor(500, 500, LEFT_X, 0, W, H));
+        assert!(point_in_monitor(2500, 500, RIGHT_X, 0, W, H));
+    }
+
+    #[test]
+    fn the_last_pixel_of_a_monitor_still_belongs_to_it() {
+        // 宽 1920 覆盖 0..=1919，所以 1919 属于左屏
+        assert!(point_in_monitor(1919, 1079, LEFT_X, 0, W, H));
+    }
+
+    #[test]
+    fn the_shared_border_pixel_belongs_to_the_right_monitor_only() {
+        // 核心用例：x=1920 是右屏的第一个像素。
+        // 修复前用 `x <= position.x + size.width`，左屏判定区间成了 [0, 1920]，
+        // 会把这一像素**也**算作左屏的；遍历顺序下先命中左屏，
+        // 于是翻译窗口弹在左屏右缘，而不是鼠标真正所在的右屏。
+        assert!(
+            !point_in_monitor(1920, 500, LEFT_X, 0, W, H),
+            "x=1920 is the first pixel of the right monitor, not inside the left one"
+        );
+        assert!(
+            point_in_monitor(1920, 500, RIGHT_X, 0, W, H),
+            "x=1920 must belong to the right monitor"
+        );
+    }
+
+    #[test]
+    fn a_left_edge_border_pixel_does_not_leak_into_the_monitor_on_its_left() {
+        // 对称检查：右屏起点 1920，那么 1919（左屏最后一个像素）不属于右屏
+        assert!(!point_in_monitor(1919, 500, RIGHT_X, 0, W, H));
+    }
+
+    #[test]
+    fn monitors_above_or_left_of_the_origin_still_work() {
+        // 副屏常在原点左上（负坐标），半开区间的负值一侧同样要正确。
+        // 这块屏起点 -1920、宽 1920，覆盖 [-1920, 0)。
+        assert!(point_in_monitor(-500, -500, -1920, -1080, W, H));
+        assert!(point_in_monitor(-1920, -1080, -1920, -1080, W, H), "top-left corner is inside");
+        assert!(point_in_monitor(-1, -500, -1920, -1080, W, H), "last column before 0 is inside");
+        // 右/下边界是开的：x=0 属于原点那块屏，不属于这块
+        assert!(!point_in_monitor(0, -500, -1920, -1080, W, H));
+        assert!(!point_in_monitor(-1, 0, -1920, -1080, W, H));
+        // 左侧越界
+        assert!(!point_in_monitor(-1921, -500, -1920, -1080, W, H));
+    }
+
+    #[test]
+    fn large_coordinates_do_not_overflow() {
+        // i32 下的 `position.x + width` 会回绕；改成 i64 后必须仍然正确。
+        // 取起点接近 i32 上限的显示器：left + width 会超过 i32::MAX。
+        let left = i32::MAX - 100;
+        assert!(point_in_monitor(i32::MAX, 0, left, 0, 200, 100));
+        // i32::MAX 之后的坐标在 i32 里不存在，用 MAX 本身验证仍属该屏
+        assert!(!point_in_monitor(left - 1, 0, left, 0, 200, 100));
+    }
 
     #[test]
     fn saved_text_is_written_back() {
