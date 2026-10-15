@@ -31,6 +31,23 @@ fn backup_name(name: Option<&str>) -> Result<&str, Error> {
     .ok_or_else(|| Error::Error("Invalid backup name".into()))
 }
 
+/// 逐组件规范化路径，消除中间的 `.` / `..`（不触碰前导 `..`，因为
+/// enclosed_name() 已经拒绝那些）。用于把 `plugins/../x` 归一为 `x`
+/// 再做白名单判断，避免借 plugins/ 前缀绕过。
+fn normalize_components(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                out.pop();
+            }
+            other => out.push(other),
+        }
+    }
+    out
+}
+
 fn restore_archive<R: Read + Seek>(
     mut archive: ZipArchive<R>,
     destination: &Path,
@@ -50,9 +67,13 @@ fn restore_archive<R: Read + Seek>(
         let path = entry
             .enclosed_name()
             .ok_or_else(|| Error::Error("Backup contains an unsafe path".into()))?;
-        if path != Path::new("config.json")
-            && path != Path::new("history.db")
-            && !path.starts_with("plugins")
+        // 规范化路径后再做白名单判断，防止 `plugins/../escape.js` 这类借
+        // plugins/ 前缀夹带非插件文件（enclosed_name() 不消除中间 `..`，
+        // 直接 starts_with("plugins") 会误判通过，见 rejects_archive_path_traversal_and_symlinks）。
+        let normalized = normalize_components(&path);
+        if normalized != Path::new("config.json")
+            && normalized != Path::new("history.db")
+            && !normalized.starts_with("plugins")
         {
             return Err(Error::Error("Backup contains an unexpected file".into()));
         }
@@ -301,6 +322,53 @@ mod tests {
             &destination
         )
         .is_err());
+    }
+
+    #[test]
+    fn rejects_archive_path_traversal_and_symlinks() {
+        let destination = std::env::temp_dir().join(format!(
+            "cup-translate-backup-traversal-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        // zip slip: 路径穿越条目必须被 enclosed_name() 拒绝
+        assert!(restore_archive(
+            archive(&[
+                ("config.json", b"{}"),
+                ("../outside.txt", b"escaped"),
+            ]),
+            &destination
+        )
+        .is_err());
+        // 绝对路径条目也必须被拒
+        assert!(restore_archive(
+            archive(&[("config.json", b"{}"), ("/etc/cron.d/evil", b"pwned")]),
+            &destination
+        )
+        .is_err());
+        // plugins/ 前缀被用来夹带 .. 路径穿越：normalize_components() 把它
+        // 归一为 escape.js（不在 plugins/ 下），必须被白名单拒绝。
+        assert!(restore_archive(
+            archive(&[
+                ("config.json", b"{}"),
+                ("plugins/../escape.js", b"escaped"),
+            ]),
+            &destination
+        )
+        .is_err());
+        // 合法的 plugins/ 子路径仍应被接受
+        assert!(restore_archive(
+            archive(&[
+                ("config.json", b"{}"),
+                ("plugins/translate/plugin-a/main.js", b"export default 1;"),
+            ]),
+            &destination
+        )
+        .is_ok());
+        let _ = std::fs::remove_dir_all(&destination);
     }
 
     #[test]
