@@ -1,4 +1,4 @@
-import { fetch, Body } from '@tauri-apps/api/http';
+import { fetchWithTimeout as fetch, Body } from '../../../utils/fetchWithTimeout';
 
 export async function collection(source, target, options = {}) {
     const { config } = options;

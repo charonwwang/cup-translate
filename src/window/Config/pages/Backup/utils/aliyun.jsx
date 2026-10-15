@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api';
-import { Body, fetch } from '@tauri-apps/api/http';
+import { Body, fetchWithTimeout as fetch } from '../../../../../utils/fetchWithTimeout';
 import { appConfigDir, join } from '@tauri-apps/api/path';
 import { exists, removeFile } from '@tauri-apps/api/fs';
 import { nanoid } from 'nanoid';

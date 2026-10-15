@@ -1,5 +1,5 @@
 import { readBinaryFile, BaseDirectory } from '@tauri-apps/api/fs';
-import { fetch, Body } from '@tauri-apps/api/http';
+import { fetchWithTimeout as fetch, Body } from '../../../utils/fetchWithTimeout';
 
 export async function recognize(base64, language, options = {}) {
     const { config } = options;

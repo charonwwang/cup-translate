@@ -1,4 +1,4 @@
-import { fetch, Body } from '@tauri-apps/api/http';
+import { fetchWithTimeout as fetch, Body } from './fetchWithTimeout';
 import { invoke } from '@tauri-apps/api';
 import { store } from './store';
 import { v4 as uuidv4 } from 'uuid';

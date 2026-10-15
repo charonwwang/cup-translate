@@ -1,4 +1,4 @@
-import { fetch, Body } from '@tauri-apps/api/http';
+import { fetchWithTimeout as fetch, Body } from '../../../utils/fetchWithTimeout';
 import CryptoJS from 'crypto-js';
 
 export async function recognize(base64, language, options = {}) {
