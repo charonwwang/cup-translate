@@ -285,4 +285,104 @@ mod tests {
         assert!(err.starts_with("错误"), "got {err:?}");
         assert!(!err.is_empty(), "a corrupt stderr must not become an empty error message");
     }
+
+    /// `ensure_executable` 的语义测试（仅 macOS：该函数只在 macOS 分支存在）。
+    ///
+    /// 为什么值得测：仓库里的 `resources/ocr-*-apple-darwin` 权限是 **0644**，
+    /// 直接 spawn 会 `Permission denied`。首次运行必须补 `+x`，而每次 OCR 都
+    /// spawn 一次 `chmod` 是无谓开销，故用 `OnceLock<Mutex<HashSet>>` 按路径缓存。
+    /// 这里有两条容易被写错的语义：
+    ///   1. **失败绝不能写进缓存** —— 否则一次瞬时失败（如权限/路径问题）会被
+    ///      永久记住，后续调用直接 `Ok(())` 放行,真正执行时才炸,且错误信息
+    ///      完全指不到 chmod 上，极难排查;
+    ///   2. 成功后同一路径**不应**重复 chmod。
+    ///
+    /// 每条测试都用**独占的临时路径**：缓存按路径索引，因此不会互相干扰，
+    /// 也不依赖测试执行顺序（这是用静态缓存时最容易踩的坑）。
+    /// `chmod` 只作用在临时文件上，不碰仓库资源。
+    #[cfg(target_os = "macos")]
+    mod ensure_executable_semantics {
+        use super::*;
+
+        /// 造一个独占的临时文件路径并创建它。
+        fn unique_temp_file(tag: &str) -> std::path::PathBuf {
+            let path = std::env::temp_dir().join(format!(
+                "cup-translate-ocr-chmod-{}-{}-{tag}",
+                std::process::id(),
+                // 计数器保证同一进程内多次调用也不撞名
+                {
+                    use std::sync::atomic::{AtomicU32, Ordering};
+                    static N: AtomicU32 = AtomicU32::new(0);
+                    N.fetch_add(1, Ordering::Relaxed)
+                }
+            ));
+            std::fs::write(&path, b"#!/bin/sh\nexit 0\n").expect("create temp file");
+            path
+        }
+
+        /// 读权限位里的可执行标志（Unix 上取 owner execute）。
+        fn is_executable(path: &std::path::Path) -> bool {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::metadata(path)
+                .map(|m| m.permissions().mode() & 0o100 != 0)
+                .unwrap_or(false)
+        }
+
+        #[test]
+        fn makes_a_non_executable_file_executable() {
+            let path = unique_temp_file("basic");
+            // 先确保它是不可执行的（模拟仓库里的 0644）
+            let mut perms = std::fs::metadata(&path).unwrap().permissions();
+            use std::os::unix::fs::PermissionsExt;
+            perms.set_mode(0o644);
+            std::fs::set_permissions(&path, perms).unwrap();
+            assert!(!is_executable(&path), "precondition: the file must start non-executable");
+
+            ensure_executable(&path).expect("chmod should succeed on our own temp file");
+            assert!(is_executable(&path), "the file must be executable afterwards");
+
+            let _ = std::fs::remove_file(&path);
+        }
+
+        /// 关键回归：**chmod 失败时绝不能把它记进缓存**。
+        ///
+        /// 用一个不存在的路径触发失败；连续两次调用**都必须返回 Err**。
+        /// 若有人误写成「先 insert 再 chmod」，第一次之后缓存就认为已就绪，
+        /// 第二次会返回 `Ok(())` —— 这条断言就会失败。
+        #[test]
+        fn a_failed_chmod_is_not_cached_as_success() {
+            let path = std::env::temp_dir().join(format!(
+                "cup-translate-ocr-chmod-missing-{}-{}",
+                std::process::id(),
+                "definitely-absent"
+            ));
+            let _ = std::fs::remove_file(&path);
+            assert!(!path.exists(), "precondition: the path must not exist");
+
+            let first = ensure_executable(&path);
+            assert!(first.is_err(), "chmod on a missing file must fail, got {first:?}");
+
+            // 第二次：若失败被错误地缓存成成功，这里会是 Ok，测试即失败
+            let second = ensure_executable(&path);
+            assert!(
+                second.is_err(),
+                "a failed chmod must not be cached as success; second call returned {second:?}"
+            );
+        }
+
+        /// 成功后重复调用应当**幂等**（走缓存直接返回 Ok，不再 spawn chmod）。
+        /// 这里只固定「结果正确」，不假定内部一定没 spawn ——
+        /// 缓存命中与否属于实现细节，测行为而非测实现。
+        #[test]
+        fn repeated_calls_after_success_keep_succeeding() {
+            let path = unique_temp_file("repeat");
+
+            ensure_executable(&path).expect("first call");
+            ensure_executable(&path).expect("second call must also succeed");
+            ensure_executable(&path).expect("third call must also succeed");
+            assert!(is_executable(&path), "the file must remain executable");
+
+            let _ = std::fs::remove_file(&path);
+        }
+    }
 }
