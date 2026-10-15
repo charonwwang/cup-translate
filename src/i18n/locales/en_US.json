@@ -134,7 +134,9 @@
                 "google": "Google",
                 "bing": "Bing",
                 "yandex": "Yandex",
-                "local": "Local"
+                "local": "Local",
+                "clipboard_monitor": "Clipboard Monitor",
+                "clipboard_monitor_help": "Monitor clipboard changes and auto-translate copied text (alternative to selection translate)"
             },
             "recognize": {
                 "label": "Recognize",
@@ -148,7 +150,7 @@
             "hotkey": {
                 "label": "Hotkey",
                 "title": "Hotkey Settings",
-                "selection_translate": "Selection Translation",
+                "selection_translate": "Selection Translate",
                 "input_translate": "Text Translation",
                 "ocr_recognize": "Text Recognition",
                 "ocr_translate": "Screenshot Translation",

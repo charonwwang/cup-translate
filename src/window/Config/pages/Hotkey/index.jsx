@@ -46,7 +46,7 @@ const keyMap = {
 };
 
 export default function Hotkey() {
-    const [selectionTranslate, setSelectionTranslate] = useConfig('hotkey_selection_translate', '');
+    const [selectionTranslate, setSelectionTranslate] = useConfig('hotkey_selection_translate', 'Alt+T');
     const [inputTranslate, setInputTranslate] = useConfig('hotkey_input_translate', '');
     const [ocrRecognize, setOcrRecognize] = useConfig('hotkey_ocr_recognize', '');
     const [ocrTranslate, setOcrTranslate] = useConfig('hotkey_ocr_translate', '');

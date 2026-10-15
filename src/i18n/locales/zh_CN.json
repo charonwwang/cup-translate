@@ -134,7 +134,9 @@
                 "google": "谷歌",
                 "bing": "必应",
                 "yandex": "Yandex",
-                "local": "本地"
+                "local": "本地",
+                "clipboard_monitor": "剪贴板监控",
+                "clipboard_monitor_help": "监控剪贴板变化，自动翻译复制的文本（划词翻译的替代方案）"
             },
             "recognize": {
                 "label": "文字识别",

@@ -19,6 +19,7 @@ export default function Translate() {
     const [secondLanguage, setSecondLanguage] = useConfig('translate_second_language', 'en');
     const [detectEngine, setDetectEngine] = useConfig('translate_detect_engine', 'local');
     const [autoCopy, setAutoCopy] = useConfig('translate_auto_copy', 'disable');
+    const [clipboardMonitor, setClipboardMonitor] = useConfig('clipboard_monitor', false);
     const [incrementalTranslate, setIncrementalTranslate] = useConfig('incremental_translate', false);
     const [historyDisable, setHistoryDisable] = useConfig('history_disable', false);
     const [dynamicTranslate, setDynamicTranslate] = useConfig('dynamic_translate', false);
@@ -324,6 +325,20 @@ export default function Translate() {
                                 isSelected={hideWindow}
                                 onValueChange={(v) => {
                                     setHideWindow(v);
+                                }}
+                            />
+                        )}
+                    </div>
+                    <div className='config-item'>
+                        <h3 className='my-auto mx-0'>{t('config.translate.clipboard_monitor')}</h3>
+                        <p className='text-small text-default-400'>{t('config.translate.clipboard_monitor_help')}</p>
+                        {clipboardMonitor !== null && (
+                            <Switch
+                                isSelected={clipboardMonitor}
+                                onValueChange={(v) => {
+                                    setClipboardMonitor(v);
+                                    // 同步到 Rust 端启动/停止剪贴板监控
+                                    invoke('update_tray', { language: '', copyMode: '' });
                                 }}
                             />
                         )}
