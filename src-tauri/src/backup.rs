@@ -237,6 +237,10 @@ pub async fn local(operate: &str, path: String) -> Result<String, Error> {
 pub async fn aliyun(operate: &str, path: String, url: String) -> Result<String, Error> {
     match operate {
         "put" => {
+            // 注意：std::fs::read 会把整个备份加载进内存。reqwest 0.12 的
+            // Body::from 不支持 std::fs::File（需 tokio::fs::File 或流式包装），
+            // 备份上传是用户主动操作且体积有限（配置+插件，通常几 MB），暂接受
+            // 此内存占用。下载方向已改流式写入临时文件（见 get 分支）。
             reqwest::Client::builder()
                 .timeout(BACKUP_HTTP_TIMEOUT)
                 .build()?
