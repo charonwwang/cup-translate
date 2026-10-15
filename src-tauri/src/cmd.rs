@@ -18,6 +18,24 @@ fn is_symlink_entry(unix_mode: Option<u32>) -> bool {
     unix_mode.is_some_and(|mode| mode & 0o170000 == 0o120000)
 }
 
+/// 纯函数：检查 zip 条目是否带**特殊权限位**（setuid / setgid / sticky）。
+///
+/// 背景（本轮实测）：`zip` 0.6.6 的 `extract` 会把条目的 `unix_mode`
+/// 原样 `set_permissions` 落到磁盘上。实测确认：`external_attr = 0o4755`
+/// 的归档条目解压后，磁盘上的文件权限**就是 4755**（setuid 位被保留）。
+///
+/// 这**不是提权漏洞**，不必渲染成安全事件：
+///   - 落盘位置是用户自己的配置目录，用户对自己的文件本来就能随意 chmod；
+///   - setuid 只在 exec 时生效，而插件是 .js，由 webview 读取、不会被执行；
+///   - 安装 .potext 需要用户主动选文件，恶意插件本就已能执行 JS。
+///
+/// 之所以仍然拒绝，是**纵深防御与可预期性**：插件归档里出现 setuid/sticky
+/// 这类位没有任何正当用途，属于「不该出现的东西」，应当像符号链接一样被显式拦下，
+/// 而不是默默写进用户配置目录。
+fn has_special_permission_bits(unix_mode: Option<u32>) -> bool {
+    unix_mode.is_some_and(|mode| mode & 0o7000 != 0)
+}
+
 /// 解压前检查**落盘位置**是否已被一个符号链接占位。
 ///
 /// 背景：`zip::ZipArchive::extract` 内部是 `fs::File::create(directory.join(name))`
@@ -244,6 +262,13 @@ pub fn install_plugin(path_list: Vec<String>) -> Result<i32, Error> {
             if is_symlink_entry(entry.unix_mode()) {
                 return Err(Error::Error("Invalid Plugin: contains a symbolic link".into()));
             }
+            // setuid / setgid / sticky 位：zip 会原样 set_permissions 落盘
+            //（实测 external_attr=0o4755 -> 磁盘 4755），插件归档里没有正当用途。
+            if has_special_permission_bits(entry.unix_mode()) {
+                return Err(Error::Error(
+                    "Invalid Plugin: contains a file with setuid/setgid/sticky bits".into(),
+                ));
+            }
         }
         #[allow(unused_mut)]
         let mut plugin_type: String;
@@ -373,6 +398,89 @@ mod tests {
         assert!(!is_symlink_entry(None));
     }
 
+    /// 取出 `needle` 起点到**下一个顶层项**之间的源码切片（用于接线护栏）。
+    ///
+    /// 必须按「行首不得有空白」来判定顶层边界：测试模块里的函数是缩进的
+    /// （`    fn xxx`），若只找 `"\nfn "` 会匹配不到，切片一路吃到文件末尾，
+    /// 护栏就会把整个文件（含测试本身）算进去而形同虚设——本项目 round 45
+    /// 实际踩过这个坑（切片 14432 字符 vs 应为 3524）。
+    fn function_body(source: &'static str, needle: &str) -> &'static str {
+        let start = source.find(needle).expect("the function should exist");
+        let rest = &source[start..];
+        let mut end = rest.len();
+        for (offset, _) in rest.match_indices('\n') {
+            let after = &rest[offset + 1..];
+            // 顶层项：行首无缩进，且是 fn / pub fn / #[attr]
+            if !after.starts_with([' ', '\t'])
+                && (after.starts_with("fn ")
+                    || after.starts_with("pub fn ")
+                    || after.starts_with("pub async fn ")
+                    || after.starts_with("#["))
+            {
+                end = offset + 1;
+                break;
+            }
+        }
+        let body = &rest[..end];
+        // 双向自检：切片既不能吃到文件末尾（切太长），也不能在函数开头就断掉（切太短）。
+        // 只查上界是不够的——把边界条件写成「每个 \n 都算边界」时切片只剩 70 字符，
+        // 依然通过 len 检查，护栏会静默失效（round 45 实测踩到）。
+        assert!(
+            body.len() > 200,
+            "the slice for {needle:?} is only {} chars — the boundary logic cut it short",
+            body.len()
+        );
+        assert!(
+            body.trim_end().ends_with('}'),
+            "the slice for {needle:?} should end at the function's closing brace"
+        );
+        body
+    }
+
+    /// **接线**护栏：确认 `install_plugin` 真的调用了特殊权限位校验。
+    ///
+    /// 为什么需要单独一条：`special_permission_bits_are_flagged` 测的是**纯函数**，
+    /// 把 `has_special_permission_bits` 从 `install_plugin` 里删掉，它照样通过。
+    /// 这正是本项目 round 34 踩过的「测纯函数 ≠ 测接线」。
+    #[test]
+    fn install_plugin_actually_calls_the_special_permission_check() {
+        let body = function_body(include_str!("cmd.rs"), "pub fn install_plugin(");
+        // 自检：切片必须真的只覆盖这一个函数（见 function_body 的说明）
+        assert!(
+            body.len() < 6000,
+            "the slice is {} chars, so it ran past install_plugin",
+            body.len()
+        );
+        assert!(
+            body.contains("has_special_permission_bits("),
+            "install_plugin must call has_special_permission_bits — otherwise a .potext \
+             with setuid/setgid/sticky bits is written to disk verbatim"
+        );
+        assert!(
+            body.contains("is_symlink_entry("),
+            "install_plugin must keep rejecting symbolic links"
+        );
+    }
+
+    #[test]
+    fn special_permission_bits_are_flagged() {
+        use super::has_special_permission_bits;
+        // setuid / setgid / sticky —— 插件归档里没有正当用途
+        assert!(has_special_permission_bits(Some(0o4755))); // setuid
+        assert!(has_special_permission_bits(Some(0o2755))); // setgid
+        assert!(has_special_permission_bits(Some(0o1755))); // sticky
+        assert!(has_special_permission_bits(Some(0o7777))); // 全带上
+        // 普通权限不能被误伤（否则正常插件装不上）
+        for mode in [0o100644, 0o100755, 0o100600, 0o040755, 0o100000] {
+            assert!(
+                !has_special_permission_bits(Some(mode)),
+                "{mode:o} is ordinary and must not be flagged"
+            );
+        }
+        // 没有 mode（非 Unix 打的包）不应被拒
+        assert!(!has_special_permission_bits(None));
+    }
+
     #[test]
     fn plugin_paths_cannot_escape_the_plugin_directory() {
         assert!(valid_plugin_type("translate"));
@@ -380,6 +488,99 @@ mod tests {
         assert!(valid_plugin_name("plugin-openai_2"));
         assert!(!valid_plugin_name("../../plugin-evil"));
         assert!(!valid_plugin_name("plugin/evil"));
+    }
+
+    /// 用**真实 zip 字节**造一个含穿越条目的归档，验证解压不会写到目标目录之外。
+    ///
+    /// 为什么要专门钉住这件事：`install_plugin` 自己**没有**做 `enclosed_name()`
+    /// 校验（`restore_archive` 有），路径穿越目前**完全依赖 zip crate 内部**。
+    /// 本轮实测 zip 0.6.6 确实会拒绝（`Invalid file path`），恶意 `../` 条目
+    /// 一个文件都没落地——但这是**上游库的行为**，不是本仓库的显式契约。
+    /// 一旦升级到某个不再默认校验的版本，防护会静默消失且无人察觉。
+    /// 这条测试把「跨过库边界后的可观察结果」固定下来：
+    /// 只要它开始失败，就说明该补一条与 restore_archive 对称的显式校验了。
+    #[test]
+    fn a_traversal_entry_never_lands_outside_the_destination() {
+        use std::io::Write;
+
+        let base = std::env::temp_dir().join(format!("ct-zipslip-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        let archive_path = base.join("evil.potext");
+        let dest = base.join("dest");
+        std::fs::create_dir_all(&dest).unwrap();
+
+        // 手工写 zip：两个正常条目 + 两个试图穿越的条目
+        {
+            let file = std::fs::File::create(&archive_path).unwrap();
+            let mut zip = zip::ZipWriter::new(file);
+            let opts: zip::write::FileOptions<()> = zip::write::FileOptions::default();
+            for (name, body) in [
+                ("info.json", r#"{"plugin_type":"translate"}"#),
+                ("main.js", "console.log(1)"),
+                ("../ESCAPED.txt", "pwned"),
+                ("../../ESCAPED.txt", "pwned"),
+            ] {
+                zip.start_file(name, opts).unwrap();
+                zip.write_all(body.as_bytes()).unwrap();
+            }
+            zip.finish().unwrap();
+        }
+
+        let mut zip = zip::ZipArchive::new(std::fs::File::open(&archive_path).unwrap()).unwrap();
+        // extract 要么直接报错，要么成功——两种都行，关键是**不能**有文件逃出去
+        let _ = zip.extract(&dest);
+
+        assert!(
+            !base.join("ESCAPED.txt").exists(),
+            "a '../' entry escaped the destination directory"
+        );
+        assert!(
+            !dest.parent().unwrap().join("ESCAPED.txt").exists(),
+            "a traversal entry escaped one level up"
+        );
+        // 穿越条目若被拒绝，连正常条目也不应半途留下（extract 是逐个处理的，
+        // 这里只断言**没有逃逸**，不假设事务性）
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// 与上一条配对：正常归档必须能完整解压，别把正常插件也拦掉了。
+    #[test]
+    fn an_ordinary_plugin_archive_still_extracts() {
+        use std::io::Write;
+
+        let base = std::env::temp_dir().join(format!("ct-zipok-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let dest = base.join("dest");
+        std::fs::create_dir_all(&dest).unwrap();
+        let archive_path = base.join("ok.potext");
+
+        {
+            let file = std::fs::File::create(&archive_path).unwrap();
+            let mut zip = zip::ZipWriter::new(file);
+            let opts: zip::write::FileOptions<()> =
+                zip::write::FileOptions::default().unix_permissions(0o644);
+            for (name, body) in [
+                ("info.json", r#"{"plugin_type":"translate"}"#),
+                ("main.js", "console.log(1)"),
+            ] {
+                zip.start_file(name, opts).unwrap();
+                zip.write_all(body.as_bytes()).unwrap();
+            }
+            zip.finish().unwrap();
+        }
+
+        let mut zip = zip::ZipArchive::new(std::fs::File::open(&archive_path).unwrap()).unwrap();
+        // 正常归档里不应有任何条目被 is_symlink_entry / has_special_permission_bits 拦下
+        for index in 0..zip.len() {
+            let entry = zip.by_index(index).unwrap();
+            assert!(!super::is_symlink_entry(entry.unix_mode()));
+            assert!(!super::has_special_permission_bits(entry.unix_mode()));
+        }
+        zip.extract(&dest).unwrap();
+        assert!(dest.join("info.json").exists());
+        assert!(dest.join("main.js").exists());
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]

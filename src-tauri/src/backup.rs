@@ -105,6 +105,14 @@ fn restore_archive<R: Read + Seek>(
         {
             return Err(Error::Error("Backup contains a symbolic link".into()));
         }
+        // 与 cmd.rs::install_plugin 对称：zip 会把条目的 unix_mode 原样
+        // set_permissions 落盘（实测 0o4755 -> 磁盘 4755），
+        // setuid/setgid/sticky 在备份归档里同样没有正当用途。
+        if entry.unix_mode().is_some_and(|mode| mode & 0o7000 != 0) {
+            return Err(Error::Error(
+                "Backup contains a file with setuid/setgid/sticky bits".into(),
+            ));
+        }
         // 单边的 symlink 校验是不够的：`archive.extract` 内部是
         // `fs::File::create(destination.join(name))`，会**跟随已存在的 symlink**。
         // 若恢复目标目录里预先被放了指向外部的 symlink，解压仍会覆写目录之外的文件。
@@ -588,6 +596,65 @@ mod tests {
 
         let _ = std::fs::remove_file(&victim);
         let _ = std::fs::remove_dir_all(&destination);
+    }
+
+    /// 取出 `needle` 起点到**下一个顶层项**之间的源码切片（用于接线护栏）。
+    ///
+    /// 必须按「行首不得有空白」来判定顶层边界：测试模块里的函数是缩进的
+    /// （`    fn xxx`），若只找 `"\nfn "` 会匹配不到，切片一路吃到文件末尾，
+    /// 护栏就会把整个文件（含测试本身）算进去而形同虚设——本项目 round 45
+    /// 实际踩过这个坑（切片 14432 字符 vs 应为 3524）。
+    fn function_body(source: &'static str, needle: &str) -> &'static str {
+        let start = source.find(needle).expect("the function should exist");
+        let rest = &source[start..];
+        let mut end = rest.len();
+        for (offset, _) in rest.match_indices('\n') {
+            let after = &rest[offset + 1..];
+            // 顶层项：行首无缩进，且是 fn / pub fn / #[attr]
+            if !after.starts_with([' ', '\t'])
+                && (after.starts_with("fn ")
+                    || after.starts_with("pub fn ")
+                    || after.starts_with("pub async fn ")
+                    || after.starts_with("#["))
+            {
+                end = offset + 1;
+                break;
+            }
+        }
+        let body = &rest[..end];
+        // 双向自检：切片既不能吃到文件末尾（切太长），也不能在函数开头就断掉（切太短）。
+        // 只查上界是不够的——把边界条件写成「每个 \n 都算边界」时切片只剩 70 字符，
+        // 依然通过 len 检查，护栏会静默失效（round 45 实测踩到）。
+        assert!(
+            body.len() > 200,
+            "the slice for {needle:?} is only {} chars — the boundary logic cut it short",
+            body.len()
+        );
+        assert!(
+            body.trim_end().ends_with('}'),
+            "the slice for {needle:?} should end at the function's closing brace"
+        );
+        body
+    }
+
+    /// **接线**护栏：确认 `restore_archive` 真的调用了特殊权限位校验
+    ///（与 cmd.rs 的 install_plugin 对称，说明见那里的 function_body）。
+    #[test]
+    fn restore_archive_actually_rejects_special_permission_bits() {
+        let body = function_body(include_str!("backup.rs"), "fn restore_archive");
+        assert!(
+            body.len() < 12000,
+            "the slice is {} chars, so it ran past restore_archive",
+            body.len()
+        );
+        assert!(
+            body.contains("0o7000"),
+            "restore_archive must reject setuid/setgid/sticky bits, not just symlinks"
+        );
+        assert!(
+            body.contains("0o120000"),
+            "restore_archive must keep rejecting symbolic links"
+        );
     }
 
     #[test]
