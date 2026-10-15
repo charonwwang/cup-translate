@@ -37,6 +37,7 @@ import { invoke } from '@tauri-apps/api/tauri';
 import { sourceLanguageAtom, targetLanguageAtom } from '../LanguageArea';
 import { useConfig, useToastStyle, useVoice } from '../../../../hooks';
 import { sourceTextAtom, detectLanguageAtom } from '../SourceArea';
+import { clipboardFailureMessage, writeClipboardSafely } from '../../../../utils/clipboard';
 import { invoke_plugin } from '../../../../utils/invoke_plugin';
 import * as builtinServices from '../../../../services/translate';
 import * as builtinTtsServices from '../../../../services/tts';
@@ -57,9 +58,7 @@ import {
 function richTextToPlainText(value) {
     if (typeof value !== 'string') return '';
 
-    const withLineBreaks = value
-        .replace(/<br\s*\/?\s*>/gi, '\n')
-        .replace(/<\/(?:p|div|li)>/gi, '\n');
+    const withLineBreaks = value.replace(/<br\s*\/?\s*>/gi, '\n').replace(/<\/(?:p|div|li)>/gi, '\n');
     const document = new DOMParser().parseFromString(withLineBreaks, 'text/html');
     return document.body.textContent ?? '';
 }
@@ -124,13 +123,7 @@ export default function TargetArea(props) {
             clipboardMonitor !== null
         ) {
             if (autoCopy === 'source' && !clipboardMonitor) {
-                writeText(sourceText).then(() => {
-                    if (hideWindow) {
-                        sendNotification({ title: t('common.write_clipboard'), body: sourceText });
-                    } else {
-                        toast.success(t('common.copied'), { style: toastStyle });
-                    }
-                });
+                copyToClipboard(sourceText, hideWindow ? 'notification' : 'toast');
             }
             translate();
         }
@@ -278,25 +271,13 @@ export default function TargetArea(props) {
                         if (index === 0 && !clipboardMonitor) {
                             switch (autoCopy) {
                                 case 'target':
-                                    writeText(v).then(() => {
-                                        if (hideWindow) {
-                                            sendNotification({ title: t('common.write_clipboard'), body: v });
-                                        } else {
-                                            toast.success(t('common.copied'), { style: toastStyle });
-                                        }
-                                    });
+                                    copyToClipboard(v, hideWindow ? 'notification' : 'toast');
                                     break;
                                 case 'source_target':
-                                    writeText(sourceText.trim() + '\n\n' + v).then(() => {
-                                        if (hideWindow) {
-                                            sendNotification({
-                                                title: t('common.write_clipboard'),
-                                                body: sourceText.trim() + '\n\n' + v,
-                                            });
-                                        } else {
-                                            toast.success(t('common.copied'), { style: toastStyle });
-                                        }
-                                    });
+                                    copyToClipboard(
+                                        sourceText.trim() + '\n\n' + v,
+                                        hideWindow ? 'notification' : 'toast'
+                                    );
                                     break;
                                 default:
                                     break;
@@ -355,21 +336,13 @@ export default function TargetArea(props) {
                             if (index === 0 && !clipboardMonitor) {
                                 switch (autoCopy) {
                                     case 'target':
-                                        writeText(v).then(() => {
-                                            if (hideWindow) {
-                                                sendNotification({ title: t('common.write_clipboard'), body: v });
-                                            }
-                                        });
+                                        copyToClipboard(v, hideWindow ? 'notification' : 'toast');
                                         break;
                                     case 'source_target':
-                                        writeText(sourceText.trim() + '\n\n' + v).then(() => {
-                                            if (hideWindow) {
-                                                sendNotification({
-                                                    title: t('common.write_clipboard'),
-                                                    body: sourceText.trim() + '\n\n' + v,
-                                                });
-                                            }
-                                        });
+                                        copyToClipboard(
+                                            sourceText.trim() + '\n\n' + v,
+                                            hideWindow ? 'notification' : 'toast'
+                                        );
                                         break;
                                     default:
                                         break;
@@ -671,7 +644,9 @@ export default function TargetArea(props) {
                                                 </span>
                                                 <>
                                                     {sentence['source'] && (
-                                                        <span className={`text-[${appFontSize}px] select-text whitespace-pre-wrap`}>
+                                                        <span
+                                                            className={`text-[${appFontSize}px] select-text whitespace-pre-wrap`}
+                                                        >
                                                             {richTextToPlainText(sentence['source'])}
                                                         </span>
                                                     )}
@@ -747,9 +722,7 @@ export default function TargetArea(props) {
                                     size='sm'
                                     isDisabled={typeof result !== 'string' || result === ''}
                                     onPress={() => {
-                                        writeText(result).then(() => {
-                                            toast.success(t('common.copied'), { style: toastStyle });
-                                        });
+                                        copyToClipboard(result, 'toast');
                                     }}
                                 >
                                     <MdContentCopy className='text-[16px]' />

@@ -1,12 +1,12 @@
 import { Card, CardBody, CardFooter, Button, Skeleton, ButtonGroup, Tooltip } from '@nextui-org/react';
 import { sendNotification } from '@tauri-apps/api/notification';
-import { writeText } from '@tauri-apps/api/clipboard';
 import { atom, useAtom, useAtomValue } from 'jotai';
 import React, { useEffect, useState } from 'react';
 import { CgSpaceBetween } from 'react-icons/cg';
 import { MdContentCopy } from 'react-icons/md';
 import { MdSmartButton } from 'react-icons/md';
 import { useTranslation } from 'react-i18next';
+import { error as logError } from 'tauri-plugin-log-api';
 import { nanoid } from 'nanoid';
 
 import { getServiceName, getServiceSouceType, ServiceSourceType } from '../../../utils/service_instance';
@@ -14,6 +14,7 @@ import { currentServiceInstanceKeyAtom, languageAtom, recognizeFlagAtom } from '
 import { invoke_plugin } from '../../../utils/invoke_plugin';
 import * as builtinServices from '../../../services/recognize';
 import { useConfig } from '../../../hooks';
+import { clipboardFailureMessage, writeClipboardSafely } from '../../../utils/clipboard';
 import { base64Atom } from '../ImageArea';
 import { pluginListAtom } from '..';
 
@@ -34,6 +35,30 @@ export default function TextArea(props) {
     const [error, setError] = useState('');
     const pluginList = useAtomValue(pluginListAtom);
     const { t } = useTranslation();
+
+    /**
+     * 写入剪贴板并处理失败。修复前各调用点是 `writeText(...).then(...)`，
+     * 没有 .catch：写失败时用户拿不到文本、也收不到任何提示，
+     * 还留下无人处理的 promise rejection。
+     *
+     * mode: 'notification' 窗口已隐藏时发系统通知；'toast' 页面内提示；'silent' 不提示成功。
+     * 失败在所有模式下都会记日志并弹错误提示。
+     */
+    const copyToClipboard = (text, mode = 'toast') => {
+        return writeClipboardSafely(text, {
+            onSuccess: () => {
+                if (mode === 'notification') {
+                    sendNotification({ title: t('common.write_clipboard'), body: text });
+                }
+            },
+            onError: (e) => {
+                // 该窗口没有渲染 react-hot-toast 的 <Toaster/>，toast 在此不可见，
+                // 因此复用组件已有的 error 展示区（红色只读文本域），确保失败真的被看到。
+                logError('clipboard write failed: ' + e);
+                setError(clipboardFailureMessage(e));
+            },
+        });
+    };
 
     useEffect(() => {
         setText('');
@@ -67,14 +92,7 @@ export default function TextArea(props) {
                                     setText(v);
                                     setLoading(false);
                                     if (autoCopy) {
-                                        writeText(v).then(() => {
-                                            if (hideWindow) {
-                                                sendNotification({
-                                                    title: t('common.write_clipboard'),
-                                                    body: v,
-                                                });
-                                            }
-                                        });
+                                        copyToClipboard(v, hideWindow ? 'notification' : 'silent');
                                     }
                                 },
                                 (e) => {
@@ -114,14 +132,7 @@ export default function TextArea(props) {
                                 setText(v);
                                 setLoading(false);
                                 if (autoCopy) {
-                                    writeText(v).then(() => {
-                                        if (hideWindow) {
-                                            sendNotification({
-                                                title: t('common.write_clipboard'),
-                                                body: v,
-                                            });
-                                        }
-                                    });
+                                    copyToClipboard(v, hideWindow ? 'notification' : 'silent');
                                 }
                             },
                             (e) => {
@@ -189,7 +200,7 @@ export default function TextArea(props) {
                             size='sm'
                             variant='light'
                             onPress={() => {
-                                writeText(text);
+                                copyToClipboard(text, 'silent');
                             }}
                         >
                             <MdContentCopy className='text-[16px]' />

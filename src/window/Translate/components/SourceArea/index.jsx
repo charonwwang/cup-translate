@@ -1,7 +1,6 @@
 import { Button, Card, CardBody, CardFooter, ButtonGroup, Chip, Tooltip, Spacer } from '@nextui-org/react';
 import { BaseDirectory, readTextFile } from '@tauri-apps/api/fs';
 import React, { useEffect, useRef, useState } from 'react';
-import { writeText } from '@tauri-apps/api/clipboard';
 import { HiOutlineVolumeUp } from 'react-icons/hi';
 import { appWindow } from '@tauri-apps/api/window';
 import toast, { Toaster } from 'react-hot-toast';
@@ -15,6 +14,8 @@ import { invoke } from '@tauri-apps/api';
 import { atom, useAtom } from 'jotai';
 import { getServiceName, getServiceSouceType, ServiceSourceType } from '../../../../utils/service_instance';
 import { useConfig, useSyncAtom, useVoice, useToastStyle } from '../../../../hooks';
+import { clipboardFailureMessage, writeClipboardSafely } from '../../../../utils/clipboard';
+import { error as logError } from 'tauri-plugin-log-api';
 import { invoke_plugin } from '../../../../utils/invoke_plugin';
 import * as recognizeServices from '../../../../services/recognize';
 import * as builtinTtsServices from '../../../../services/tts';
@@ -42,6 +43,22 @@ export default function SourceArea(props) {
     const [ttsPluginInfo, setTtsPluginInfo] = useState();
     const [windowType, setWindowType] = useState('[SELECTION_TRANSLATE]');
     const toastStyle = useToastStyle();
+
+    /**
+     * 写入剪贴板并处理失败。修复前 `writeText(sourceText)` 完全没有接错误：
+     * 写失败时既无反馈，也留下未处理的 promise rejection。
+     */
+    const copyToClipboard = (text) => {
+        return writeClipboardSafely(text, {
+            onSuccess: () => {
+                toast.success(t('common.copied'), { style: toastStyle });
+            },
+            onError: (e) => {
+                logError('clipboard write failed: ' + e);
+                toast.error(clipboardFailureMessage(e), { style: toastStyle });
+            },
+        });
+    };
     const { t } = useTranslation();
     const textAreaRef = useRef();
     const handleNewTextRef = useRef();
@@ -454,7 +471,7 @@ export default function SourceArea(props) {
                                     variant='light'
                                     size='sm'
                                     onPress={() => {
-                                        writeText(sourceText);
+                                        copyToClipboard(sourceText);
                                     }}
                                 >
                                     <MdContentCopy className='text-[16px]' />
