@@ -272,21 +272,35 @@ ci: 收敛上游发布流水线，避免误用上游身份发布
 
 ## 6. 测试现状（务必知悉）
 
-**本项目目前没有任何自动化测试**：
-- 前端无测试框架、无 `test` 脚本
-- `src-tauri/src/` 中无 `#[test]`
-- `.github/workflows/` 仅 `package.yml`，且**只做打包发版，不跑任何测试**
+**本项目已有自动化测试（回归护栏），但没有端到端测试**：
+
+| 层次 | 位置 | 命令 | 说明 |
+|---|---|---|---|
+| 前端/配置回归 | `tests/*.test.mjs` | `pnpm test` | Node 内置 `node:test`，无框架依赖 |
+| Rust 单元测试 | `src-tauri/src/**/#[cfg(test)]` | `cd src-tauri && cargo test --release --features custom-protocol` | 覆盖 server 端口校验、backup、config、local_mt 等 |
+
+测试以**回归护栏**为主：断言源码/配置中的关键契约（服务白名单同步、品牌标识、
+打包元数据、快捷键改键语义等）。**新增修复时优先补一条会失败的回归用例**
+（先确认它在改前失败、改后通过，避免写出永真断言）。
+
+仍需手工验证的部分：
+- **GUI 行为**（划词弹窗定位、热键实际触发、托盘交互）**没有自动化覆盖**，
+  必须在真实会话下手工跑，见 §7
+- CI（`.github/workflows/package.yml`）会跑 `pnpm test`（三平台打包前各一次），
+  但**不跑 `cargo test`**，且**从未打过 tag，因此从未真正跑通**（见 §2.3）
 
 因此：
-- 改动后**必须手工验证**，并在提交信息里写清验证方式
-- **不要假装**存在测试命令（如编造 `pnpm test`）；若需验证，用真实可跑的命令：
+- 改动后跑上面两条测试命令 + 手工验证受影响路径，并在提交信息里写清**验证方式**
+- **不要编造**不存在的测试命令；可跑的命令：
   ```bash
-  pnpm build                                                             # 前端能否构建
-  cd src-tauri && cargo build --release --features custom-protocol # 后端能否编译（跑 GUI 必须带 custom-protocol，见 §2.1）
-  bash scripts/check-linux-build-env.sh                                  # 构建环境
-  ./src-tauri/target/release/cup-translate                               # 能否启动（GUI 常驻，需 Ctrl-C）
+  pnpm test                                                             # 回归护栏（node:test）
+  pnpm build                                                            # 前端能否构建
+  cd src-tauri && cargo test --release --features custom-protocol        # Rust 单测
+  cd src-tauri && cargo build --release --features custom-protocol       # 后端能否编译（跑 GUI 必须带 custom-protocol，见 §2.1）
+  bash scripts/check-linux-build-env.sh                                 # 构建环境
+  ./src-tauri/target/release/cup-translate                              # 能否启动（GUI 常驻，需 Ctrl-C）
   ```
-- 引入测试框架是**待办**，不是既成事实
+- **不要声称有端到端/GUI 自动化测试**，也不要声称 CI 会跑测试
 
 ---
 
@@ -328,4 +342,4 @@ Xvfb/无头环境下 GUI 行为不可信。
 4. 若涉及运行行为 → 实际跑 `./src-tauri/target/release/cup-translate` 验证
 5. 按 §5.3 规范提交，按 §8 同步文档
 
-**红线**：不要删版权头、不要改协议、不要启用上游身份 CI、不要声称有测试、不要编造验证结果。
+**红线**：不要删版权头、不要改协议、不要启用上游身份 CI、不要夸大测试覆盖（GUI 无自动化覆盖）、不要编造验证结果。
