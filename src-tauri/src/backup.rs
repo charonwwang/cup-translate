@@ -88,6 +88,17 @@ fn restore_archive<R: Read + Seek>(
         {
             return Err(Error::Error("Backup contains a symbolic link".into()));
         }
+        // 单边的 symlink 校验是不够的：`archive.extract` 内部是
+        // `fs::File::create(destination.join(name))`，会**跟随已存在的 symlink**。
+        // 若恢复目标目录里预先被放了指向外部的 symlink，解压仍会覆写目录之外的文件。
+        // 因此还要检查每个条目在**落盘位置**上是否已被 symlink 占位
+        //（与 cmd.rs::install_plugin 的处理对称）。
+        if destination.join(&normalized).symlink_metadata().is_ok_and(|meta| meta.file_type().is_symlink())
+        {
+            return Err(Error::Error(
+                "Backup target is occupied by a symbolic link".into(),
+            ));
+        }
     }
 
     archive.extract(destination)?;
@@ -513,6 +524,52 @@ mod tests {
             &destination
         )
         .is_ok());
+        let _ = std::fs::remove_dir_all(&destination);
+    }
+
+    /// 恢复目标的落盘位置若被 symlink 占位，必须拒绝——否则 extract 会跟随
+    /// 该链接覆写到配置目录之外（zip 0.6.6 的 extract 用 File::create，
+    /// 行为已由 cmd::tests::zip_extract_would_follow_a_preexisting_symlink 锚定）。
+    #[cfg(unix)]
+    #[test]
+    fn rejects_target_occupied_by_a_symbolic_link() {
+        let destination = std::env::temp_dir().join(format!(
+            "cup-translate-backup-symlink-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let _ = std::fs::remove_dir_all(&destination);
+        std::fs::create_dir_all(&destination).unwrap();
+
+        // 受害文件位于配置目录之外
+        let victim = destination
+            .parent()
+            .unwrap()
+            .join(format!("victim-{}.txt", std::process::id()));
+        std::fs::write(&victim, b"ORIGINAL").unwrap();
+
+        // 在恢复目标里把 config.json 换成指向受害文件的 symlink
+        std::os::unix::fs::symlink(&victim, destination.join("config.json")).unwrap();
+
+        let result = restore_archive(
+            archive(&[("config.json", b"{\"evil\":true}")]),
+            &destination,
+        );
+        assert!(
+            result.is_err(),
+            "restoring onto a symlinked target must be refused"
+        );
+        // 关键：受害文件必须**未被改写**
+        assert_eq!(
+            std::fs::read(&victim).unwrap(),
+            b"ORIGINAL",
+            "the file outside the destination must be untouched"
+        );
+
+        let _ = std::fs::remove_file(&victim);
         let _ = std::fs::remove_dir_all(&destination);
     }
 

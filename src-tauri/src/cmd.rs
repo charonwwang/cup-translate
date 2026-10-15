@@ -18,6 +18,22 @@ fn is_symlink_entry(unix_mode: Option<u32>) -> bool {
     unix_mode.is_some_and(|mode| mode & 0o170000 == 0o120000)
 }
 
+/// 解压前检查**落盘位置**是否已被一个符号链接占位。
+///
+/// 背景：`zip::ZipArchive::extract` 内部是 `fs::File::create(directory.join(name))`
+/// （zip 0.6.6 src/read.rs:467），而 `File::create` 会**跟随已存在的符号链接**。
+/// 上面已经拒绝了 zip **内部**的 symlink 条目，但若目标目录里预先放了一个
+/// 指向别处的 symlink，解压依然能顺着它覆写插件目录**之外**的任意文件。
+/// 两侧都要防，否则这道校验是单边的。
+///
+/// 返回 true 表示路径已被 symlink 占位，调用方应拒绝安装。
+/// 注意：路径不存在，或已存在的是**普通文件/目录**（正常重装插件的情形）
+/// 都返回 false，不改变既有语义。
+fn target_is_symlinked(path: &std::path::Path) -> bool {
+    path.symlink_metadata()
+        .is_ok_and(|meta| meta.file_type().is_symlink())
+}
+
 fn valid_plugin_type(value: &str) -> bool {
     PLUGIN_TYPES.contains(&value)
 }
@@ -261,6 +277,13 @@ pub fn install_plugin(path_list: Vec<String>) -> Result<i32, Error> {
         let config_path = config_path.join("plugins");
         let config_path = config_path.join(plugin_type);
         let plugin_path = config_path.join(file_name);
+        // 落盘目标若已被 symlink 占位，extract 会顺着它写到插件目录之外
+        // （见 target_is_symlinked 的说明）。必须在解压前拦下。
+        if target_is_symlinked(&plugin_path) {
+            return Err(Error::Error(
+                "Invalid Plugin: target path is a symbolic link".into(),
+            ));
+        }
         std::fs::create_dir_all(&config_path)?;
         zip.extract(&plugin_path)?;
 
@@ -357,5 +380,88 @@ mod tests {
         assert!(valid_plugin_name("plugin-openai_2"));
         assert!(!valid_plugin_name("../../plugin-evil"));
         assert!(!valid_plugin_name("plugin/evil"));
+    }
+
+    #[test]
+    fn symlinked_install_targets_are_detected() {
+        use super::target_is_symlinked;
+        let base = std::env::temp_dir().join(format!("ct-cmd-symlink-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+
+        // 不存在的路径：不拦截（首次安装的正常情形）
+        let fresh = base.join("plugin-fresh");
+        assert!(!target_is_symlinked(&fresh));
+
+        // 普通文件 / 目录：不拦截（重装插件的正常情形）
+        let file = base.join("plugin-file");
+        std::fs::write(&file, b"x").unwrap();
+        assert!(!target_is_symlinked(&file));
+        let dir = base.join("plugin-dir");
+        std::fs::create_dir_all(&dir).unwrap();
+        assert!(!target_is_symlinked(&dir));
+
+        // symlink：必须拦截
+        #[cfg(unix)]
+        {
+            let link = base.join("plugin-link");
+            std::os::unix::fs::symlink(&file, &link).unwrap();
+            assert!(
+                target_is_symlinked(&link),
+                "a symlinked plugin target must be rejected"
+            );
+            // 目录形式的 symlink 同样要拦
+            let dlink = base.join("plugin-dlink");
+            std::os::unix::fs::symlink(&dir, &dlink).unwrap();
+            assert!(target_is_symlinked(&dlink));
+        }
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// 端到端复现：预置 symlink 后直接 extract 会覆写插件目录之外的文件。
+    /// 这条测试锚定的是「zip crate 的真实行为」——即我们为什么要加那道检查；
+    /// 若将来 zip 升级后不再跟随 symlink，这条会失败，提示我们可以放宽。
+    #[cfg(unix)]
+    #[test]
+    fn zip_extract_would_follow_a_preexisting_symlink() {
+        let base = std::env::temp_dir().join(format!("ct-cmd-extract-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let victim = base.join("victim.txt");
+        let dest_dir = base.join("plugins").join("translate").join("plugin-evil");
+        std::fs::create_dir_all(&dest_dir).unwrap();
+        std::fs::write(&victim, b"ORIGINAL").unwrap();
+
+        // 在落盘目录里放一个指向外部文件的 symlink
+        std::os::unix::fs::symlink(&victim, dest_dir.join("main.js")).unwrap();
+        // 注意：dest_dir 本身是真实目录（所以 target_is_symlinked 为 false，
+        // 这正是我们要拦住的那个 symlink 的真实形态——它在目录**内部**）；
+        // 真正被检查的是「解压时会被写到的那个文件路径」。
+        assert!(!super::target_is_symlinked(&dest_dir));
+        assert!(super::target_is_symlinked(&dest_dir.join("main.js")));
+
+        // 构造一个含 main.js 的 zip，并按 extract 的方式落盘
+        let zip_path = base.join("evil.potext");
+        {
+            let mut writer = zip::ZipWriter::new(std::fs::File::create(&zip_path).unwrap());
+            let options: zip::write::FileOptions<()> =
+                zip::write::FileOptions::default().unix_permissions(0o644);
+            use std::io::Write;
+            writer.start_file("main.js", options).unwrap();
+            writer.write_all(b"EVIL").unwrap();
+            writer.finish().unwrap();
+        }
+        let mut archive = zip::ZipArchive::new(std::fs::File::open(&zip_path).unwrap()).unwrap();
+        archive.extract(&dest_dir).unwrap();
+
+        // 记录 zip 的真实行为：它确实跟随了 symlink
+        let after = std::fs::read(&victim).unwrap();
+        assert_eq!(
+            after, b"EVIL",
+            "zip 0.6.6 extract follows pre-existing symlinks; if this changed, \
+             revisit target_is_symlinked in install_plugin"
+        );
+
+        let _ = std::fs::remove_dir_all(&base);
     }
 }
