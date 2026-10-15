@@ -827,11 +827,20 @@ mod tests {
     /// 语言选择器（src/window/Config/pages/General/index.jsx 的 DropdownItem key）
     /// 会原样写入 app_language 并传给 update_tray，因此托盘必须覆盖其中的每一种语言。
     ///
-    /// 这里刻意硬编码一份清单而不是去读前端文件：
-    /// 若将来前端新增语言却忘了加托盘菜单，本测试会失败，从而逼出同步更新。
+    /// **本清单是前端下拉的硬编码副本，必须与它逐项一致。**
+    ///
+    /// 曾经漏了 `he` / `ta`（前端有、生产分发也有），这里却没有——
+    /// 于是本测试的循环**永远不会检查这两项**，长期显示绿色。
+    /// 更要紧的是原文写着「前端新增语言却忘了加托盘菜单，本测试会失败」，
+    /// 这句话**并不成立**：硬编码副本不会自己跟着前端变，新增语言时
+    /// 循环仍只覆盖旧条目，**不会**失败。
+    ///
+    /// 权威护栏是 `tests/tray-language-parity.test.mjs`：它直接解析**真实**的
+    /// 前端下拉与**真实**的 `update_tray` 分发，新增语言会立刻失败（已实测）。
+    /// 这里保留一份独立副本，是为了让 `cargo test` 单独也能发现托盘分支被删。
     const UI_LANGUAGES: &[&str] = &[
         "zh_cn", "zh_tw", "en", "ja", "ko", "fr", "de", "es", "ru", "it", "tr", "pt_pt", "pt_br", "nb_no",
-        "nn_no", "fa", "uk", "ar",
+        "nn_no", "fa", "uk", "ar", "he", "ta", "tk",
     ];
 
     /// locale 文件只有 2 个 key 的占位语言：全站文案本就回退英文，
@@ -863,6 +872,70 @@ mod tests {
             "uk" => "uk",
             _ => return None,
         })
+    }
+
+    /// `UI_LANGUAGES` 必须与**真实的前端语言下拉**逐项一致。
+    ///
+    /// 为什么需要这条：`UI_LANGUAGES` 是被检查对象的清单，而清单**自证不了
+    /// 完整性**——从它里面删一项，上面那个循环就少检查一项，测试依然全绿。
+    /// 实测确认：把 `he` 从本清单删掉，`cargo test` 与 `pnpm test` **都是全绿**
+    /// （`tests/tray-language-parity.test.mjs` 读的是前端下拉与 Rust 分发，
+    /// 并不校验本清单）。所以本清单的完整性此前**无人守**，`he` / `ta`
+    /// 就是这样悄悄漏掉的。
+    ///
+    /// 这里直接解析 `General/index.jsx` 里语言下拉的 `key='...'`，
+    /// 与 `UI_LANGUAGES` 比对——比的是**权威来源**，不是另一份副本。
+    #[test]
+    fn the_ui_language_list_matches_the_frontend_picker() {
+        // env!("CARGO_MANIFEST_DIR") 是 src-tauri/，前端源码在它的上一级
+        let picker = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("src-tauri must have a parent")
+            .join("src/window/Config/pages/General/index.jsx");
+        let source = std::fs::read_to_string(&picker)
+            .unwrap_or_else(|e| panic!("cannot read {}: {e}", picker.display()));
+
+        // 边界：从 `aria-label='app language'` 到 `</DropdownMenu>`。
+        // 不设边界会把主题/引擎的 key='...' 误当语言码（Node 那条护栏的注释里
+        // 记着同一个坑）。
+        let start = source
+            .find("aria-label='app language'")
+            .expect("the language dropdown must exist");
+        let rest = &source[start..];
+        let end = rest.find("</DropdownMenu>").expect("the dropdown must be closed");
+        let menu = &rest[..end];
+
+        // 逐个提取 key='xx' 的值
+        let mut offered: Vec<&str> = Vec::new();
+        let mut cursor = menu;
+        while let Some(at) = cursor.find("key='") {
+            let after = &cursor[at + "key='".len()..];
+            let close = after.find('\'').expect("key literal must be closed");
+            offered.push(&after[..close]);
+            cursor = &after[close..];
+        }
+
+        assert!(
+            offered.len() >= 20,
+            "expected the picker to offer >=20 languages, got {}: {offered:?}",
+            offered.len()
+        );
+
+        let mut offered_sorted = offered.clone();
+        offered_sorted.sort_unstable();
+        let mut declared: Vec<&str> = UI_LANGUAGES.to_vec();
+        declared.sort_unstable();
+
+        assert_eq!(
+            declared, offered_sorted,
+            "UI_LANGUAGES must list exactly the languages the picker offers — \
+             a missing entry means that language is never checked below"
+        );
+
+        // 清单内不得重复（重复会掩盖漏项）
+        let mut dedup = offered_sorted.clone();
+        dedup.dedup();
+        assert_eq!(dedup.len(), offered_sorted.len(), "the picker must not repeat a language key");
     }
 
     #[test]
