@@ -78,3 +78,63 @@ test('backups use the current app identifier and restored settings restart the a
     const config = JSON.parse(await readFile('src-tauri/tauri.conf.json', 'utf8'));
     assert.equal(config.tauri.allowlist.process.relaunch, true);
 });
+
+// ── 本轮新增：macOS 抓图失败不得拿旧图冒充新图 ──
+
+/**
+ * 背景（实测，本机 macOS）：
+ *   `ocr_recognize()` / `ocr_translate()` 原来这样调用 screencapture：
+ *
+ *       if let Ok(_output) = std::process::Command::new("/usr/sbin/screencapture")
+ *           .arg("-i").arg("-r").arg(path).output()
+ *       { recognize_window(); }
+ *
+ *   `Ok` 只表示「进程被成功创建并运行完毕」，**与退出码无关**
+ *   —— 与 `tts.rs` 里被修掉的 `is_ok()` 是同一类错误。
+ *
+ *   实测 `screencapture -x <path>`：
+ *     · 失败时退出码为 1，stderr = `could not create image from display`
+ *       （屏幕录制权限未授予时即如此）；
+ *     · 失败时**不创建**目标文件；
+ *     · 若目标路径**已存在**，失败时**原样保留**（放 12 字节 `old-content`
+ *       进去，失败后读回来仍是 `old-content`）。
+ *
+ *   而 `pot_screenshot_cut.png` 正是识别流程读取的文件
+ *   （`cmd.rs::get_base64` 与各 `recognize/*` 服务都读它）。
+ *   所以旧代码的后果是：抓图失败 -> 仍然进入识别 -> **识别上一张截图**，
+ *   用户看到与本次操作无关的结果，且没有任何错误提示。
+ *
+ * 修复：抽出 `remove_stale_screenshot()`（抓图前清掉旧文件）+
+ * `macos_capture_screenshot()`（检查退出码，失败返回 false 不再往下走）。
+ * 行为契约由 Rust 单测 `stale_screenshot_is_removed_before_capturing`
+ * 与 `a_real_removal_failure_is_reported_not_swallowed` 覆盖；
+ * 这里锁「两个调用点都不得退回忽略退出码的写法」。
+ */
+test('macOS screenshot capture never treats a spawned process as a success', async () => {
+    const source = await readFile('src-tauri/src/window.rs', 'utf8');
+    const code = source
+        .replace(/^\s*\/\/\/.*$/gm, '')
+        .replace(/^\s*\/\/.*$/gm, '')
+        .split(/#\[cfg\(all\(test/)[0];
+
+    // 不得再用 `if let Ok(_output) = ...screencapture...` 这种忽略退出码的写法
+    assert.doesNotMatch(
+        code,
+        /if let Ok\(_?\w*\) = std::process::Command::new\("\/usr\/sbin\/screencapture"\)/,
+        'is_ok()-style matching ignores the exit code, so a failed capture still runs recognition'
+    );
+    // 抓图必须走统一的 helper
+    assert.match(code, /fn macos_capture_screenshot\(path: &str\) -> bool/, 'capture must go through one helper');
+    assert.match(code, /output\.status\.success\(\)/, 'the capture result must be judged by exit status');
+    // 抓图前必须先删旧文件：这是「旧图冒充新图」的直接防线
+    assert.match(
+        code,
+        /fn macos_capture_screenshot[\s\S]{0,400}?remove_stale_screenshot\(path\)/,
+        'the stale screenshot must be removed before capturing'
+    );
+    // 两个入口都必须用同一个 helper（各一次）
+    const uses = code.match(/if macos_capture_screenshot\(&path\)/g) ?? [];
+    assert.equal(uses.length, 2, `both ocr_recognize and ocr_translate must use the helper, found ${uses.length}`);
+    // 反向自检：确认剥注释后仍有实质内容
+    assert.ok(code.length > 8000, `stripped source looks too small: ${code.length} bytes`);
+});

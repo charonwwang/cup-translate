@@ -566,6 +566,74 @@ fn screenshot_window() -> Window {
     window
 }
 
+/// macOS 专用：调用 `/usr/sbin/screencapture` 抓图，并**如实报告成败**。
+///
+/// 修复前的写法是 `if let Ok(_output) = Command::new(...).output() { ... }`，
+/// 它只判断「进程是否被成功创建并运行完毕」，**完全不看退出码**——
+/// 与 `tts.rs` 那个 `is_ok()` 是同一类错误（`Ok` 与退出码无关）。
+///
+/// 实测（本机 macOS，`screencapture -x /tmp/probe.png`）：
+///   · 截图失败时退出码为 **1**，stderr 为 `could not create image from display`
+///     （屏幕录制权限未授予时就会这样）；
+///   · 失败时**不创建**目标文件；
+///   · 更关键：若目标路径**已存在**（上一次成功截图的产物），
+///     失败时该文件**原样保留**，内容一字未改（实测把 12 字节的
+///     `old-content` 放进去，失败后读回来仍是 `old-content`）。
+///
+/// 于是旧代码的后果是：截图失败 -> 仍然调用 `recognize_window()` /
+/// `image_translate()` -> 前端读到的还是**上一张截图**，
+/// 用户看到的是与本次操作无关的识别结果，且没有任何错误提示。
+///
+/// 因此这里做两件事：
+///   1. 抓图**前**先删掉目标文件，消除「旧图冒充新图」的可能；
+///   2. 抓图**后**检查退出码，失败就返回 false，由调用方放弃后续流程。
+///
+/// **可达性诚实说明**：我实测到的是「screencapture 在失败时返回 1 且保留旧文件」
+/// 这一**行为事实**；我没有在真实 GUI 会话里走完「用户选中截图 -> 识别出旧图」
+/// 的全流程（需要屏幕录制权限与真人交互）。「用户按 Esc 取消」这一常见情形
+/// 同样无法在本环境复现（`-i` 会阻塞等待交互）。
+/// 删除可能残留的旧截图，避免「旧图冒充新图」。
+///
+/// 抽成独立函数是为了**可测**：`macos_capture_screenshot` 本身要求真实
+/// `screencapture` 与交互式 GUI 会话，无法在单测里跑；而「先删旧文件」
+/// 这一步恰好是修复的核心，且完全可以在测试里用临时文件验证。
+///
+/// 文件本来就不存在（首次截图）不算错误，静默通过。
+fn remove_stale_screenshot(path: &str) -> std::io::Result<()> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
+fn macos_capture_screenshot(path: &str) -> bool {
+    if let Err(e) = remove_stale_screenshot(path) {
+        warn!("capture: cannot remove the stale screenshot: {e:?}");
+    }
+
+    match std::process::Command::new("/usr/sbin/screencapture")
+        .arg("-i")
+        .arg("-r")
+        .arg(path)
+        .output()
+    {
+        Ok(output) if output.status.success() => true,
+        Ok(output) => {
+            warn!(
+                "capture: screencapture exited with {:?}, skipping recognition (stderr: {})",
+                output.status.code(),
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+            false
+        }
+        Err(e) => {
+            warn!("capture: cannot run screencapture: {e:?}, skipping recognition");
+            false
+        }
+    }
+}
+
 pub fn ocr_recognize() {
     #[cfg(target_os = "macos")]
     {
@@ -589,12 +657,7 @@ pub fn ocr_recognize() {
 
         let path = app_cache_dir_path.to_string_lossy().replace("\\\\?\\", "");
         println!("Screenshot path: {}", path);
-        if let Ok(_output) = std::process::Command::new("/usr/sbin/screencapture")
-            .arg("-i")
-            .arg("-r")
-            .arg(path)
-            .output()
-        {
+        if macos_capture_screenshot(&path) {
             recognize_window();
         }
     }
@@ -631,12 +694,7 @@ pub fn ocr_translate() {
 
         let path = app_cache_dir_path.to_string_lossy().replace("\\\\?\\", "");
         println!("Screenshot path: {}", path);
-        if let Ok(_output) = std::process::Command::new("/usr/sbin/screencapture")
-            .arg("-i")
-            .arg("-r")
-            .arg(path)
-            .output()
-        {
+        if macos_capture_screenshot(&path) {
             image_translate();
         }
     }
@@ -667,7 +725,7 @@ pub fn updater_window() {
 
 #[cfg(all(test, target_os = "macos"))]
 mod tests {
-    use super::{point_in_monitor, restore_action, RestoreAction};
+    use super::{point_in_monitor, remove_stale_screenshot, restore_action, RestoreAction};
 
     // 左右并排双屏：左屏起点 0、宽 1920；右屏起点 1920、宽 1920
     const LEFT_X: i32 = 0;
@@ -767,5 +825,54 @@ mod tests {
         // 回归护栏：若将来又引入 as_deref() 之类的压平，
         // Some(None) 会与 None 合并，这条会立刻失败。
         assert_ne!(restore_action(Some(None)), restore_action(None));
+    }
+
+    /// 截图失败时 `screencapture` **不会**删除已存在的目标文件 ——
+    /// 实测：把一个 12 字节的旧文件放在目标路径，抓图失败后读回来内容不变。
+    /// 而旧代码只看 `Ok(_output)`（忽略退出码），失败后**照样**进入识别流程，
+    /// 前端读到的就是这张旧图（`pot_screenshot_cut.png` 被
+    /// cmd.rs::get_base64 与各 recognize 服务共同读取）。
+    /// 因此抓图前必须先把旧文件清掉。
+    #[test]
+    fn stale_screenshot_is_removed_before_capturing() {
+        let dir = std::env::temp_dir().join("cup-translate-test-stale-shot");
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("pot_screenshot_cut.png");
+        let path_str = path.to_string_lossy().to_string();
+
+        // 1) 预置一张「旧图」
+        std::fs::write(&path, b"old-content").expect("write fixture");
+        assert!(path.exists(), "precondition: the stale file must exist");
+
+        // 2) 清理（模拟抓图前的那一步）
+        remove_stale_screenshot(&path_str).expect("removing a stale file must succeed");
+
+        // 3) 旧图必须没了，否则识别流程会读到它
+        assert!(
+            !path.exists(),
+            "the stale screenshot must be gone, otherwise it can be mistaken for this capture"
+        );
+
+        // 4) 再次调用（文件已不存在）必须仍然是 Ok —— 首次截图就是这种情况，
+        //    不能因为「没有旧文件可删」就报错或放弃截图。
+        remove_stale_screenshot(&path_str).expect("a missing file is not an error");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 删除失败（这里是权限问题）必须**冒泡为 Err**，由调用方记日志；
+    /// 不能被静默吞掉，否则「旧图还在」这件事无人知晓。
+    #[test]
+    fn a_real_removal_failure_is_reported_not_swallowed() {
+        let dir = std::env::temp_dir().join("cup-translate-test-undeletable");
+        let _ = std::fs::create_dir_all(&dir);
+        // 目录本身无法用 remove_file 删掉 -> 得到一个真实的非 NotFound 错误
+        let path_str = dir.to_string_lossy().to_string();
+        let result = remove_stale_screenshot(&path_str);
+        assert!(
+            result.is_err(),
+            "removing a non-empty directory must surface an error, got {result:?}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
