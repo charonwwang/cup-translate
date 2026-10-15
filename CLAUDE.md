@@ -195,8 +195,17 @@ ECDict（`pot-app.com/api/dict` 404/405）、Lingva 翻译（NXDOMAIN）、Bing 
 `pubkey` 为自有 minisign 公钥（key id `DB420303520E0CB5`）。
 产物名与仓库地址已在 `updater/*.mjs` 与 CI 中统一为 `cup-translate`。
 
-- 代码层面保留 `tauri::updater`（故 `Cargo.toml` **必须**显式声明 `updater` feature，
-  否则 `src-tauri/src/updater.rs` 编译失败：`cannot find updater in tauri`）
+- 代码层面保留 `tauri::updater`。这里涉及**两个不同的** `updater`，缺任一都不行：
+  1. **`tauri` 依赖**的 features 里要有 `"updater"` —— 否则 `tauri::updater` 模块不存在，
+     编译报错 `cannot find updater in tauri`（**报错，容易发现**）。
+  2. **本 crate** 的 `[features]` 要声明 `updater`，且 `src-tauri/src/updater.rs` 的门控
+     必须写成 **`#[cfg(feature = "updater")]`**。
+     ⚠️ **写成 `#[cfg(updater)]` 恒为假**：cargo 传给 rustc 的是 `--cfg 'feature="updater"'`，
+     它定义的是名为 `feature`、值为 `"updater"` 的 cfg，**不是**名为 `updater` 的 cfg。
+     此时 `updater.rs` 的真实实现**整段不参与编译**，`check_update()` 永远走文件末尾的空实现
+     —— **编译通过、运行不报错、日志无异常，只是「启动时检查更新」不存在**（幽灵功能）。
+     该 feature 还要放进 `default = [...]`，因为 §2.1 的标准构建命令只带 `custom-protocol`。
+     `tests/rust-feature-cfg.test.mjs` 守着这一点（含 `default` 与写法两个方向）。
 - **⚠️ 私钥不在仓库中**，必须存在于 GitHub Secrets（`TAURI_PRIVATE_KEY` / `TAURI_KEY_PASSWORD`）。
   私钥丢失＝更新器永久失效：已安装用户的二进制里烧死了旧公钥，换密钥对无法推送更新。
 - **⚠️ 整条链路从未跑通**（仓库从未打过 tag），首次发版前请按
@@ -313,6 +322,9 @@ npx prettier --write <files>   # 格式化指定文件
 - 遵循 `cargo fmt` / `cargo clippy`
 - `src-tauri/Cargo.toml` 中 `[package] name = "cup-translate"`，改动会影响二进制名与打包
 - `tauri` 依赖的 features **必须包含 `updater`**（源码 `updater.rs` 需要）；删掉会导致 `cannot find updater in tauri`
+- **feature 门控必须写全 `#[cfg(feature = "x")]`**，不能写成 `#[cfg(x)]` ——
+  后者恒为假且**不报错**，整段代码静默消失（详见 §3.3 第 2 点）。
+  `tests/rust-feature-cfg.test.mjs` 会拦截这种写法。
 
 ### 5.3 提交信息
 使用**中文**、带类型前缀，例如：

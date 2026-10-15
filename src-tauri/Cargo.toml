@@ -58,6 +58,28 @@ window-shadows = "0.2"
 #openssl
 
 [features]
+# `default` 里带上 updater：§2.1 规定的构建命令是
+# `cargo build --release --features custom-protocol`，只带 custom-protocol。
+# 若把 updater 只定义成可选 feature 而不放进 default，
+# 那条**标准构建命令仍然不会启用它** —— 缺陷会原样保留。
+# 「启动时检查更新」是产品行为的一部分，不是可选特性，故默认开启。
+default = ["updater"]
+# ⚠️ 这个 feature 名**必须**存在，否则 `src/updater.rs` 里所有
+# `#[cfg(updater)]` 恒为假 —— 真实实现整段不参与编译，
+# `check_update()` 退回文件末尾的空实现，「启动时检查更新」静默失效。
+#
+# 实测证据（修复前）：
+#   · `cargo rustc -- --print cfg` 的输出里**没有** `feature="updater"`
+#     （即该 feature 从未被启用，因为它压根没在 [features] 里定义过）；
+#   · 二进制里 `"New version available"` / `"Failed to check update"`
+#     各出现 **0 次**，证明真实实现没被编进去；
+#   · 真实配置里删掉 `check_update` 键后启动，该键**没有被补回**
+#     （真实实现会 `set("check_update", true)`），而同批的
+#     `translate_detect_engine` / `clipboard_monitor` 都被正常补回。
+#
+# 注意：`tauri` 依赖的 features 里那个 `"updater"`（见上方 tauri = {...}）
+# 是 **tauri 自己的**开关，与这里的 crate feature 是两件事，不能互相替代。
+updater = []
 # this feature is used for production builds or when `devPath` points to the filesystem
 # DO NOT REMOVE!!
 custom-protocol = ["tauri/custom-protocol"]
