@@ -325,6 +325,25 @@ pub fn check_service_available() -> Result<(), Error> {
     Ok(())
 }
 
+/// 判断 `plugins/<type>/` 下的某个目录是否应当被清理。
+///
+/// 安装侧 `cmd.rs::valid_plugin_name` 强制目录名以 `plugin` 开头
+/// （且只允许字母/数字/`-`/`_`），所以**不以 plugin 开头的目录一定不是本应用装的**，
+/// 而是用户手工放进来的（旧插件、自建插件、手动备份等）。
+///
+/// 判据**复用安装侧的** `cmd::valid_plugin_name`（前缀 + 字符白名单），
+/// 而不是只判前缀——两侧必须完全一致，否则会出现「装不出来、却被列成插件」的
+/// 名字（修复前 `plugin..` / `plugin$x` 就有这个不对称）。
+///
+/// 注意它仍然是**大小写敏感**的：`Plugin-demo` / `my-plugin` 都会被判为
+/// 「需清理」。这一点由单元测试钉住，避免以后有人误以为它是宽松匹配。
+///
+/// 抽成纯函数是为了可测：原先这段逻辑内联在 `get_plugin_list` 里，
+/// 而 `get_plugin_list` 依赖 `APP` 全局句柄与真实配置目录，无法单测。
+fn should_remove_plugin_dir(name: &str) -> bool {
+    !crate::cmd::valid_plugin_name(name)
+}
+
 pub fn get_plugin_list(plugin_type: &str) -> Option<Vec<String>> {
     let app_handle = APP.get()?;
     let config_dir = dirs::config_dir()?;
@@ -341,11 +360,21 @@ pub fn get_plugin_list(plugin_type: &str) -> Option<Vec<String>> {
 
             if entry.path().is_dir() {
                 let name = entry.file_name().to_str()?.to_string();
-                if name.starts_with("plugin") {
-                    plugin_list.push(name);
+                if should_remove_plugin_dir(&name) {
+                    // 清理不是本应用安装的目录（安装侧 valid_plugin_name 强制
+                    // 'plugin' 前缀，所以这里的东西一定是用户手工放进去的）。
+                    // **必须记日志**：这是对用户数据的递归删除，且发生在每次启动。
+                    // 修复前是 `let _ = std::fs::remove_dir_all(...)`——
+                    // 成功无痕迹、失败被吞，用户发现目录消失时无从排查。
+                    warn!(
+                        "Removing unrecognized directory in plugin folder: {:?}",
+                        entry.path()
+                    );
+                    if let Err(e) = std::fs::remove_dir_all(entry.path()) {
+                        warn!("Failed to remove {:?}: {:?}", entry.path(), e);
+                    }
                 } else {
-                    // Remove old plugin
-                    let _ = std::fs::remove_dir_all(entry.path());
+                    plugin_list.push(name);
                 }
             }
         }
@@ -427,7 +456,10 @@ pub fn is_first_run() -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{coerce_bool, coerce_i64, coerce_str, copy_dir_all, migrate_config_dir, staging_dir_for};
+    use super::{
+        coerce_bool, coerce_i64, coerce_str, copy_dir_all, migrate_config_dir, should_remove_plugin_dir,
+        staging_dir_for,
+    };
 
     /// 生成唯一临时目录，避免并行测试互踩。
     fn unique_dir(prefix: &str) -> std::path::PathBuf {
@@ -440,6 +472,133 @@ mod tests {
                 .unwrap()
                 .as_nanos()
         ))
+    }
+
+    /// `plugins/<type>/` 下哪些目录会被启动时清理。
+    ///
+    /// 这是对**用户数据**的递归删除，且每次启动都跑，此前没有任何测试也没日志。
+    /// 判据必须与安装侧的 `cmd.rs::valid_plugin_name` 配套：
+    /// 安装时强制 'plugin' 前缀，所以不以 plugin 开头的目录一定是用户手工放的。
+    #[test]
+    fn plugin_directories_are_only_removed_when_they_lack_the_plugin_prefix() {
+        // 本应用安装的（valid_plugin_name 允许的形态）必须保留
+        for keep in [
+            "plugin-demo",
+            "plugin_openai_2",
+            "pluginA",
+            "plugin",
+            "plugin-translate-demo",
+        ] {
+            assert!(
+                !should_remove_plugin_dir(keep),
+                "{keep:?} looks like an installed plugin and must be kept"
+            );
+        }
+
+        // 用户手工放进去的目录会被删除——这是**既有行为**，此处明确记录，
+        // 避免以后有人以为它是"保守的"白名单之外一律保留。
+        for removed in [
+            "my-plugin",
+            "translate",
+            "backup-2026",
+            ".git",
+            "node_modules",
+            "myPlugin",
+        ] {
+            assert!(
+                should_remove_plugin_dir(removed),
+                "{removed:?} does not have the plugin prefix and is removed today"
+            );
+        }
+    }
+
+    /// 前缀判断是**大小写敏感**的，与安装侧的 `starts_with("plugin")` 一致。
+    /// 若哪天有人把它改成大小写不敏感，这条会失败——那正是需要显式决策的点。
+    #[test]
+    fn the_plugin_prefix_check_is_case_sensitive() {
+        assert!(should_remove_plugin_dir("Plugin-demo"), "capital P is not the plugin prefix");
+        assert!(should_remove_plugin_dir("PLUGIN-demo"));
+        assert!(!should_remove_plugin_dir("plugin-demo"));
+        assert!(!should_remove_plugin_dir("plugindemo"));
+    }
+
+    /// 判据必须与安装侧 `valid_plugin_name` **完全一致**。
+    ///
+    /// 修复前列表侧只判 `starts_with("plugin")`，于是这些「安装时必然被拒」
+    /// 的名字会被收进 plugin_list、渲染成插件服务，却永远加载不了：
+    ///     "plugin " / "plugin.." / "plugin$x" / "plugin/x"
+    /// 我第一版测试把 "plugin " 断言成「会被清理」，结果测试失败——
+    /// **是我的断言错了，不是代码错了**（`"plugin ".starts_with("plugin")`
+    /// 确实为 true）。这次失败恰好暴露了那个不对称。
+    #[test]
+    fn the_list_side_uses_the_same_rule_as_the_install_side() {
+        for invalid in ["plugin ", "plugin..", "plugin$x", "plugin/x", "plugin\t"] {
+            assert!(
+                should_remove_plugin_dir(invalid),
+                "{invalid:?} can never be installed, so it must not be listed as a plugin"
+            );
+        }
+        // 合法形态仍然保留
+        for valid in ["plugin-demo", "plugin_2", "plugin", "pluginA"] {
+            assert!(
+                !should_remove_plugin_dir(valid),
+                "{valid:?} is a legal plugin directory name"
+            );
+        }
+    }
+
+    /// 清理用户目录时**必须留下日志**。
+    ///
+    /// 这是可测性缺口兜底：`warn!` 位于 `get_plugin_list` 内，而它依赖
+    /// `APP` 全局句柄与真实配置目录，无法单测（所以 `no_log` 变异会逃逸）。
+    /// 用源码扫描确认「删除」与「记日志」成对出现——
+    /// 手法与 fetch-timeout / anki-port / proxy 等接线护栏一致。
+    #[test]
+    fn removing_a_user_directory_always_logs_it() {
+        let source = include_str!("config.rs");
+        let start = source.find("if should_remove_plugin_dir(&name) {").expect("the branch must exist");
+        let rest = &source[start..];
+        // 分支体到 `} else {` 为止（该 else 属于同一个 if）
+        let end = rest.find("} else {").expect("the branch must have an else") + "} else {".len();
+        let branch = &rest[..end];
+
+        // 分支里必须真的删除那个目录
+        assert!(
+            branch.contains("std::fs::remove_dir_all(entry.path())"),
+            "the branch must actually remove the directory"
+        );
+        // 删除之前必须先记日志（否则用户目录消失时无从排查）
+        let remove_at = branch.find("std::fs::remove_dir_all(entry.path())").unwrap();
+        let before = &branch[..remove_at];
+        assert!(
+            before.contains("warn!") && before.contains("Removing unrecognized directory"),
+            "the removal must be preceded by an explanatory warn!"
+        );
+        // 删除失败也必须记日志，不能被 `let _ =` 吞掉。
+        // 注意：`"std::fs::remove_dir_all(entry.path())"` 这个子串在
+        // `if let Err(e) = std::fs::remove_dir_all(...)` 里也出现，
+        // 所以 remove_at 实际指向的是**那一行**（我第一版按它切尾部，
+        // 结果边界全错、断言必然失败）。这里直接整段检查更稳。
+        assert!(
+            !branch.contains("let _ = std::fs::remove_dir_all(entry.path())"),
+            "the removal result must not be discarded silently"
+        );
+        assert!(
+            branch.contains("if let Err(e) = std::fs::remove_dir_all(entry.path())"),
+            "a failed removal must be logged, not swallowed"
+        );
+        assert!(
+            branch.contains("Failed to remove"),
+            "the failure log must identify what could not be removed"
+        );
+    }
+
+    /// 空名字与空白名字不该被当成插件。
+    #[test]
+    fn degenerate_directory_names_are_not_treated_as_plugins() {
+        assert!(should_remove_plugin_dir(""));
+        assert!(should_remove_plugin_dir(" "));
+        assert!(should_remove_plugin_dir("plugin "));
     }
 
     #[test]

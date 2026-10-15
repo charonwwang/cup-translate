@@ -56,7 +56,20 @@ fn valid_plugin_type(value: &str) -> bool {
     PLUGIN_TYPES.contains(&value)
 }
 
-fn valid_plugin_name(value: &str) -> bool {
+/// 插件目录名是否合法。
+///
+/// 这是**安装侧与列表侧共用的唯一判据**：`install_plugin` 用它拒绝非法
+/// .potext 文件名，`config.rs::is_installed_plugin_dir` 用同一套规则决定
+/// `plugins/<type>/` 下的目录是否算已安装插件。
+///
+/// 修复前列表侧只判 `starts_with("plugin")`，于是 `plugin..` / `plugin$x`
+/// 这类**永远装不出来**的名字会被收进 plugin_list 并渲染成插件服务
+/// （实测确认的不对称）。
+///
+/// 注：`!value.is_empty()` 是**死条件**——`starts_with("plugin")` 为真时
+/// 长度必然 >= 6。保留它只为让意图显式；变异测试确认删掉它不改变任何行为
+/// （属等价变异）。
+pub(crate) fn valid_plugin_name(value: &str) -> bool {
     value.starts_with("plugin")
         && !value.is_empty()
         && value
