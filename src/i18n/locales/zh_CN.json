@@ -7,7 +7,8 @@
             "write_clipboard": "写入剪贴板",
             "plugin": "插件",
             "coming": "敬请期待…",
-            "clear": "清空"
+            "clear": "清空",
+            "copied": "已复制到剪贴板"
         },
         "languages": {
             "auto": "自动检测",
@@ -452,6 +453,10 @@
                 "local_tts": {
                     "title": "本地语音合成",
                     "help": "使用系统已安装的 espeak-ng / espeak / speech-dispatcher 合成语音：完全离线、零配置。若提示未找到引擎，请安装 espeak-ng（sudo apt install espeak-ng）。"
+                },
+                "google_tts": {
+                    "title": "Google 语音合成",
+                    "help": "使用 Google 翻译的 TTS 服务：免费、无需安装、开箱即用。"
                 }
             },
             "collection": {

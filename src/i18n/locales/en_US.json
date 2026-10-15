@@ -7,7 +7,8 @@
             "write_clipboard": "Write to Clipboard",
             "plugin": "Plugin",
             "coming": "Coming soon…",
-            "clear": "Clear"
+            "clear": "Clear",
+            "copied": "Copied to clipboard"
         },
         "languages": {
             "auto": "Auto Detect",
@@ -452,6 +453,10 @@
                 "local_tts": {
                     "title": "Local TTS",
                     "help": "Uses the system-installed espeak-ng / espeak / speech-dispatcher to synthesize speech: fully offline, zero configuration. If no engine is found, install espeak-ng (sudo apt install espeak-ng)."
+                },
+                "google_tts": {
+                    "title": "Google TTS",
+                    "help": "Uses Google Translate TTS service: free, no installation required, works out of the box."
                 }
             },
             "collection": {

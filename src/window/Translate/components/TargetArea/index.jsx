@@ -77,7 +77,7 @@ export default function TargetArea(props) {
 
     const [appFontSize] = useConfig('app_font_size', 16);
     const [collectionServiceList] = useConfig('collection_service_list', []);
-    const [ttsServiceList] = useConfig('tts_service_list', ['local_tts']);
+    const [ttsServiceList] = useConfig('tts_service_list', ['google_tts']);
     const [translateSecondLanguage] = useConfig('translate_second_language', 'en');
     const [historyDisable] = useConfig('history_disable', false);
     const [isLoading, setIsLoading] = useState(false);
@@ -127,6 +127,8 @@ export default function TargetArea(props) {
                 writeText(sourceText).then(() => {
                     if (hideWindow) {
                         sendNotification({ title: t('common.write_clipboard'), body: sourceText });
+                    } else {
+                        toast.success(t('common.copied'), { style: toastStyle });
                     }
                 });
             }
@@ -279,6 +281,8 @@ export default function TargetArea(props) {
                                     writeText(v).then(() => {
                                         if (hideWindow) {
                                             sendNotification({ title: t('common.write_clipboard'), body: v });
+                                        } else {
+                                            toast.success(t('common.copied'), { style: toastStyle });
                                         }
                                     });
                                     break;
@@ -289,6 +293,8 @@ export default function TargetArea(props) {
                                                 title: t('common.write_clipboard'),
                                                 body: sourceText.trim() + '\n\n' + v,
                                             });
+                                        } else {
+                                            toast.success(t('common.copied'), { style: toastStyle });
                                         }
                                     });
                                     break;
@@ -741,7 +747,9 @@ export default function TargetArea(props) {
                                     size='sm'
                                     isDisabled={typeof result !== 'string' || result === ''}
                                     onPress={() => {
-                                        writeText(result);
+                                        writeText(result).then(() => {
+                                            toast.success(t('common.copied'), { style: toastStyle });
+                                        });
                                     }}
                                 >
                                     <MdContentCopy className='text-[16px]' />

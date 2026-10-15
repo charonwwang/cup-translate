@@ -75,7 +75,7 @@ export default function Translate() {
         DEFAULT_TRANSLATE_SERVICE_INSTANCE_LIST
     );
     const [recognizeServiceInstanceList] = useConfig('recognize_service_list', ['system', 'tesseract']);
-    const [ttsServiceInstanceList] = useConfig('tts_service_list', ['local_tts']);
+    const [ttsServiceInstanceList] = useConfig('tts_service_list', ['google_tts']);
     const [collectionServiceInstanceList] = useConfig('collection_service_list', []);
     const [hideLanguage] = useConfig('hide_language', false);
     const [pined, setPined] = useState(false);
