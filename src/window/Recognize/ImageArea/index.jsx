@@ -41,6 +41,15 @@ export default function ImageArea() {
                 load_img();
             });
         }
+        return () => {
+            // 组件卸载时清理监听器，防止对已卸载组件触发 load_img
+            if (unlisten) {
+                unlisten.then((f) => {
+                    f();
+                });
+                unlisten = null;
+            }
+        };
     }, [hideWindow]);
 
     return (

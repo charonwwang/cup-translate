@@ -26,8 +26,6 @@ import { debug } from 'tauri-plugin-log-api';
 export const sourceTextAtom = atom('');
 export const detectLanguageAtom = atom('');
 
-let timer = null;
-
 export default function SourceArea(props) {
     const { pluginList, serviceInstanceConfigMap } = props;
     const [appFontSize] = useConfig('app_font_size', 16);
