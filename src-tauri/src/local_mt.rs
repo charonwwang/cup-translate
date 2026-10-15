@@ -36,7 +36,17 @@ struct ModelSpec {
     expected_sha256: &'static [(&'static str, &'static str)],
 }
 
-/// 模型目录的完整文件清单（约 82MB，model.bin 占 79.6MB）
+/// 模型目录的完整文件清单（约 82MB，model.bin 占 79.6MB）。
+///
+/// **必须与每个 `ModelSpec::expected_sha256` 的文件名集合完全相等**，两个方向都有人用：
+///   · 下载与 `local_mt_model_status` 只遍历这里
+///     （`installed` = 这些文件都存在）
+///   · `verify_model_checksums`（下载终检）只遍历 `expected_sha256`
+///     （缺任一 -> `<file>: file is missing`）
+/// 若 `expected_sha256` 多出一项，状态页会显示「已安装」，而下载/终检永远失败
+/// ——那个文件从不会被下载，用户看到的只是一个含糊的 missing 报错。
+/// 该契约由 `the_model_file_list_and_the_checksum_list_are_the_same_set` 守住
+/// （实测：修复前给它加一个多余哈希项，全量测试仍然全绿）。
 const MODEL_FILES: &[&str] = &[
     "config.json",
     "shared_vocabulary.json",
@@ -470,6 +480,46 @@ mod tests {
             }
             for (file, sha) in spec.expected_sha256 {
                 assert_eq!(sha.len(), 64, "{pair}/{file} sha256 must be 64 hex chars");
+            }
+        }
+    }
+
+    /// `MODEL_FILES` 与 `expected_sha256` 必须是**同一个集合**（不只是包含关系）。
+    ///
+    /// 原来的护栏只断言 `MODEL_FILES ⊆ pinned`，反向漏掉了，而两个方向都有人在用：
+    ///   · 下载 / `local_mt_model_status` 只遍历 `MODEL_FILES`
+    ///     （"installed" = MODEL_FILES 全部存在）
+    ///   · `verify_model_checksums` 只遍历 `expected_sha256`
+    ///     （缺任一 -> 报 "<file>: file is missing"）
+    /// 于是 `expected_sha256` 里多出一项时，状态页会显示「已安装」，
+    /// 而下载/校验永远失败（那个文件从不会被下载），用户无从理解。
+    /// **实测确认**：给 en-zh 加一个 `("extra_file.bin", ...)` 项，
+    /// 修改前的测试全绿（117 passed / 0 failed）——这个缺口是真实存在的。
+    #[test]
+    fn the_model_file_list_and_the_checksum_list_are_the_same_set() {
+        let mut model_files: Vec<&str> = super::MODEL_FILES.to_vec();
+        model_files.sort_unstable();
+        for pair in ["en-zh", "zh-en"] {
+            let spec = model_spec(pair).unwrap();
+            let mut pinned: Vec<&str> = spec.expected_sha256.iter().map(|(f, _)| *f).collect();
+            pinned.sort_unstable();
+            assert_eq!(
+                pinned, model_files,
+                "{pair}: MODEL_FILES and expected_sha256 must be the same set — \
+                 an extra checksum entry is never downloaded, so verification fails \
+                 forever while the status page still reports 'installed'"
+            );
+        }
+    }
+
+    /// 同一 pair 内不允许重复文件项（重复会让 `expected` HashMap 静默丢弃一项）。
+    #[test]
+    fn no_model_pair_lists_a_file_twice() {
+        for pair in ["en-zh", "zh-en"] {
+            let spec = model_spec(pair).unwrap();
+            let mut seen = std::collections::HashSet::new();
+            for (file, _) in spec.expected_sha256 {
+                assert!(seen.insert(*file), "{pair} lists {file} more than once");
             }
         }
     }
