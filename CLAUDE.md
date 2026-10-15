@@ -310,7 +310,7 @@ ci: 收敛上游发布流水线，避免误用上游身份发布
 | 层次 | 位置 | 命令 | 说明 |
 |---|---|---|---|
 | 前端/配置回归 | `tests/*.test.mjs` | `pnpm test` | Node 内置 `node:test`，无框架依赖 |
-| Rust 单元测试 | `src-tauri/src/**/#[cfg(test)]` | `cd src-tauri && cargo test --release --features custom-protocol` | 覆盖 server 端口校验、backup、config、local_mt 等 |
+| Rust 单元测试 | `src-tauri/src/**/#[cfg(test)]` | `cd src-tauri && cargo test --release --features custom-protocol` | 覆盖 server 端口校验与路由、backup、config、local_mt 等 |
 
 测试以**回归护栏**为主：断言源码/配置中的关键契约（服务白名单同步、品牌标识、
 打包元数据、快捷键改键语义、快捷键「聚焦不落盘」、Tauri 命令注册、前后端事件名、

@@ -57,7 +57,22 @@ fn http_handle(request: Request, port: u16) {
         return;
     }
 
-    match request.url() {
+    // 按**路径**路由，查询串交给各处理器自己解析。
+    //
+    // 修复前这里是一组精确字符串匹配，把 `?screenshot=true/false` 也写进了 match 臂：
+    //   "/ocr_recognize?screenshot=false" => handle_ocr_recognize(request),
+    //   "/ocr_recognize?screenshot=true"  => handle_ocr_recognize(request),
+    // 于是只有这 4 个硬编码 URL 能进来，其余组合（如
+    // `/ocr_recognize?screenshot=false&extra=1`、`/ocr_recognize?x=1`）一律 404——
+    // 而 ocr_uses_internal_screenshot() **专门**为这些组合写了参数解析、
+    // 还配了单元测试，却永远走不到（实测确认：带额外参数的 URL 返回 404）。
+    //
+    // 这正是它要处理的情况：文档给的 curl 示例是
+    // `/ocr_recognize?screenshot=false`，但用户从 shell/脚本里追加参数
+    // （常用于 cache-busting，或让不同截图工具共用同一端点）是常见做法，
+    // 而 HTTP 语义也要求「同路径、不同查询串」应命中同一资源。
+    let path = request_path(request.url());
+    match path.as_str() {
         "/" => handle_translate(request),
         "/config" => handle_config(request),
         "/translate" => handle_translate(request),
@@ -65,15 +80,34 @@ fn http_handle(request: Request, port: u16) {
         "/input_translate" => handle_input_translate(request),
         "/ocr_recognize" => handle_ocr_recognize(request),
         "/ocr_translate" => handle_ocr_translate(request),
-        "/ocr_recognize?screenshot=false" => handle_ocr_recognize(request),
-        "/ocr_translate?screenshot=false" => handle_ocr_translate(request),
-        "/ocr_recognize?screenshot=true" => handle_ocr_recognize(request),
-        "/ocr_translate?screenshot=true" => handle_ocr_translate(request),
         _ => {
             warn!("Unknown request url: {}", request.url());
             response(request, StatusCode(404), "not found");
         }
     }
+}
+
+/// 全部可路由的**路径**（不含查询串）。
+///
+/// 与 `http_handle` 的 match 臂一一对应，给测试一个可断言的清单：
+/// 它保证「路由表里不会混进带 `?` 的条目」（那正是修复前的形态），
+/// 而 [`request_path`] 保证运行时只按路径匹配。两者配对才算完整契约。
+const ROUTES: [&str; 7] = [
+    "/",
+    "/config",
+    "/translate",
+    "/selection_translate",
+    "/input_translate",
+    "/ocr_recognize",
+    "/ocr_translate",
+];
+
+/// 取出 URL 的路径部分（丢掉 `?` 之后的查询串）。
+///
+/// 单独抽成函数是为了能被测试直接调用：路由表只认路径，
+/// 查询串一律交给处理器（如 [`ocr_uses_internal_screenshot`]）解析。
+fn request_path(url: &str) -> String {
+    url.split('?').next().unwrap_or("").to_string()
 }
 
 fn header<'a>(request: &'a Request, name: &'static str) -> Option<&'a str> {
@@ -232,6 +266,147 @@ fn response(request: Request, status: StatusCode, body: &str) {
 mod tests {
     use super::browser_request_is_local;
     use super::ocr_uses_internal_screenshot;
+    use super::request_path;
+    use super::ROUTES;
+
+    /// 路由表必须与 [`ROUTES`] 完全一致，且**不含查询串**。
+    ///
+    /// 为什么要读源码：`request_path` 是纯函数，单独测它无法证明路由真的用了它——
+    /// 实测过这个变异：把 `http_handle` 的 match 改回精确字符串匹配
+    /// （臂里写死 `?screenshot=true/false`），仅测 `request_path` 的断言**全部照过**。
+    /// 所以这里直接扫描 `http_handle` 里的 match 臂，把两边钉在一起。
+    #[test]
+    fn the_router_matches_on_bare_paths_only() {
+        let source = include_str!("server.rs");
+        // 只看 http_handle 函数体，避免把测试里的字符串也算进来
+        let start = source
+            .find("fn http_handle(")
+            .expect("http_handle should exist");
+        let body = &source[start..];
+        let end = body.find("\n/// 全部可路由").expect("ROUTES marker should exist");
+        let router = &body[..end];
+
+        // 1) 路由必须先把查询串剥掉
+        assert!(
+            router.contains("request_path(request.url())"),
+            "http_handle must route on the path, not on the raw url"
+        );
+
+        // 2) 每一条 match 臂都必须是裸路径，不能带 '?'
+        for line in router.lines() {
+            let trimmed = line.trim();
+            if !trimmed.starts_with('"') {
+                continue;
+            }
+            let arm = trimmed.split("=>").next().unwrap_or("").trim();
+            assert!(
+                !arm.contains('?'),
+                "route arms must not embed a query string (found {arm}); \
+                 the query string is the handler's job (see ocr_uses_internal_screenshot)"
+            );
+            assert!(
+                ROUTES.contains(&arm.trim_matches('"')),
+                "route arm {arm} is missing from the ROUTES list used by the tests"
+            );
+        }
+
+        // 3) ROUTES 里也不许出现带 '?' 或重复的条目
+        for route in ROUTES {
+            assert!(!route.contains('?'), "ROUTES must hold bare paths, got {route}");
+        }
+        let mut seen = ROUTES.to_vec();
+        seen.sort_unstable();
+        seen.dedup();
+        assert_eq!(seen.len(), ROUTES.len(), "ROUTES must not contain duplicates");
+    }
+
+    /// 文档里的四个 OCR 端点必须仍然可达——其中包括过去唯一能进的那几种写法。
+    #[test]
+    fn documented_ocr_endpoints_still_route() {
+        for url in [
+            "/ocr_recognize",
+            "/ocr_recognize?screenshot=true",
+            "/ocr_recognize?screenshot=false",
+            "/ocr_translate?screenshot=false",
+        ] {
+            assert!(
+                ROUTES.contains(&request_path(url).as_str()),
+                "documented endpoint must still route: {url}"
+            );
+        }
+    }
+
+    /// 路由必须按**路径**匹配，而不是整条 URL。
+    ///
+    /// 修复前 match 的臂里写死了 `?screenshot=true` / `?screenshot=false` 四种组合，
+    /// 于是 `/ocr_recognize?screenshot=false&extra=1` 这类 URL 直接 404——
+    /// 尽管 `ocr_uses_internal_screenshot` 专门支持它（上面那条测试就断言了支持）。
+    /// 两处逻辑互相矛盾，只有一种能生效；这里把路由一侧钉死。
+    #[test]
+    fn routing_key_is_the_path_and_ignores_the_query_string() {
+        // 同一路径 + 任意查询串，都必须归约到同一个路由键
+        for url in [
+            "/ocr_recognize",
+            "/ocr_recognize?screenshot=true",
+            "/ocr_recognize?screenshot=false",
+            "/ocr_recognize?screenshot=false&extra=1",
+            "/ocr_recognize?extra=1&screenshot=false",
+            "/ocr_recognize?x=notfalse",
+            "/ocr_recognize?foo=false",
+            "/ocr_recognize?a=1&b=2&c=3",
+        ] {
+            assert_eq!(
+                request_path(url),
+                "/ocr_recognize",
+                "every query string on the same path must route identically ({url})"
+            );
+        }
+
+        for url in [
+            "/ocr_translate",
+            "/ocr_translate?screenshot=true",
+            "/ocr_translate?screenshot=false",
+            "/ocr_translate?screenshot=false&extra=1",
+        ] {
+            assert_eq!(request_path(url), "/ocr_translate", "…({url})");
+        }
+
+        assert_eq!(request_path("/"), "/");
+        assert_eq!(request_path("/?x=1"), "/");
+        assert_eq!(request_path("/config"), "/config");
+        assert_eq!(request_path("/translate"), "/translate");
+        assert_eq!(request_path("/selection_translate"), "/selection_translate");
+        assert_eq!(request_path("/input_translate"), "/input_translate");
+    }
+
+    /// 未知路径仍要被拒（不要让上面那条放宽变成「什么都能进」）。
+    #[test]
+    fn unknown_paths_still_do_not_route() {
+        let known = [
+            "/",
+            "/config",
+            "/translate",
+            "/selection_translate",
+            "/input_translate",
+            "/ocr_recognize",
+            "/ocr_translate",
+        ];
+        for url in [
+            "/nope",
+            "/nope?x=1",
+            "/ocr_recognition",
+            "/ocr_recognize/sub",
+            "/translate/extra",
+            "/OCR_RECOGNIZE",
+            "",
+            "?screenshot=false",
+        ] {
+            assert!(
+                !known.contains(&request_path(url).as_str()),
+                "unknown path must not match any route: {url}"
+            );
+        }
+    }
 
     #[test]
     fn ocr_screenshot_parameter_is_parsed_exactly() {
