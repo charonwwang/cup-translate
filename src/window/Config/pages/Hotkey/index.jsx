@@ -110,24 +110,46 @@ export default function Hotkey() {
      * 用户看到的输入框和磁盘上的值仍然一致。
      */
     function registerHandler(name, key, persist) {
-        isRegistered(key).then((res) => {
-            if (res) {
-                toast.error(t('config.hotkey.is_register'), { style: toastStyle });
-            } else {
-                invoke('register_shortcut_by_frontend', {
-                    name: name,
-                    shortcut: key,
-                }).then(
-                    () => {
-                        persist(key, true);
-                        toast.success(t('config.hotkey.success'), { style: toastStyle });
-                    },
-                    (e) => {
-                        toast.error(e, { style: toastStyle });
-                    }
-                );
-            }
-        });
+        // `isRegistered` 是 `@tauri-apps/api/globalShortcut` 的
+        // `invokeTauriCommand({ __tauriModule: 'GlobalShortcut', ... })`（真实 IPC），
+        // **会 reject**。修复前这里只有 `.then()`、没有 `.catch`，
+        // 于是一旦它失败，回调**从不执行**：
+        //   · 用户按下组合键后界面**毫无反应** —— 既没有「已被占用」的错误提示，
+        //     也没有成功提示；
+        //   · 配置确实没被写入（`persist` 没被调用，这点是对的），
+        //     但用户无法区分「失败了」和「没按上」，只会反复重试；
+        //   · 同时留下一个未处理的 Promise 拒绝（仓库里没有任何
+        //     `window.unhandledrejection` 兜底，已 grep 确认为空）。
+        //
+        // 注意**同一个函数内层**的 `invoke('register_shortcut_by_frontend')`
+        // 本来就带了两参数形式的失败回调（下面那段），所以这里是把外层漏掉的那个
+        // 补齐——失败时必须给出提示，不能静默。
+        //
+        // 文案沿用内层失败分支的做法（直接把错误对象交给 toast.error），
+        // 不新增 i18n key：本项目没有母语校验能力，机翻会产出错误文案
+        // （CLAUDE.md §4.2 / §9 红线）。
+        isRegistered(key)
+            .then((res) => {
+                if (res) {
+                    toast.error(t('config.hotkey.is_register'), { style: toastStyle });
+                } else {
+                    invoke('register_shortcut_by_frontend', {
+                        name: name,
+                        shortcut: key,
+                    }).then(
+                        () => {
+                            persist(key, true);
+                            toast.success(t('config.hotkey.success'), { style: toastStyle });
+                        },
+                        (e) => {
+                            toast.error(e, { style: toastStyle });
+                        }
+                    );
+                }
+            })
+            .catch((e) => {
+                toast.error(e, { style: toastStyle });
+            });
     }
 
     return (
