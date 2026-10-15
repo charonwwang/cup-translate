@@ -1,6 +1,10 @@
 import { Language } from './info';
 import * as jose from 'jose';
 import { info } from 'tauri-plugin-log-api';
+// 必须用带超时的封装：@tauri-apps/api/http 的 fetch **不会**自动超时，
+// 服务端挂起时请求会无限等待，界面永久卡在 loading。
+// （本文件是 19 个翻译引擎里唯一漏掉这层的；其余 18 个都 import 了它。）
+import { fetchWithTimeout as fetch } from '../../../utils/fetchWithTimeout';
 
 export async function translate(text, from, to, options = {}) {
     const { config, setResult, detect } = options;

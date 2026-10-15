@@ -1,6 +1,8 @@
 import { Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Button } from '@nextui-org/react';
 import { atom, useAtom, useSetAtom, useAtomValue } from 'jotai';
-import { fetch, Body } from '@tauri-apps/api/http';
+// 用带超时的封装：裸 fetch 不会超时，服务端挂起会让这次「翻译」永远不返回。
+// fetchWithTimeout 会再导出 Body，故这里一并从它取。
+import { fetchWithTimeout as fetch, Body } from '../../../utils/fetchWithTimeout';
 import { useTranslation } from 'react-i18next';
 import { HiTranslate } from 'react-icons/hi';
 import { GiCycle } from 'react-icons/gi';
