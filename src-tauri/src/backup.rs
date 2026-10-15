@@ -138,13 +138,18 @@ pub async fn webdav(
     password: String,
     name: Option<String>,
 ) -> Result<String, Error> {
-    // build a client
+    // build a client（reqwest_dav 内部用 reqwest 0.11，agent 需用其 re_exports 类型）
+    let http_client = reqwest_dav::re_exports::reqwest::Client::builder()
+        .timeout(BACKUP_HTTP_TIMEOUT)
+        .build()?;
     let client = ClientBuilder::new()
+        .set_agent(http_client.clone())
         .set_host(url.clone())
         .set_auth(Auth::Basic(username.clone(), password.clone()))
         .build()?;
     client.mkcol("/pot-app").await.unwrap_or_default();
     let client = ClientBuilder::new()
+        .set_agent(http_client)
         .set_host(format!("{}/pot-app", url.trim_end_matches("/")))
         .set_auth(Auth::Basic(username, password))
         .build()?;
