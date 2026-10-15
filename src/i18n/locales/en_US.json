@@ -9,7 +9,8 @@
             "coming": "Coming soon…",
             "clear": "Clear",
             "copied": "Copied to clipboard",
-            "language_not_supported": "The selected language is not supported by this service"
+            "language_not_supported": "The selected language is not supported by this service",
+            "clipboard_failed": "Failed to copy to clipboard"
         },
         "languages": {
             "auto": "Auto Detect",

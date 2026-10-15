@@ -37,7 +37,7 @@ import { invoke } from '@tauri-apps/api/tauri';
 import { sourceLanguageAtom, targetLanguageAtom } from '../LanguageArea';
 import { useConfig, useToastStyle, useVoice } from '../../../../hooks';
 import { sourceTextAtom, detectLanguageAtom } from '../SourceArea';
-import { clipboardFailureMessage, writeClipboardSafely } from '../../../../utils/clipboard';
+import { writeClipboardSafely } from '../../../../utils/clipboard';
 import { invoke_plugin } from '../../../../utils/invoke_plugin';
 import * as builtinServices from '../../../../services/translate';
 import * as builtinTtsServices from '../../../../services/tts';

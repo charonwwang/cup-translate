@@ -49,10 +49,27 @@ export async function writeClipboardSafely(text, options = {}) {
 /**
  * 构造失败提示文案。
  *
- * 不新增 i18n key：一是 21 个语言文件都要同步，二是
- * 这里要传达的是「这次复制失败了」这一事实本身，附上底层错误更有助于自查。
+ * 修复前这里**硬编码简体中文**（`复制到剪贴板失败：…`），而它出现的三个窗口
+ * 都是完整本地化的（TextArea 6 处 t()、TargetArea 16 处、SourceArea 15 处）。
+ * 于是英文界面下复制失败时，用户看到的是一句中文——
+ * 与 `common.language_not_supported` 当初的问题完全同类。
+ *
+ * 原来的注释给了两条不新增 i18n key 的理由，两条都站不住：
+ *   1. 「21 个语言文件都要同步」——不必。缺 key 时 i18next 会回退英文
+ *      （`src/i18n/index.jsx` 的 `fallbackLng` 最终 `default: ['en']`），
+ *      所以只需补 `en_US` / `zh_CN` 两个基准文件（CLAUDE.md §4.2）。
+ *   2. 「传达的是这次复制失败了这一事实」——这恰恰是**用户可见文案**，
+ *      正是应该本地化的那一类。
+ *
+ * 底层错误细节仍然保留（与 History 页 `clear_failed` 同一写法）：
+ * 它有助于自查，且本身通常是英文原样，不参与翻译。
+ *
+ * @param {unknown} error 底层错误
+ * @param {(key: string) => string} t i18next 的 t 函数
  */
-export function clipboardFailureMessage(error) {
+export function clipboardFailureMessage(error, t) {
     const detail = error && error.message ? error.message : String(error);
-    return `复制到剪贴板失败：${detail}`;
+    // 没拿到 t（例如被单独调用）时退回英文，绝不退回硬编码中文
+    const prefix = typeof t === 'function' ? t('common.clipboard_failed') : 'Failed to copy to clipboard';
+    return `${prefix}: ${detail}`;
 }

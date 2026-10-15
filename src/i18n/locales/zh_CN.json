@@ -9,7 +9,8 @@
             "coming": "敬请期待…",
             "clear": "清空",
             "copied": "已复制到剪贴板",
-            "language_not_supported": "当前服务不支持所选语言"
+            "language_not_supported": "当前服务不支持所选语言",
+            "clipboard_failed": "复制到剪贴板失败"
         },
         "languages": {
             "auto": "自动检测",

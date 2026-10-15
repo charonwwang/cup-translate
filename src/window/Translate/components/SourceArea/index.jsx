@@ -55,7 +55,7 @@ export default function SourceArea(props) {
             },
             onError: (e) => {
                 logError('clipboard write failed: ' + e);
-                toast.error(clipboardFailureMessage(e), { style: toastStyle });
+                toast.error(clipboardFailureMessage(e, t), { style: toastStyle });
             },
         });
     };

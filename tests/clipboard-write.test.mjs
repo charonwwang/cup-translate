@@ -65,8 +65,67 @@ test('an error without a writer still resolves rather than rejecting', async () 
 });
 
 test('failure message includes the underlying reason', () => {
-    assert.match(clipboardFailureMessage(new Error('clipboard busy')), /clipboard busy/);
-    assert.match(clipboardFailureMessage('plain string reason'), /plain string reason/);
+    assert.match(
+        clipboardFailureMessage(new Error('clipboard busy'), (k) => k),
+        /clipboard busy/
+    );
+    assert.match(
+        clipboardFailureMessage('plain string reason', (k) => k),
+        /plain string reason/
+    );
+});
+
+test('the failure message goes through the translation function', () => {
+    // 修复前这里**硬编码简体中文**（`复制到剪贴板失败：…`），
+    // 而用到它的两个窗口都是完整本地化的，于是英文界面下会弹出一句中文。
+    // 现在前缀必须由 t() 提供，且传入的 key 必须真实存在。
+    const seen = [];
+    const t = (key) => {
+        seen.push(key);
+        return 'TRANSLATED';
+    };
+    const message = clipboardFailureMessage(new Error('busy'), t);
+    assert.deepEqual(seen, ['common.clipboard_failed'], 'must translate exactly one key');
+    assert.equal(message, 'TRANSLATED: busy');
+});
+
+test('no user-visible clipboard message falls back to hardcoded Chinese', () => {
+    // 反向护栏：即使没有传 t，也**绝不能**退回中文——
+    // 项目的默认/回退语言是英文（CLAUDE.md §4.2）。
+    const message = clipboardFailureMessage(new Error('busy'));
+    assert.ok(!/[\u4e00-\u9fff]/.test(message), `the no-t fallback must be English, got ${JSON.stringify(message)}`);
+    assert.match(message, /busy/);
+});
+
+test('every clipboard failure call site passes t so the text is localizable', async () => {
+    // 行为测试只证明「传了 t 就能本地化」，不证明调用点真的传了。
+    // 这条扫描真实调用点（round 34 的教训：测纯函数 ≠ 测接线）。
+    const targets = ['src/window/Recognize/TextArea/index.jsx', 'src/window/Translate/components/SourceArea/index.jsx'];
+    for (const file of targets) {
+        const source = await readFile(file, 'utf8');
+        const call = /clipboardFailureMessage\(([^)]*)\)/.exec(source);
+        assert.ok(call, `${file} should call clipboardFailureMessage`);
+        assert.match(call[1], /,\s*t\s*$/, `${file} must pass t as the second argument, got (${call[1]})`);
+    }
+});
+
+test('the clipboard_failed key exists in both baseline locales', async () => {
+    for (const locale of ['en_US', 'zh_CN']) {
+        const parsed = JSON.parse(await readFile(`src/i18n/locales/${locale}.json`, 'utf8'));
+        // 记得剥掉 i18next 的 translation 外壳（CLAUDE.md §4.2）
+        const value = parsed?.translation?.common?.clipboard_failed;
+        assert.equal(typeof value, 'string', `${locale}.json is missing common.clipboard_failed`);
+        assert.ok(value.trim() !== '', `${locale}.json has an empty clipboard_failed`);
+        assert.notEqual(value, 'clipboard_failed', `${locale}.json just repeats the key`);
+    }
+    // 两个基准文件必须是**不同**的文案，否则等于没翻译
+    const en = JSON.parse(await readFile('src/i18n/locales/en_US.json', 'utf8'));
+    const zh = JSON.parse(await readFile('src/i18n/locales/zh_CN.json', 'utf8'));
+    assert.notEqual(
+        en.translation.common.clipboard_failed,
+        zh.translation.common.clipboard_failed,
+        'en_US and zh_CN must not share the same clipboard_failed text'
+    );
 });
 
 // ---------------------------------------------------------------------------

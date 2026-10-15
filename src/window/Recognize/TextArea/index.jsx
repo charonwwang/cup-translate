@@ -55,7 +55,7 @@ export default function TextArea(props) {
                 // 该窗口没有渲染 react-hot-toast 的 <Toaster/>，toast 在此不可见，
                 // 因此复用组件已有的 error 展示区（红色只读文本域），确保失败真的被看到。
                 logError('clipboard write failed: ' + e);
-                setError(clipboardFailureMessage(e));
+                setError(clipboardFailureMessage(e, t));
             },
         });
     };
