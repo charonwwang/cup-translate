@@ -137,9 +137,35 @@ fn model_dir(app_handle: &AppHandle, pair: &str) -> Result<PathBuf, String> {
         .join(spec.dir_name))
 }
 
-/// Translator 加载较慢（约 1~2 秒），按语向缓存复用；线程数变化时重建
-fn translator_cache() -> &'static Mutex<HashMap<String, (usize, Arc<MtTranslator>)>> {
-    static CACHE: OnceLock<Mutex<HashMap<String, (usize, Arc<MtTranslator>)>>> = OnceLock::new();
+/// 线程数的合理上界。
+///
+/// `threads` 来自设置页的自由文本输入（`local_mt/Config.jsx` 只做 parseInt，
+/// 没有范围校验），因此后端必须自己夹紧。原先只做 `threads.max(1)` 挡下界，
+/// 上界不设限：用户把输入框误填成 `999999`（或粘贴了一长串数字）会直接传进
+/// CTranslate2 作为 `num_threads_per_replica`，导致线程数爆炸、推理卡死。
+/// 64 远超任何桌面 CPU 的物理核心数，作为兜底上界足够宽松。
+const MAX_MT_THREADS: usize = 64;
+
+/// 把前端传来的线程数夹到 [1, MAX_MT_THREADS]。
+///
+/// 注意 `unwrap_or(2)` 之前发生在 `as usize` 之前，而类型是 u32，
+/// 所以负数在反序列化阶段就被 Tauri 拒绝，不存在 `-1 as usize` 的回绕问题；
+/// 这里只需处理后端可信范围内的越界值。
+fn clamp_threads(threads: Option<u32>) -> usize {
+    let requested = threads.unwrap_or(2) as usize;
+    requested.clamp(1, MAX_MT_THREADS)
+}
+
+/// Translator 加载较慢（约 1~2 秒），按语向缓存复用；线程数变化时重建。
+///
+/// 每个语向只保留**一个**缓存项：模型是 80MB 级别的重对象，
+/// 若按 (pair, threads) 组合缓存，用户每改一次线程数就会多留一份模型在内存里
+/// 且永不释放。线程数变化时直接替换旧项，旧的 Arc 在没有在途请求后即被释放。
+/// 缓存项：已加载的 translator 及其线程数（线程数变化时需要重建）
+type CachedTranslator = (usize, Arc<MtTranslator>);
+
+fn translator_cache() -> &'static Mutex<HashMap<String, CachedTranslator>> {
+    static CACHE: OnceLock<Mutex<HashMap<String, CachedTranslator>>> = OnceLock::new();
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
@@ -353,7 +379,8 @@ pub async fn local_mt_translate(
 ) -> Result<String, String> {
     let spec = model_spec(&pair)?;
     // 默认 2 线程：资源占用最小化（实测 2 线程 152ms vs 4 线程 106ms，CPU 占用减半）
-    let threads = threads.unwrap_or(2) as usize;
+    // 前端输入框无范围校验，这里夹紧到 [1, 64]（见 clamp_threads）
+    let threads = clamp_threads(threads);
     let translator = load_translator(&app_handle, &pair, threads)?;
     let results = match spec.target_prefix {
         Some(prefix) => translator.translate_batch_with_target_prefix(
@@ -375,8 +402,36 @@ pub async fn local_mt_translate(
 
 #[cfg(test)]
 mod tests {
-    use super::{file_sha256, model_spec, verify_model_checksums, ModelSpec};
+    use super::{clamp_threads, file_sha256, model_spec, verify_model_checksums, ModelSpec, MAX_MT_THREADS};
     use std::path::PathBuf;
+
+    #[test]
+    fn requested_threads_are_clamped_to_a_sane_range() {
+        // 设置页的线程数是自由文本输入（只做 parseInt，无范围校验），
+        // 后端必须自己夹紧，否则 999999 会直接传进 CTranslate2。
+        assert_eq!(clamp_threads(Some(999_999)), MAX_MT_THREADS);
+        assert_eq!(clamp_threads(Some(u32::MAX)), MAX_MT_THREADS);
+        assert_eq!(clamp_threads(Some(65)), MAX_MT_THREADS);
+        assert_eq!(clamp_threads(Some(64)), 64);
+
+        // 0 表示「未设置/无意义」，回落到最小可用值 1，而不是 0 线程
+        assert_eq!(clamp_threads(Some(0)), 1);
+        assert_eq!(clamp_threads(Some(1)), 1);
+
+        // 正常值原样保留；None 用默认 2（与前端默认值一致）
+        assert_eq!(clamp_threads(Some(2)), 2);
+        assert_eq!(clamp_threads(Some(8)), 8);
+        assert_eq!(clamp_threads(None), 2);
+
+        // 不变量：结果永远落在合法区间内
+        for requested in [0u32, 1, 2, 4, 64, 65, 1000, u32::MAX] {
+            let actual = clamp_threads(Some(requested));
+            assert!(
+                (1..=MAX_MT_THREADS).contains(&actual),
+                "threads {requested} clamped to {actual}, outside [1, {MAX_MT_THREADS}]"
+            );
+        }
+    }
 
     #[test]
     fn download_guard_prevents_concurrent_access_to_same_pair() {
