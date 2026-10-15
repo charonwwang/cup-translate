@@ -50,14 +50,32 @@ fn crop_in_bounds(
 
 #[tauri::command]
 pub fn get_text(state: tauri::State<StringWrapper>) -> String {
-    return state.0.lock().unwrap().to_string();
+    match state.0.lock() {
+        Ok(guard) => guard.to_string(),
+        Err(_) => {
+            log::warn!("get_text: string state mutex poisoned, returning empty");
+            String::new()
+        }
+    }
 }
 
 #[tauri::command]
 pub fn reload_store() {
-    let state = APP.get().unwrap().state::<StoreWrapper>();
-    let mut store = state.0.lock().unwrap();
-    store.load().unwrap();
+    let Some(app_handle) = APP.get() else {
+        log::warn!("reload_store: app not initialized, skipping");
+        return;
+    };
+    let state = app_handle.state::<StoreWrapper>();
+    let load_result = match state.0.lock() {
+        Ok(mut store) => store.load(),
+        Err(_) => {
+            log::warn!("reload_store: store mutex poisoned, skipping");
+            return;
+        }
+    };
+    if let Err(e) = load_result {
+        log::warn!("reload_store: failed to reload store: {e:?}");
+    }
 }
 
 #[tauri::command]
@@ -233,9 +251,13 @@ pub fn install_plugin(path_list: Vec<String>) -> Result<i32, Error> {
                 "Invalid Plugin: unsupported plugin type".into(),
             ));
         }
-        let config_path = dirs::config_dir().unwrap();
+        let config_path = dirs::config_dir()
+            .ok_or_else(|| Error::Error("Get Config Dir Error".into()))?;
+        let app_handle = APP
+            .get()
+            .ok_or_else(|| Error::Error("App is not initialized".into()))?;
         let config_path =
-            config_path.join(APP.get().unwrap().config().tauri.bundle.identifier.clone());
+            config_path.join(app_handle.config().tauri.bundle.identifier.clone());
         let config_path = config_path.join("plugins");
         let config_path = config_path.join(plugin_type);
         let plugin_path = config_path.join(file_name);
@@ -262,8 +284,12 @@ pub fn run_binary(
         return Err(Error::Error("Invalid plugin path".into()));
     }
 
-    let config_path = dirs::config_dir().unwrap();
-    let config_path = config_path.join(APP.get().unwrap().config().tauri.bundle.identifier.clone());
+    let config_path =
+        dirs::config_dir().ok_or_else(|| Error::Error("Get Config Dir Error".into()))?;
+    let app_handle = APP
+        .get()
+        .ok_or_else(|| Error::Error("App is not initialized".into()))?;
+    let config_path = config_path.join(app_handle.config().tauri.bundle.identifier.clone());
     let config_path = config_path.join("plugins");
     let config_path = config_path.join(plugin_type);
     let plugin_path = config_path.join(plugin_name);
