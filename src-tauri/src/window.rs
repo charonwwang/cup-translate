@@ -292,6 +292,93 @@ fn simulate_copy_with_cg_event() {
     std::thread::sleep(std::time::Duration::from_millis(80));
 }
 
+/// 兜底取词：模拟 Cmd+C 把选区写进剪贴板，读出后**把剪贴板还原如初**。
+///
+/// 为什么必须还原：模拟 Cmd+C 会覆盖用户剪贴板。用户只是想划词翻译，
+/// 却发现自己原先复制的内容被换成了刚划中的文字——属于静默的数据丢失。
+///
+/// 还原语义（见 [`restore_action`]）：
+/// - 原本有文本 -> 写回原文本；
+/// - 原本没有文本（空剪贴板 / 只有图片或文件）-> **清空**剪贴板。
+///   修复前这两种「无文本」的情况会被 `.filter(|s| !s.is_empty())` 归成 None，
+///   于是跳过还原，选区文字被留在剪贴板里；
+///   即「划词翻译凭空往剪贴板塞了一段文本」，正是本函数要消除的副作用。
+///
+/// 返回取到的选区文本；没取到则返回 None（此时同样会还原剪贴板）。
+#[cfg(target_os = "macos")]
+fn copy_selection_via_cgevent() -> Option<String> {
+    let mut clipboard = arboard::Clipboard::new().ok();
+
+    // 区分「原本就没有文本」与「压根读不到剪贴板」：
+    // 前者要清空还原，后者无从还原（保持现状，不做破坏性操作）。
+    let saved: Option<Option<String>> = clipboard
+        .as_mut()
+        .map(|c| c.get_text().ok())
+        .map(|maybe_text| maybe_text.filter(|s| !s.is_empty()));
+
+    simulate_copy_with_cg_event();
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    let mut selection: Option<String> = None;
+    if let Some(c) = clipboard.as_mut() {
+        if let Ok(clip_text) = c.get_text() {
+            if !clip_text.trim().is_empty() {
+                info!("selection_translate: got text via CGEvent copy");
+                selection = Some(clip_text);
+            }
+        }
+    }
+
+    if let (Some(c), Some(saved)) = (clipboard.as_mut(), saved) {
+        // saved: Option<String>；包装成 Option<Option<&str>> 以保留三层语义
+        match restore_action(Some(saved.as_deref())) {
+            RestoreAction::SetText(text) => match c.set_text(text) {
+                Ok(()) => info!("selection_translate: clipboard text restored"),
+                Err(e) => warn!("selection_translate: failed to restore clipboard: {e:?}"),
+            },
+            RestoreAction::Clear => match c.clear() {
+                Ok(()) => info!("selection_translate: clipboard cleared back to its original empty state"),
+                Err(e) => warn!("selection_translate: failed to clear clipboard: {e:?}"),
+            },
+            RestoreAction::Nothing => {}
+        }
+    }
+
+    selection
+}
+
+/// 还原剪贴板时该做什么。抽成纯函数以便单测（无需真实剪贴板）。
+///
+/// 参数是备份的**三层**结果，不能提前压平：
+/// - `None`：压根读不到剪贴板 -> 不做破坏性操作
+/// - `Some(None)`：读到了但没有文本（空 / 只有图片或文件）-> 清空
+/// - `Some(Some(text))`：原本就有文本 -> 写回
+///
+/// 注意别把参数写成 `Option<Option<String>>` 再 `as_deref()`：
+/// 那会把 `Some(None)` 与 `None` 合并成同一个 `None`，
+/// 使「原本为空」这条路径退化成「不还原」，修复就白做了。
+#[cfg(target_os = "macos")]
+#[derive(Debug, PartialEq, Eq)]
+enum RestoreAction<'a> {
+    /// 把原文本写回去
+    SetText(&'a str),
+    /// 原本没有文本，清空剪贴板
+    Clear,
+    /// 原本读不到剪贴板，不做任何破坏性操作
+    Nothing,
+}
+
+/// 依据备份结果决定还原动作。`saved` 的三层语义见 [`RestoreAction`] 的文档。
+#[cfg(target_os = "macos")]
+fn restore_action(saved: Option<Option<&str>>) -> RestoreAction<'_> {
+    match saved {
+        Some(Some(text)) if !text.is_empty() => RestoreAction::SetText(text),
+        // 备份成功但内容为空：必须清空，否则选区文字会残留在剪贴板里
+        Some(Some(_)) | Some(None) => RestoreAction::Clear,
+        None => RestoreAction::Nothing,
+    }
+}
+
 /// 划词翻译：读取当前选中文本并翻译（不含剪贴板兜底）
 pub fn selection_translate() {
     use selection::get_text;
@@ -307,36 +394,8 @@ pub fn selection_translate() {
     // 兜底：用 CGEvent 模拟 Cmd+C 获取选中文本（不需要 Automation 权限）
     if text.trim().is_empty() {
         info!("selection_translate: trying CGEvent Cmd+C fallback");
-        // 模拟 Cmd+C 会**覆盖用户剪贴板**，属于副作用数据丢失：
-        // 用户只是想划词翻译，却发现自己刚复制的内容没了。
-        // 这里先备份剪贴板，取到选区文本后再还原（取不到也还原）。
-        #[cfg(target_os = "macos")]
-        {
-            let mut clipboard = arboard::Clipboard::new().ok();
-            let saved = clipboard
-                .as_mut()
-                .and_then(|c| c.get_text().ok())
-                .filter(|s| !s.is_empty());
-
-            simulate_copy_with_cg_event();
-            std::thread::sleep(std::time::Duration::from_millis(100));
-            if let Some(c) = clipboard.as_mut() {
-                if let Ok(clip_text) = c.get_text() {
-                    if !clip_text.trim().is_empty() {
-                        info!("selection_translate: got text via CGEvent copy");
-                        text = clip_text;
-                    }
-                }
-            }
-
-            // 还原用户原有剪贴板内容（选区文本已复制到 text，不再依赖剪贴板）
-            if let (Some(c), Some(saved)) = (clipboard.as_mut(), saved) {
-                if let Err(e) = c.set_text(saved) {
-                    warn!("selection_translate: failed to restore clipboard: {e:?}");
-                } else {
-                    info!("selection_translate: clipboard restored after CGEvent copy");
-                }
-            }
+        if let Some(clip_text) = copy_selection_via_cgevent() {
+            text = clip_text;
         }
     }
 
@@ -578,5 +637,46 @@ pub fn updater_window() {
     }
     if let Err(e) = window.center() {
         warn!("Failed to center updater window: {e:?}");
+    }
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod tests {
+    use super::{restore_action, RestoreAction};
+
+    #[test]
+    fn saved_text_is_written_back() {
+        assert_eq!(
+            restore_action(Some(Some("user clipboard"))),
+            RestoreAction::SetText("user clipboard")
+        );
+    }
+
+    #[test]
+    fn an_originally_empty_clipboard_is_cleared_not_left_dirty() {
+        // 核心用例：备份成功但内容为空（空剪贴板 / 只有图片或文件）时，
+        // 必须清空剪贴板。修复前这种情况被归成「无需还原」，
+        // 于是 CGEvent 复制进来的选区文字被留在剪贴板里——
+        // 用户只是划词翻译，剪贴板却凭空多出一段文本。
+        assert_eq!(restore_action(Some(None)), RestoreAction::Clear);
+    }
+
+    #[test]
+    fn an_empty_string_is_treated_as_no_text() {
+        // get_text() 可能返回空串而非 None，语义同样是「原本没有文本」
+        assert_eq!(restore_action(Some(Some(""))), RestoreAction::Clear);
+    }
+
+    #[test]
+    fn an_unreadable_clipboard_is_left_alone() {
+        // 读不到剪贴板时无从还原，不能做破坏性操作（清空可能毁掉用户的图片剪贴板）
+        assert_eq!(restore_action(None), RestoreAction::Nothing);
+    }
+
+    #[test]
+    fn the_three_backup_outcomes_stay_distinguishable() {
+        // 回归护栏：若将来又引入 as_deref() 之类的压平，
+        // Some(None) 会与 None 合并，这条会立刻失败。
+        assert_ne!(restore_action(Some(None)), restore_action(None));
     }
 }
