@@ -10,6 +10,14 @@ use tauri::Manager;
 
 const PLUGIN_TYPES: &[&str] = &["recognize", "translate", "tts", "collection"];
 
+/// info.json 解压大小上限，防止恶意 .potext 用 zip 炸弹撑爆内存
+const MAX_PLUGIN_INFO_BYTES: u64 = 64 * 1024;
+
+/// 纯函数：检查 zip 条目是否为符号链接（用于单元测试，不依赖全局状态）
+fn is_symlink_entry(unix_mode: Option<u32>) -> bool {
+    unix_mode.is_some_and(|mode| mode & 0o170000 == 0o120000)
+}
+
 fn valid_plugin_type(value: &str) -> bool {
     PLUGIN_TYPES.contains(&value)
 }
@@ -194,11 +202,21 @@ pub fn install_plugin(path_list: Vec<String>) -> Result<i32, Error> {
         }
 
         let mut zip = zip::ZipArchive::new(std::fs::File::open(path)?)?;
+        // 拒绝符号链接条目：zip.extract 在 Unix 上会照常创建 symlink，
+        // 恶意 .potext 可借此指向任意系统文件（restore_archive 已做同样校验，
+        // install_plugin 此前漏掉，见 cmd.rs tests::plugin_archive_rejects_symlink_entries）。
+        for index in 0..zip.len() {
+            let entry = zip.by_index(index)?;
+            if is_symlink_entry(entry.unix_mode()) {
+                return Err(Error::Error("Invalid Plugin: contains a symbolic link".into()));
+            }
+        }
         #[allow(unused_mut)]
         let mut plugin_type: String;
-        if let Ok(mut info) = zip.by_name("info.json") {
+        if let Ok(info) = zip.by_name("info.json") {
             let mut content = String::new();
-            info.read_to_string(&mut content)?;
+            // 限制 info.json 大小，防止 zip 炸弹
+            info.take(MAX_PLUGIN_INFO_BYTES).read_to_string(&mut content)?;
             let json: serde_json::Value = serde_json::from_str(&content)?;
             plugin_type = json["plugin_type"]
                 .as_str()
@@ -292,6 +310,18 @@ mod tests {
         assert!(!crop_in_bounds(10, 20, 0, 40, 100, 100));
         assert!(!crop_in_bounds(90, 20, 30, 40, 100, 100));
         assert!(!crop_in_bounds(u32::MAX, 20, 30, 40, 100, 100));
+    }
+
+    #[test]
+    fn plugin_symlink_entries_are_rejected() {
+        use super::is_symlink_entry;
+        // 0o120000 是 Unix symlink 文件类型位（S_IFLNK）
+        assert!(is_symlink_entry(Some(0o120777)));
+        assert!(is_symlink_entry(Some(0o120000)));
+        // 普通文件、目录、None 都不应被误判为 symlink
+        assert!(!is_symlink_entry(Some(0o100644)));
+        assert!(!is_symlink_entry(Some(0o040755)));
+        assert!(!is_symlink_entry(None));
     }
 
     #[test]
