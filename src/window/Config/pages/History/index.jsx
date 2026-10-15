@@ -9,6 +9,7 @@ import toast, { Toaster } from 'react-hot-toast';
 import { Pagination } from '@nextui-org/react';
 import { useTranslation } from 'react-i18next';
 import Database from 'tauri-plugin-sql-api';
+import { error as logError } from 'tauri-plugin-log-api';
 
 import * as builtinCollectionServices from '../../../../services/collection';
 import { invoke_plugin } from '../../../../utils/invoke_plugin';
@@ -45,39 +46,74 @@ export default function History() {
     }, [total, page]);
 
     const init = async () => {
-        const db = await Database.load('sqlite:history.db');
-        const result = await db.select('SELECT COUNT(*) FROM history');
-        if (result[0] && result[0]['COUNT(*)']) {
-            setTotal(result[0]['COUNT(*)']);
+        try {
+            const db = await Database.load('sqlite:history.db');
+            const result = await db.select('SELECT COUNT(*) FROM history');
+            if (result[0] && result[0]['COUNT(*)']) {
+                setTotal(result[0]['COUNT(*)']);
+            }
+        } catch (e) {
+            // 表尚不存在（从未翻译过 / 刚被清空）或 sqlite 插件未就绪时，
+            // 视为「0 条历史」即可，不应让异常逃逸中断页面加载。
+            logError('[history] init failed: ' + e);
+            setTotal(0);
+            setItems([]);
         }
     };
     const getData = async () => {
-        const db = await Database.load('sqlite:history.db');
-        let result = await db.select('SELECT * FROM history ORDER BY id DESC LIMIT 20 OFFSET $1', [20 * (page - 1)]);
-        setItems(result);
+        try {
+            const db = await Database.load('sqlite:history.db');
+            let result = await db.select('SELECT * FROM history ORDER BY id DESC LIMIT 20 OFFSET $1', [
+                20 * (page - 1),
+            ]);
+            setItems(result);
+        } catch (e) {
+            // getData 由 useEffect 以裸调用触发（未 await、未 catch），
+            // 因此必须在此吞掉异常，否则会变成未处理的 promise rejection。
+            logError('[history] load failed: ' + e);
+            setItems([]);
+        }
     };
 
     const getSelectedData = async (id) => {
-        const db = await Database.load('sqlite:history.db');
-        let result = await db.select('SELECT * FROM history WHERE id=$1', [id]);
-        setSelectItem(result[0]);
+        try {
+            const db = await Database.load('sqlite:history.db');
+            let result = await db.select('SELECT * FROM history WHERE id=$1', [id]);
+            setSelectItem(result[0]);
+        } catch (e) {
+            logError('[history] load record failed: ' + e);
+        }
     };
     const clearData = async () => {
-        const db = await Database.load('sqlite:history.db');
-        await db.execute('DROP TABLE history');
-        await db.execute('VACUUM');
-        setItems([]);
-        setTotal(0);
-        setPage(1);
+        try {
+            const db = await Database.load('sqlite:history.db');
+            // 用 DELETE 清空行而不是 DROP TABLE：全项目只有
+            // TargetArea.addToHistory 的失败重试会重建该表，
+            // 一旦把表删掉，历史页会持续报 "no such table"，
+            // 直到用户再翻译一次为止。清空数据不应破坏表结构。
+            await db.execute('DELETE FROM history');
+            await db.execute('VACUUM');
+            setItems([]);
+            setTotal(0);
+            setPage(1);
+        } catch (e) {
+            logError('[history] clear failed: ' + e);
+            toast.error('[history] clear failed: ' + e, { style: toastStyle });
+        }
     };
     const updateData = async () => {
-        const db = await Database.load('sqlite:history.db');
-        await db.execute('UPDATE history SET text=$1, result=$2 WHERE id=$3', [
-            selectedItem.text,
-            selectedItem.result,
-            selectedItem.id,
-        ]);
-        await getData();
+        try {
+            const db = await Database.load('sqlite:history.db');
+            await db.execute('UPDATE history SET text=$1, result=$2 WHERE id=$3', [
+                selectedItem.text,
+                selectedItem.result,
+                selectedItem.id,
+            ]);
+            await getData();
+        } catch (e) {
+            logError('[history] update failed: ' + e);
+            toast.error('[history] update failed: ' + e, { style: toastStyle });
+        }
     };
 
     const formatDate = (date) => {
