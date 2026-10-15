@@ -81,32 +81,33 @@ export async function translate(text, from, to, options) {
                     let datas = str.split('data:');
                     for (let data of datas) {
                         if (data.trim() !== '' && data.trim() !== '[DONE]') {
+                            // temp 只用来缓存「上一次没解析成功的片段」。
+                            // 注意：**只有 JSON.parse 失败**才算片段被截断，
+                            // 解析成功但结构不同（例如流末尾的 usage 块
+                            // `{"choices":[],"usage":{...}}`）不是截断。
+                            // 原来把整个处理都包在 try 里，于是 `choices[0]` 抛的
+                            // TypeError 也被当成截断，把**完整**的 usage 块塞进 temp；
+                            // 下一个内容块再与它拼接必然解析失败，又被塞回 temp——
+                            // 此后所有内容块全被丢弃，译文静默截断。
+                            let raw = temp !== '' ? temp + data.trim() : data.trim();
+                            let result;
                             try {
-                                if (temp !== '') {
-                                    data = temp + data.trim();
-                                    let result = JSON.parse(data.trim());
-                                    if (result.choices[0].delta.content) {
-                                        target += result.choices[0].delta.content;
-                                        if (setResult) {
-                                            setResult(target + '_');
-                                        } else {
-                                            return '[STREAM]';
-                                        }
-                                    }
-                                    temp = '';
-                                } else {
-                                    let result = JSON.parse(data.trim());
-                                    if (result.choices[0].delta.content) {
-                                        target += result.choices[0].delta.content;
-                                        if (setResult) {
-                                            setResult(target + '_');
-                                        } else {
-                                            return '[STREAM]';
-                                        }
-                                    }
-                                }
+                                result = JSON.parse(raw);
                             } catch {
-                                temp = data.trim();
+                                // 真的被截断了：留给下一个数据块再拼
+                                temp = raw;
+                                continue;
+                            }
+                            temp = '';
+                            // choices 可能为空数组（usage 块），delta.content 也可能缺失
+                            const piece = result?.choices?.[0]?.delta?.content;
+                            if (typeof piece === 'string') {
+                                target += piece;
+                                if (setResult) {
+                                    setResult(target + '_');
+                                } else {
+                                    return '[STREAM]';
+                                }
                             }
                         }
                     }

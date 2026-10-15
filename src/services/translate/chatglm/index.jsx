@@ -81,11 +81,27 @@ export async function translate(text, from, to, options = {}) {
 
                     for (const chunk of chunks) {
                         const text = chunk.replace(/^data:/, '').trim();
-                        if (text === '[DONE]') {
+                        if (text === '[DONE]' || text === '') {
                             continue;
                         }
-                        const data = JSON.parse(text);
-                        result += data.choices[0].delta.content;
+                        // 两类事件必须跳过，否则会毁掉整段译文：
+                        //  1) usage 块 —— OpenAI 兼容协议在流末尾会发一个
+                        //     `{"choices":[],"usage":{...}}`，`choices[0]` 是 undefined，
+                        //     原来会抛 TypeError 并**中断整个读取循环**，后面的内容全丢；
+                        //  2) delta 存在但没有 content 的块（首个 role 块、工具调用块），
+                        //     直接把 undefined/null 拼进字符串会得到字面量
+                        //     "undefined"/"null" 出现在译文里。
+                        let data;
+                        try {
+                            data = JSON.parse(text);
+                        } catch {
+                            continue;
+                        }
+                        const piece = data?.choices?.[0]?.delta?.content;
+                        if (typeof piece !== 'string') {
+                            continue;
+                        }
+                        result += piece;
                         if (setResult) {
                             setResult(result + '_');
                         }
