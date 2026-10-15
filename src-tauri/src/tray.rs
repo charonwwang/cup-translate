@@ -54,8 +54,20 @@ pub fn update_tray(app_handle: tauri::AppHandle, mut language: String, mut copy_
         "de" => tray_menu_de(),
         "ru" => tray_menu_ru(),
         "pt_br" => tray_menu_pt_br(),
+        // pt_PT 在语言选择器里与 pt_br 并列，是独立选项；
+        // 修复前它会落到 _ 分支拿到**英文**托盘。
+        "pt_pt" => tray_menu_pt_pt(),
+        "es" => tray_menu_es(),
+        "it" => tray_menu_it(),
+        "ar" => tray_menu_ar(),
+        "he" => tray_menu_he(),
+        "ta" => tray_menu_ta(),
         "fa" => tray_menu_fa(),
         "uk" => tray_menu_uk(),
+        // nb_no / nn_no / tr / tk 的 locale 是不完整的占位文件
+        // （分别只有 2 / 2 / 2 / 68 个 key，远少于完整语言的 342），
+        // 全站文案本就回退英文，托盘保持英文与之一致；
+        // 为它们编造托盘译文等于凭空发明翻译，故不添加。
         _ => tray_menu_en(),
     }) {
         log::warn!("Failed to set tray menu: {e:?}");
@@ -637,6 +649,332 @@ fn tray_menu_uk() -> tauri::SystemTrayMenu {
         .add_item(clipboard_monitor)
         .add_submenu(SystemTraySubmenu::new(
             "Автоматичне копіювання",
+            SystemTrayMenu::new()
+                .add_item(copy_source)
+                .add_item(copy_target)
+                .add_item(copy_source_target)
+                .add_native_item(SystemTrayMenuItem::Separator)
+                .add_item(copy_disable),
+        ))
+        .add_native_item(SystemTrayMenuItem::Separator)
+        .add_item(ocr_recognize)
+        .add_item(ocr_translate)
+        .add_native_item(SystemTrayMenuItem::Separator)
+        .add_item(config)
+        .add_item(check_update)
+        .add_item(view_log)
+        .add_native_item(SystemTrayMenuItem::Separator)
+        .add_item(restart)
+        .add_item(quit)
+}
+
+fn tray_menu_es() -> tauri::SystemTrayMenu {
+    let input_translate = CustomMenuItem::new("input_translate", "Traducción de texto");
+    let clipboard_monitor = CustomMenuItem::new("clipboard_monitor", "Vigilar el portapapeles");
+    let copy_source = CustomMenuItem::new("copy_source", "Origen");
+    let copy_target = CustomMenuItem::new("copy_target", "Destino");
+    let copy_source_target = CustomMenuItem::new("copy_source_target", "Origen+Destino");
+    let copy_disable = CustomMenuItem::new("copy_disable", "Desactivar");
+    let ocr_recognize = CustomMenuItem::new("ocr_recognize", "Reconocimiento de texto");
+    let ocr_translate = CustomMenuItem::new("ocr_translate", "Traducción de captura de pantalla");
+    let config = CustomMenuItem::new("config", "Ajustes generales");
+    let check_update = CustomMenuItem::new("check_update", "Comprobar la actualización");
+    let view_log = CustomMenuItem::new("view_log", "Ver registros");
+    let restart = CustomMenuItem::new("restart", "Reiniciar la aplicación");
+    let quit = CustomMenuItem::new("quit", "Salir");
+    SystemTrayMenu::new()
+        .add_item(input_translate)
+        .add_item(clipboard_monitor)
+        .add_submenu(SystemTraySubmenu::new(
+            "Copia automática",
+            SystemTrayMenu::new()
+                .add_item(copy_source)
+                .add_item(copy_target)
+                .add_item(copy_source_target)
+                .add_native_item(SystemTrayMenuItem::Separator)
+                .add_item(copy_disable),
+        ))
+        .add_native_item(SystemTrayMenuItem::Separator)
+        .add_item(ocr_recognize)
+        .add_item(ocr_translate)
+        .add_native_item(SystemTrayMenuItem::Separator)
+        .add_item(config)
+        .add_item(check_update)
+        .add_item(view_log)
+        .add_native_item(SystemTrayMenuItem::Separator)
+        .add_item(restart)
+        .add_item(quit)
+}
+
+fn tray_menu_it() -> tauri::SystemTrayMenu {
+    let input_translate = CustomMenuItem::new("input_translate", "Input di traduzione");
+    let clipboard_monitor = CustomMenuItem::new("clipboard_monitor", "Monitora gli appunti");
+    let copy_source = CustomMenuItem::new("copy_source", "Origine");
+    let copy_target = CustomMenuItem::new("copy_target", "Destinazione");
+    let copy_source_target = CustomMenuItem::new("copy_source_target", "Origine+Destinazione");
+    let copy_disable = CustomMenuItem::new("copy_disable", "Disattiva");
+    let ocr_recognize = CustomMenuItem::new("ocr_recognize", "Riconoscimento del testo");
+    let ocr_translate = CustomMenuItem::new("ocr_translate", "Traduzione di schermate");
+    let config = CustomMenuItem::new("config", "Impostazioni Generali");
+    let check_update = CustomMenuItem::new("check_update", "Controlla aggiornamento");
+    let view_log = CustomMenuItem::new("view_log", "Vedi log");
+    let restart = CustomMenuItem::new("restart", "Riavvia applicazione");
+    let quit = CustomMenuItem::new("quit", "Esci");
+    SystemTrayMenu::new()
+        .add_item(input_translate)
+        .add_item(clipboard_monitor)
+        .add_submenu(SystemTraySubmenu::new(
+            "Copia automatica",
+            SystemTrayMenu::new()
+                .add_item(copy_source)
+                .add_item(copy_target)
+                .add_item(copy_source_target)
+                .add_native_item(SystemTrayMenuItem::Separator)
+                .add_item(copy_disable),
+        ))
+        .add_native_item(SystemTrayMenuItem::Separator)
+        .add_item(ocr_recognize)
+        .add_item(ocr_translate)
+        .add_native_item(SystemTrayMenuItem::Separator)
+        .add_item(config)
+        .add_item(check_update)
+        .add_item(view_log)
+        .add_native_item(SystemTrayMenuItem::Separator)
+        .add_item(restart)
+        .add_item(quit)
+}
+
+fn tray_menu_pt_pt() -> tauri::SystemTrayMenu {
+    let input_translate = CustomMenuItem::new("input_translate", "Tradução do Texto");
+    let clipboard_monitor = CustomMenuItem::new("clipboard_monitor", "Monitorizar a área de transferência");
+    let copy_source = CustomMenuItem::new("copy_source", "Origem");
+    let copy_target = CustomMenuItem::new("copy_target", "Destino");
+    let copy_source_target = CustomMenuItem::new("copy_source_target", "Origem+Destino");
+    let copy_disable = CustomMenuItem::new("copy_disable", "Desativar");
+    let ocr_recognize = CustomMenuItem::new("ocr_recognize", "Reconhecimento de Texto");
+    let ocr_translate = CustomMenuItem::new("ocr_translate", "Tradução de Imagem");
+    let config = CustomMenuItem::new("config", "Configurações Gerais");
+    let check_update = CustomMenuItem::new("check_update", "Procurar Atualização");
+    let view_log = CustomMenuItem::new("view_log", "Exibir Registro");
+    let restart = CustomMenuItem::new("restart", "Reiniciar aplicação");
+    let quit = CustomMenuItem::new("quit", "Sair");
+    SystemTrayMenu::new()
+        .add_item(input_translate)
+        .add_item(clipboard_monitor)
+        .add_submenu(SystemTraySubmenu::new(
+            "Cópia automática",
+            SystemTrayMenu::new()
+                .add_item(copy_source)
+                .add_item(copy_target)
+                .add_item(copy_source_target)
+                .add_native_item(SystemTrayMenuItem::Separator)
+                .add_item(copy_disable),
+        ))
+        .add_native_item(SystemTrayMenuItem::Separator)
+        .add_item(ocr_recognize)
+        .add_item(ocr_translate)
+        .add_native_item(SystemTrayMenuItem::Separator)
+        .add_item(config)
+        .add_item(check_update)
+        .add_item(view_log)
+        .add_native_item(SystemTrayMenuItem::Separator)
+        .add_item(restart)
+        .add_item(quit)
+}
+
+fn tray_menu_ar() -> tauri::SystemTrayMenu {
+    let input_translate = CustomMenuItem::new("input_translate", "تحديد النص");
+    let clipboard_monitor = CustomMenuItem::new("clipboard_monitor", "مراقبة الحافظة");
+    let copy_source = CustomMenuItem::new("copy_source", "المصدر");
+    let copy_target = CustomMenuItem::new("copy_target", "الهدف");
+    let copy_source_target = CustomMenuItem::new("copy_source_target", "المصدر+الهدف");
+    let copy_disable = CustomMenuItem::new("copy_disable", "تعطيل");
+    let ocr_recognize = CustomMenuItem::new("ocr_recognize", "التعرف على النص");
+    let ocr_translate = CustomMenuItem::new("ocr_translate", "أخذ لقطة للترجمة");
+    let config = CustomMenuItem::new("config", "إعدادات عامة");
+    let check_update = CustomMenuItem::new("check_update", "تحقق من التحديث");
+    let view_log = CustomMenuItem::new("view_log", "اعرض السجل");
+    let restart = CustomMenuItem::new("restart", "إعادة تشغيل التطبيق");
+    let quit = CustomMenuItem::new("quit", "خروج");
+    SystemTrayMenu::new()
+        .add_item(input_translate)
+        .add_item(clipboard_monitor)
+        .add_submenu(SystemTraySubmenu::new(
+            "النسخ التلقائي",
+            SystemTrayMenu::new()
+                .add_item(copy_source)
+                .add_item(copy_target)
+                .add_item(copy_source_target)
+                .add_native_item(SystemTrayMenuItem::Separator)
+                .add_item(copy_disable),
+        ))
+        .add_native_item(SystemTrayMenuItem::Separator)
+        .add_item(ocr_recognize)
+        .add_item(ocr_translate)
+        .add_native_item(SystemTrayMenuItem::Separator)
+        .add_item(config)
+        .add_item(check_update)
+        .add_item(view_log)
+        .add_native_item(SystemTrayMenuItem::Separator)
+        .add_item(restart)
+        .add_item(quit)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 语言选择器（src/window/Config/pages/General/index.jsx 的 DropdownItem key）
+    /// 会原样写入 app_language 并传给 update_tray，因此托盘必须覆盖其中的每一种语言。
+    ///
+    /// 这里刻意硬编码一份清单而不是去读前端文件：
+    /// 若将来前端新增语言却忘了加托盘菜单，本测试会失败，从而逼出同步更新。
+    const UI_LANGUAGES: &[&str] = &[
+        "zh_cn", "zh_tw", "en", "ja", "ko", "fr", "de", "es", "ru", "it", "tr", "pt_pt", "pt_br", "nb_no",
+        "nn_no", "fa", "uk", "ar",
+    ];
+
+    /// locale 文件只有 2 个 key 的占位语言：全站文案本就回退英文，
+    /// 托盘回退英文与之一致，不属于缺陷。
+    /// 这些语言的 locale 文件远不完整（2/2/2/68 个 key，完整语言为 342），
+    /// 全站文案本就回退英文，托盘回退英文与之一致，不属于缺陷。
+    const PLACEHOLDER_LOCALES: &[&str] = &["tr", "nb_no", "nn_no", "tk"];
+
+    /// 复刻 update_tray 的语言分发，用于断言「该语言有没有专属菜单」。
+    /// 返回 None 表示落到了 _ 分支（即英文托盘）。
+    fn menu_for(language: &str) -> Option<&'static str> {
+        Some(match language {
+            "en" => "en",
+            "zh_cn" => "zh_cn",
+            "zh_tw" => "zh_tw",
+            "ja" => "ja",
+            "ko" => "ko",
+            "fr" => "fr",
+            "de" => "de",
+            "ru" => "ru",
+            "pt_br" => "pt_br",
+            "pt_pt" => "pt_pt",
+            "es" => "es",
+            "it" => "it",
+            "ar" => "ar",
+            "he" => "he",
+            "ta" => "ta",
+            "fa" => "fa",
+            "uk" => "uk",
+            _ => return None,
+        })
+    }
+
+    #[test]
+    fn every_ui_language_has_a_tray_menu_route() {
+        // 核心用例：修复前 es / it / ar / pt_pt 没有分支，
+        // 用户把界面切成这些语言后，系统托盘仍是英文。
+        let missing: Vec<_> = UI_LANGUAGES
+            .iter()
+            .filter(|l| !PLACEHOLDER_LOCALES.contains(l))
+            .filter(|l| menu_for(l).is_none())
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "these UI languages fall back to the English tray: {missing:?}"
+        );
+    }
+
+    #[test]
+    fn the_four_previously_missing_languages_are_covered() {
+        // 逐个点名，避免将来有人「优化」掉其中某个分支
+        for lang in ["es", "it", "ar", "pt_pt", "he", "ta"] {
+            assert!(
+                menu_for(lang).is_some(),
+                "{lang} had no tray menu before the fix and must keep one"
+            );
+        }
+    }
+
+    #[test]
+    fn placeholder_locales_may_fall_back_to_english() {
+        // 显式记录「有意不覆盖」，与上面的断言配对，
+        // 以免日后误以为漏了这三种语言
+        for lang in PLACEHOLDER_LOCALES {
+            assert!(
+                menu_for(lang).is_none(),
+                "{lang} is a 2-key placeholder locale and is intentionally English in the tray"
+            );
+        }
+    }
+
+    #[test]
+    fn pt_pt_is_distinct_from_pt_br() {
+        // pt_PT 与 pt_BR 在语言选择器里是两个独立条目，不能共用一个分支
+        assert!(menu_for("pt_pt").is_some());
+        assert!(menu_for("pt_br").is_some());
+        assert_ne!(menu_for("pt_pt"), menu_for("pt_br"));
+    }
+
+    #[test]
+    fn unknown_languages_fall_back_to_english() {
+        assert!(menu_for("klingon").is_none());
+        assert!(menu_for("").is_none());
+    }
+}
+
+fn tray_menu_he() -> tauri::SystemTrayMenu {
+    let input_translate = CustomMenuItem::new("input_translate", "תרגם טקסט");
+    let clipboard_monitor = CustomMenuItem::new("clipboard_monitor", "ניטור לוח ההעתקה");
+    let copy_source = CustomMenuItem::new("copy_source", "מקור");
+    let copy_target = CustomMenuItem::new("copy_target", "יעד");
+    let copy_source_target = CustomMenuItem::new("copy_source_target", "מקור+יעד");
+    let copy_disable = CustomMenuItem::new("copy_disable", "השבת");
+    let ocr_recognize = CustomMenuItem::new("ocr_recognize", "זהה טקסט");
+    let ocr_translate = CustomMenuItem::new("ocr_translate", "תרגם צילום מסך");
+    let config = CustomMenuItem::new("config", "הגדרות כלליות");
+    let check_update = CustomMenuItem::new("check_update", "בדוק עדכונים");
+    let view_log = CustomMenuItem::new("view_log", "הצג יומן רישום");
+    let restart = CustomMenuItem::new("restart", "הפעל מחדש את היישום");
+    let quit = CustomMenuItem::new("quit", "יציאה");
+    SystemTrayMenu::new()
+        .add_item(input_translate)
+        .add_item(clipboard_monitor)
+        .add_submenu(SystemTraySubmenu::new(
+            "העתקה אוטומטית",
+            SystemTrayMenu::new()
+                .add_item(copy_source)
+                .add_item(copy_target)
+                .add_item(copy_source_target)
+                .add_native_item(SystemTrayMenuItem::Separator)
+                .add_item(copy_disable),
+        ))
+        .add_native_item(SystemTrayMenuItem::Separator)
+        .add_item(ocr_recognize)
+        .add_item(ocr_translate)
+        .add_native_item(SystemTrayMenuItem::Separator)
+        .add_item(config)
+        .add_item(check_update)
+        .add_item(view_log)
+        .add_native_item(SystemTrayMenuItem::Separator)
+        .add_item(restart)
+        .add_item(quit)
+}
+
+fn tray_menu_ta() -> tauri::SystemTrayMenu {
+    let input_translate = CustomMenuItem::new("input_translate", "உரை மொழிபெயர்ப்பு");
+    let clipboard_monitor = CustomMenuItem::new("clipboard_monitor", "இடைநிலை நினைவகத்தைக் கண்காணி");
+    let copy_source = CustomMenuItem::new("copy_source", "மூலம்");
+    let copy_target = CustomMenuItem::new("copy_target", "இலக்கு");
+    let copy_source_target = CustomMenuItem::new("copy_source_target", "மூலம்+இலக்கு");
+    let copy_disable = CustomMenuItem::new("copy_disable", "முடக்கு");
+    let ocr_recognize = CustomMenuItem::new("ocr_recognize", "உரை ஏற்பு");
+    let ocr_translate = CustomMenuItem::new("ocr_translate", "திரைக்காட்சி மொழிபெயர்ப்பு");
+    let config = CustomMenuItem::new("config", "பொது அமைப்புகள்");
+    let check_update = CustomMenuItem::new("check_update", "புதுப்பிப்பைச் சரிபார்க்கவும்");
+    let view_log = CustomMenuItem::new("view_log", "பதிவைக் காண்க");
+    let restart = CustomMenuItem::new("restart", "பயன்பாட்டை மறுதொடக்கம் செய்");
+    let quit = CustomMenuItem::new("quit", "வெளியேறு");
+    SystemTrayMenu::new()
+        .add_item(input_translate)
+        .add_item(clipboard_monitor)
+        .add_submenu(SystemTraySubmenu::new(
+            "தானியங்கி நகல்",
             SystemTrayMenu::new()
                 .add_item(copy_source)
                 .add_item(copy_target)
