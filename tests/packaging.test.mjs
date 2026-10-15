@@ -165,3 +165,33 @@ test('window logos resolve from the public root', async () => {
     }
     await access('public/icon.png');
 });
+
+test('productName, updater artifact names, and CI rename steps stay in sync', async () => {
+    // docs/MAINTENANCE.md §7 warns: changing package.productName without syncing
+    // updater/*.mjs artifact names and CI rename steps breaks update checks with a 404.
+    const config = JSON.parse(await readFile('src-tauri/tauri.conf.json', 'utf8'));
+    const productName = config.package.productName;
+    assert.ok(productName && typeof productName === 'string', 'productName must be set');
+
+    // updater.mjs artifact name prefixes must match productName
+    for (const path of ['updater/updater.mjs', 'updater/updater-for-fix-runtime.mjs']) {
+        const source = await readFile(path, 'utf8');
+        const artifactName = source.match(/([\w-]+)_\$\{assetVersion\}/)?.[1];
+        assert.ok(artifactName, `${path} must build artifact names from a productName prefix`);
+        assert.equal(
+            artifactName,
+            productName,
+            `${path} artifact prefix "${artifactName}" must match package.productName "${productName}"`
+        );
+    }
+
+    // CI rename steps must also use the same productName prefix
+    const workflow = await readFile('.github/workflows/package.yml', 'utf8');
+    const ciPrefixes = [...workflow.matchAll(/cup-translate_\$\{\{needs\.change-version\.outputs\.version\}\}/g)];
+    assert.ok(ciPrefixes.length > 0, 'CI must rename artifacts using the productName prefix for updater compatibility');
+    assert.equal(
+        workflow.includes(`${productName}_\${{needs.change-version.outputs.version}}`),
+        true,
+        `CI rename steps must use package.productName "${productName}"`
+    );
+});
