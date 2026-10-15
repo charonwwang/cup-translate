@@ -322,9 +322,18 @@ export default function SourceArea(props) {
             }
             sourceTextChangeTimerRef.current = setTimeout(() => {
                 sourceTextChangeTimerRef.current = null;
-                detect_language(text).then(() => {
-                    syncSourceText();
-                });
+                // 语言检测失败（离线、引擎异常、store 读取失败）也必须走到 syncSourceText()：
+                // setSourceText 不会自动写回 sourceTextAtom，漏掉这一步会让 TargetArea
+                // 继续显示上一段文本的译文。detect() 内部已兜底为 'en'，这里再保一层，
+                // 保证「无论如何都同步」这一语义不被将来的改动破坏。
+                detect_language(text)
+                    .catch((error) => {
+                        logError(`Language detection failed in dynamic translate: ${error}`);
+                        setDetectLanguage('en');
+                    })
+                    .finally(() => {
+                        syncSourceText();
+                    });
             }, 1000);
         }
     };

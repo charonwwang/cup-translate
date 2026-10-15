@@ -2,6 +2,7 @@ import { fetchWithTimeout as fetch, Body } from './fetchWithTimeout';
 import { invoke } from '@tauri-apps/api';
 import { store } from './store';
 import { v4 as uuidv4 } from 'uuid';
+import { error as logError } from 'tauri-plugin-log-api';
 
 // https://fanyi-api.baidu.com/product/113
 async function baidu_detect(text) {
@@ -309,26 +310,45 @@ async function local_detect(text) {
     return await invoke('lang_detect', { text: text });
 }
 
+/**
+ * 检测文本语言，**保证 resolve 成一个语言码、永不 reject**。
+ *
+ * 各引擎末尾的 `return 'en'` 只兜住「响应格式异常」，兜不住「抛出的异常」：
+ *   · `store.get('translate_detect_engine')` 读取失败会 reject
+ *   · local 引擎走 invoke('lang_detect')，Rust 侧出错即 reject
+ *   · baidu/google/tencent/niutrans/yandex/bing 是网络请求，离线必 reject
+ *
+ * 调用方（SourceArea 的动态翻译）只在 .then 里做后续同步，
+ * 一旦这里 reject，后续同步就被静默跳过 —— 表现为翻译结果停留在上一段文本。
+ * 所以入口处统一兜底：检测失败退化为 'en'，与各引擎既有的兜底语义一致。
+ */
 export default async function detect(text) {
-    // 默认走本地（lingua）检测：零网络、零隐私风险、零配置
-    let langDetectEngine = (await store.get('translate_detect_engine')) ?? 'local';
+    try {
+        // 默认走本地（lingua）检测：零网络、零隐私风险、零配置
+        let langDetectEngine = (await store.get('translate_detect_engine')) ?? 'local';
 
-    switch (langDetectEngine) {
-        case 'baidu':
-            return await baidu_detect(text);
-        case 'google':
-            return await google_detect(text);
-        case 'local':
-            return await local_detect(text);
-        case 'tencent':
-            return await tencent_detect(text);
-        case 'niutrans':
-            return await niutrans_detect(text);
-        case 'yandex':
-            return await yandex_detect(text);
-        case 'bing':
-            return await bing_detect(text);
-        default:
-            return await local_detect(text);
+        switch (langDetectEngine) {
+            case 'baidu':
+                return await baidu_detect(text);
+            case 'google':
+                return await google_detect(text);
+            case 'local':
+                return await local_detect(text);
+            case 'tencent':
+                return await tencent_detect(text);
+            case 'niutrans':
+                return await niutrans_detect(text);
+            case 'yandex':
+                return await yandex_detect(text);
+            case 'bing':
+                return await bing_detect(text);
+            default:
+                return await local_detect(text);
+        }
+    } catch (error) {
+        // 语言检测失败不应阻断翻译流程：退化为英文（与各引擎的既有兜底一致），
+        // 但要留下日志，避免问题被完全静默。
+        logError(`Language detection failed, falling back to 'en': ${error}`);
+        return 'en';
     }
 }
