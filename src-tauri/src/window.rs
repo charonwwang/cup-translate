@@ -411,7 +411,6 @@ pub fn ocr_translate() {
             .output()
         {
             image_translate();
-            ();
         }
     }
     #[cfg(not(target_os = "macos"))]

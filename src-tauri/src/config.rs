@@ -102,6 +102,7 @@ fn check_available(list: Vec<String>, builtin: Vec<&str>, plugin: Vec<String>, k
 /// - `lingva`：`lingva.pot-app.com` 域名已不存在 NXDOMAIN（代码已删除）
 /// - `ecdict`：上游 `pot-app.com/api/dict` 返回 404/405（代码已删除）
 /// - TTS `lingva_tts`：默认地址同上已死（代码保留给自建实例，但未配置的裸实例清理）
+///
 /// 对这些「从未配置过」的旧版默认实例做一次性清理，让升级用户也开箱即用。
 /// 用户显式创建的 `name@id` 实例、以及已填写配置的实例一律保留。
 /// 注意：代码已删除的服务（bing/ecdict/lingva）不受此保留规则保护——
@@ -129,7 +130,7 @@ fn prune_service_list(config_key: &str, unusable_builtin: &[&str]) {
             }
             // 配置对象非空说明用户配置过（例如填了 DeepL 密钥 / 自建实例地址），保留
             match get(instance) {
-                Some(config) => config.as_object().map_or(true, |obj| !obj.is_empty()),
+                Some(config) => config.as_object().is_none_or(|obj| !obj.is_empty()),
                 None => false,
             }
         })
@@ -264,10 +265,7 @@ pub fn get_plugin_list(plugin_type: &str) -> Option<Vec<String>> {
 pub fn get(key: &str) -> Option<Value> {
     let state = APP.get().unwrap().state::<StoreWrapper>();
     let store = state.0.lock().unwrap();
-    match store.get(key) {
-        Some(value) => Some(value.clone()),
-        None => None,
-    }
+    store.get(key).cloned()
 }
 
 pub fn set<T: serde::ser::Serialize>(key: &str, value: T) {

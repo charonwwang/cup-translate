@@ -143,9 +143,9 @@ pub async fn webdav(
                 .put(&format!("/{}", backup_name(name.as_deref())?), archive)
                 .await
             {
-                Ok(()) => return Ok("".to_string()),
+                Ok(()) => Ok("".to_string()),
                 Err(e) => {
-                    return Err(Error::Error(format!("WebDav Put Error: {}", e).into()));
+                    Err(Error::Error(format!("WebDav Put Error: {}", e).into()))
                 }
             }
         }
@@ -154,15 +154,15 @@ pub async fn webdav(
             .delete(&format!("/{}", backup_name(name.as_deref())?))
             .await
         {
-            Ok(()) => return Ok("".to_string()),
+            Ok(()) => Ok("".to_string()),
             Err(e) => {
-                return Err(Error::Error(format!("WebDav Delete Error: {}", e).into()));
+                Err(Error::Error(format!("WebDav Delete Error: {}", e).into()))
             }
         },
         _ => {
-            return Err(Error::Error(
+            Err(Error::Error(
                 format!("WebDav Operate Error: {}", operate).into(),
-            ));
+            ))
         }
     }
 }
@@ -181,9 +181,9 @@ pub async fn local(operate: &str, path: String) -> Result<String, Error> {
             Ok("".to_string())
         }
         _ => {
-            return Err(Error::Error(
+            Err(Error::Error(
                 format!("Local Operate Error: {}", operate).into(),
-            ));
+            ))
         }
     }
 }
@@ -211,9 +211,9 @@ pub async fn aliyun(operate: &str, path: String, url: String) -> Result<String, 
             Ok("".to_string())
         }
         _ => {
-            return Err(Error::Error(
+            Err(Error::Error(
                 format!("Local Operate Error: {}", operate).into(),
-            ));
+            ))
         }
     }
 }

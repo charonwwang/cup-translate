@@ -137,8 +137,8 @@ pub fn copy_img(app_handle: tauri::AppHandle, width: usize, height: usize) -> Re
         height,
         bytes: Cow::from(rgba),
     };
-    let result = Clipboard::new()?.set_image(img)?;
-    Ok(result)
+    Clipboard::new()?.set_image(img)?;
+    Ok(())
 }
 
 #[tauri::command]

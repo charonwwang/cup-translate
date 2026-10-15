@@ -70,6 +70,6 @@ pub fn lang_detect(text: &str) -> Result<&str, ()> {
             Language::Ukrainian => Ok("uk"),
         }
     } else {
-        return Ok("en");
+        Ok("en")
     }
 }
