@@ -222,6 +222,7 @@ fn on_quit_click(app: &AppHandle) {
     if let Err(e) = app.global_shortcut_manager().unregister_all() {
         log::warn!("Failed to unregister global shortcuts on quit: {e:?}");
     }
+    crate::hotkey::clear_registered_accelerators();
     info!("============== Quit App ==============");
     app.exit(0);
 }
