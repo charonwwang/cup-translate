@@ -163,22 +163,18 @@ pub async fn webdav(
             let res = client
                 .get(&format!("/{}", backup_name(name.as_deref())?))
                 .await?;
-            // 流式写入临时文件再恢复，避免大备份全量加载进内存
-            let tmp_path = std::env::temp_dir().join(format!(
-                "cup-translate-webdav-restore-{}",
-                std::process::id()
-            ));
-            let mut tmp_file = std::fs::File::create(&tmp_path)?;
+            // 流式写入临时文件再恢复，避免大备份全量加载进内存。
+            // TempBackupFile 在函数返回（含提前 `?` 与 panic）时自动删除临时文件，
+            // 避免下载中断/内容非法时在临时目录留下大文件。
+            let tmp = TempBackupFile::new("webdav");
+            let mut tmp_file = std::fs::File::create(tmp.path())?;
             let mut resp = res;
             while let Some(chunk) = resp.chunk().await? {
                 std::io::Write::write_all(&mut tmp_file, &chunk)?;
             }
             drop(tmp_file);
-            let mut zip_file = std::fs::File::open(&tmp_path)?;
-            let result =
-                restore_archive(ZipArchive::new(&mut zip_file)?, &app_config_dir()?);
-            let _ = std::fs::remove_file(&tmp_path);
-            result?;
+            let mut zip_file = std::fs::File::open(tmp.path())?;
+            restore_archive(ZipArchive::new(&mut zip_file)?, &app_config_dir()?)?;
             Ok("".to_string())
         }
         "put" => {
@@ -259,22 +255,17 @@ pub async fn aliyun(operate: &str, path: String, url: String) -> Result<String, 
                 .send()
                 .await?
                 .error_for_status()?;
-            // 流式写入临时文件再恢复，避免大备份全量加载进内存
-            let tmp_path = std::env::temp_dir().join(format!(
-                "cup-translate-aliyun-restore-{}",
-                std::process::id()
-            ));
-            let mut tmp_file = std::fs::File::create(&tmp_path)?;
+            // 流式写入临时文件再恢复，避免大备份全量加载进内存。
+            // 同 webdav 分支：用 RAII 保证任何退出路径都会清理临时文件。
+            let tmp = TempBackupFile::new("aliyun");
+            let mut tmp_file = std::fs::File::create(tmp.path())?;
             let mut resp = res;
             while let Some(chunk) = resp.chunk().await? {
                 std::io::Write::write_all(&mut tmp_file, &chunk)?;
             }
             drop(tmp_file);
-            let mut zip_file = std::fs::File::open(&tmp_path)?;
-            let result =
-                restore_archive(ZipArchive::new(&mut zip_file)?, &app_config_dir()?);
-            let _ = std::fs::remove_file(&tmp_path);
-            result?;
+            let mut zip_file = std::fs::File::open(tmp.path())?;
+            restore_archive(ZipArchive::new(&mut zip_file)?, &app_config_dir()?)?;
             Ok("".to_string())
         }
         _ => {
@@ -285,9 +276,117 @@ pub async fn aliyun(operate: &str, path: String, url: String) -> Result<String, 
     }
 }
 
+/// 下载落盘用的临时文件，Drop 时自动删除。
+///
+/// 备份包可能很大（含 history.db 与 plugins/），而下载过程有多个可失败点：
+/// 网络中断、写盘失败、内容不是合法 zip。原实现只在 restore_archive 之后
+/// 手动 `remove_file`，那些**提前 `?` 返回**的路径会跳过清理，
+/// 在临时目录里留下几十 MB 的半成品，反复失败会持续占用磁盘。
+///
+/// 用 RAII 保证「无论从哪条路径退出（含 panic）都会删除」。
+struct TempBackupFile {
+    path: PathBuf,
+}
+
+impl TempBackupFile {
+    /// 生成唯一路径：`kind` 区分 webdav / aliyun 两条链路，
+    /// 进程号区分不同实例，自增序号区分同进程内的多次调用。
+    ///
+    /// 当前 UI 用 uploading 标志串行化了恢复操作，同 kind 并发并不常见；
+    /// 但测试是多线程并行跑的，且将来若放开并发，仅靠 PID 会让两次恢复
+    /// 写同一个临时文件、互相截断对方的内容。加序号是廉价且彻底的保险。
+    fn new(kind: &str) -> Self {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static SEQ: AtomicU64 = AtomicU64::new(0);
+
+        let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "cup-translate-{kind}-restore-{}-{seq}",
+            std::process::id()
+        ));
+        Self { path }
+    }
+
+    fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for TempBackupFile {
+    fn drop(&mut self) {
+        // 尽力清理：文件可能已不存在（创建失败等），失败也不应影响主流程
+        match std::fs::remove_file(&self.path) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => log::warn!(
+                "Failed to remove temporary backup file {:?}: {e}",
+                self.path
+            ),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn temp_backup_file_is_removed_on_normal_drop() {
+        let path = {
+            let tmp = TempBackupFile::new("test-normal");
+            std::fs::write(tmp.path(), b"partial download").unwrap();
+            assert!(tmp.path().exists(), "file should exist while the guard lives");
+            tmp.path().to_path_buf()
+        };
+        assert!(
+            !path.exists(),
+            "dropping the guard must delete the temporary file"
+        );
+    }
+
+    #[test]
+    fn temp_backup_file_is_removed_when_the_body_exits_early() {
+        // 核心用例：模拟「下载/校验中途 `?` 提前返回」。
+        // 原实现只在 restore_archive 之后手动 remove_file，
+        // 这些提前返回的路径会跳过清理，在临时目录留下半成品大文件。
+        //
+        // 注意：不要断言「临时目录里没有任何同名残留」——
+        // 临时目录是进程间共享的，别的用例乃至上一次失败留下的文件都可能在里面
+        // （本用例最早就是被自己上一次失败留下的文件绊倒的）。
+        // 这里只针对**本次运行创建的那个具体路径**断言，不依赖外部状态。
+        fn fake_restore_that_fails(path_out: &mut Option<PathBuf>) -> Result<(), Error> {
+            let tmp = TempBackupFile::new("test-early-exit");
+            *path_out = Some(tmp.path().to_path_buf());
+            std::fs::write(tmp.path(), b"truncated zip").unwrap();
+            // 用 ? 提前返回，绕过任何显式清理代码
+            Err(Error::Error("simulated download failure".into()))?;
+            Ok(())
+        }
+
+        let mut path = None;
+        assert!(fake_restore_that_fails(&mut path).is_err());
+        let path = path.expect("the guard should have been created before failing");
+        assert!(
+            !path.exists(),
+            "an early `?` return must still clean up {path:?}"
+        );
+    }
+
+    #[test]
+    fn dropping_the_guard_is_safe_when_no_file_was_created() {
+        // 创建文件前就失败的情况：Drop 不应 panic（NotFound 要容忍）
+        let tmp = TempBackupFile::new("test-missing");
+        assert!(!tmp.path().exists());
+        drop(tmp);
+    }
+
+    #[test]
+    fn temp_paths_are_unique_per_kind() {
+        // webdav 与 aliyun 两条链路若同名，同时恢复会互相覆盖
+        let webdav = TempBackupFile::new("webdav");
+        let aliyun = TempBackupFile::new("aliyun");
+        assert_ne!(webdav.path(), aliyun.path());
+    }
 
     fn archive(files: &[(&str, &[u8])]) -> ZipArchive<Cursor<Vec<u8>>> {
         let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
