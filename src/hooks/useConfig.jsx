@@ -53,6 +53,10 @@ export const useConfig = (key, defaultValue, options = {}) => {
             unlisten.then((f) => {
                 f();
             });
+            // 卸载/切换 key 时把待写盘的防抖调用立即落地。
+            // syncToStore 有 500ms 防抖，而翻译窗口失焦后约 100ms 就被关闭，
+            // 不 flush 会让用户刚改的设置（如「记住语言」下的源/目标语言）静默丢失。
+            syncToStore.flush();
         };
     }, [key]);
 
