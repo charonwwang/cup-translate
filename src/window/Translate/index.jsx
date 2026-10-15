@@ -127,6 +127,12 @@ export default function Translate() {
                 }, 100);
             });
             return () => {
+                // 组件卸载时清理未触发的 debounce 定时器，防止对已卸载组件
+                // 调用 appWindow/store 操作
+                if (moveTimeout) {
+                    clearTimeout(moveTimeout);
+                    moveTimeout = null;
+                }
                 unlistenMove.then((f) => {
                     f();
                 });
@@ -153,6 +159,11 @@ export default function Translate() {
                 }, 100);
             });
             return () => {
+                // 组件卸载时清理未触发的 debounce 定时器
+                if (resizeTimeout) {
+                    clearTimeout(resizeTimeout);
+                    resizeTimeout = null;
+                }
                 unlistenResize.then((f) => {
                     f();
                 });
