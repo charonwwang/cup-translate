@@ -21,6 +21,7 @@ import { LanguageFlag } from '../../../../utils/language';
 import { useToastStyle } from '../../../../hooks';
 import { osType } from '../../../../utils/env';
 import { nextPortValue } from '../../../../utils/port';
+import { isFilledPort, isFilledString } from '../../../../utils/configValue';
 
 let timer = null;
 
@@ -538,7 +539,13 @@ export default function General() {
                                 isSelected={proxyEnable}
                                 onValueChange={async (v) => {
                                     if (v) {
-                                        if (proxyHost === '' || proxyPort === '') {
+                                        // 用 isFilledString / isFilledPort 而不是 === ''：
+                                        // 纯空白 host（'   '）会穿过 `=== ''`，最终让 Rust 的
+                                        // set_proxy 把 `http://   :7890` 写进 http_proxy 等环境变量
+                                        // （实测确认：启动日志无任何告警，坏值被当成合法配置）。
+                                        // 端口必须用 isFilledPort——它存的是 **number**，
+                                        // 用 isFilledString 会把正常端口也判为未填。
+                                        if (!isFilledString(proxyHost) || !isFilledPort(proxyPort)) {
                                             setProxyEnable(false);
                                             toast.error(t('config.general.proxy_error'), {
                                                 duration: 3000,

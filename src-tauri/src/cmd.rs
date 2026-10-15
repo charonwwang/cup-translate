@@ -205,7 +205,11 @@ pub fn copy_img(app_handle: tauri::AppHandle, width: usize, height: usize) -> Re
 pub fn set_proxy() -> Result<bool, ()> {
     let host = get("proxy_host")
         .and_then(|value| value.as_str().map(str::to_owned))
-        .filter(|value| !value.is_empty())
+        // 必须按 trim 后判定：`!value.is_empty()` 会放行纯空白（'   '），
+        // 于是下面 format! 出 `http://   :7890`，再写进
+        // http_proxy / https_proxy / all_proxy。实测确认：proxy_host='   ' 时
+        // set_proxy() 成功返回、启动日志**没有**任何告警。（round 49）
+        .filter(|value| !value.trim().is_empty())
         .ok_or(())?;
     let port = get("proxy_port")
         .and_then(|value| value.as_u64())
