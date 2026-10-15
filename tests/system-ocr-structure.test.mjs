@@ -28,7 +28,15 @@ test('helper functions live at module level, not nested inside another fn', () =
     const lines = source.split('\n');
     const badIndentedDecls = [];
     lines.forEach((line, i) => {
-        if (/^\s+(fn |pub fn |#\[cfg\(|#\[tauri::command)/.test(line) && !/^\s{4,}/.test(line)) {
+        // 顶层声明与文档注释在 Rust 里一律顶格（column 0）。
+        //
+        // 修复前的判据是 `/^\s+.../ && !/^\s{4,}/`，即「缩进 1-3 空格」才算违规——
+        // 而函数体内嵌套的真实缩进是 4 的倍数，永远落在被排除的区间里，
+        // 于是这条断言对「把 helper 嵌进 system_ocr」（正是它要防的历史缺陷）
+        // **恒真且不报警**。实测：在 system_ocr 函数体内插入一个 4 空格缩进的
+        // `fn nested_helper()`，5 条测试全绿。
+        // 现在改成「行首只要有空白就不该是声明」。
+        if (/^\s+(fn |pub fn |#\[cfg\(|#\[tauri::command)/.test(line)) {
             badIndentedDecls.push(`${i + 1}: ${line}`);
         }
         // 文档注释若缩进，说明它被写进了某个函数体
