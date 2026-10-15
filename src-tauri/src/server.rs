@@ -94,6 +94,12 @@ fn http_handle(request: Request, port: u16) {
 /// 与 `http_handle` 的 match 臂一一对应，给测试一个可断言的清单：
 /// 它保证「路由表里不会混进带 `?` 的条目」（那正是修复前的形态），
 /// 而 [`request_path`] 保证运行时只按路径匹配。两者配对才算完整契约。
+///
+/// `#[cfg(test)]`：这个清单只服务于测试（发布构建里不必存在）。
+/// 早先没加这个属性，clippy 报 `constant ROUTES is never used`——
+/// 因为在非测试构建下它确实没有任何使用者。加上属性后两处都干净了，
+/// 且不影响测试下的可见性。
+#[cfg(test)]
 const ROUTES: [&str; 7] = [
     "/",
     "/config",

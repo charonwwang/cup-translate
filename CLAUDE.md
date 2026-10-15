@@ -177,6 +177,10 @@ ECDict（`pot-app.com/api/dict` 404/405）、Lingva 翻译（NXDOMAIN）、Bing 
 `src-tauri/src/config.rs::prune_unconfigured_dead_services()` 会清理**从未配置过**的
 `deepl`/`bing`/`lingva`/`ecdict`（翻译）与 `lingva_tts`（TTS）裸实例，让升级用户同样开箱即用；
 用户显式创建的 `name@id` 实例、已填配置（如 DeepL 密钥 / 自建地址）的实例一律保留。
+判据是 `config.rs::should_keep_instance`（已抽为纯函数并单测）：**只有配置对象为空 `{}`**
+或该键完全不存在时才清**；非对象值（null / 字符串 / 数组）一律保守保留。
+实测（真实二进制 + 真实配置）：带 `authKey` 的 deepl 与 `neverconfigured@deepl` 都被保留，
+空配置的 `lingva_tts` 被清掉并在日志留下 `Prune unusable services` 记录。
 
 `deepl` 代码保留（需 API key，翻译前会跳过未配置实例、不发请求）。
 不要把 URL 改成来路不明的第三方镜像；若要自建，需先有对应服务。

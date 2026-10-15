@@ -134,6 +134,37 @@ fn prune_unconfigured_dead_services() {
     prune_service_list("tts_service_list", UNUSABLE_TTS_BUILTIN);
 }
 
+/// 判断一个服务实例是否该被保留。抽成纯函数以便单测——
+/// `prune_service_list` 会**真的改写用户配置**，判错等于静默删掉用户的实例。
+///
+/// 关于 `instance.contains('@')` 这一项：在**当前**两张名单只含裸服务名
+/// （deepl / bing / lingva / ecdict / lingva_tts，均不含 `@`）的前提下，
+/// 它是**冗余**的——因为字符串相等要求逐字符相同，`"x@y"` 永不可能等于
+/// `"deepl"`，所以 `!unusable_builtin.contains(instance)` 必然已为 true。
+/// 保留它是为了**表达意图**（用户自建实例一律不动），
+/// 而不是因为它改变了结果；有一条测试记录了这一点，
+/// 另一条测试锁住「名单里不含 @」这个让它成立的前提。
+///
+/// 参数 `instance_config` 是该实例的配置对象：
+/// - `None`：配置不存在（从未落盘）
+/// - `Some(Json::Null)` 或非对象：视为「没有配置」
+/// - `Some(Object)`：空对象视为「没配置过」，非空视为「用户配过」
+fn should_keep_instance(
+    instance: &str,
+    unusable_builtin: &[&str],
+    instance_config: Option<&serde_json::Value>,
+) -> bool {
+    // 用户自建实例（含 @）一律保留；不在 unusable 名单里的也一律保留
+    if instance.contains('@') || !unusable_builtin.contains(&instance) {
+        return true;
+    }
+    // 配置对象非空说明用户配置过（例如填了 DeepL 密钥 / 自建实例地址），保留
+    match instance_config {
+        Some(config) => config.as_object().is_none_or(|obj| !obj.is_empty()),
+        None => false,
+    }
+}
+
 fn prune_service_list(config_key: &str, unusable_builtin: &[&str]) {
     let Some(value) = get(config_key) else {
         return;
@@ -143,16 +174,7 @@ fn prune_service_list(config_key: &str, unusable_builtin: &[&str]) {
     };
     let new_list: Vec<String> = list
         .iter()
-        .filter(|instance| {
-            if instance.contains('@') || !unusable_builtin.contains(&instance.as_str()) {
-                return true;
-            }
-            // 配置对象非空说明用户配置过（例如填了 DeepL 密钥 / 自建实例地址），保留
-            match get(instance) {
-                Some(config) => config.as_object().is_none_or(|obj| !obj.is_empty()),
-                None => false,
-            }
-        })
+        .filter(|instance| should_keep_instance(instance, unusable_builtin, get(instance).as_ref()))
         .cloned()
         .collect();
     if new_list.len() != list.len() {
@@ -473,6 +495,143 @@ mod tests {
             retain_available(list, &["google"], &plugins()),
             owned(&["google"])
         );
+    }
+
+    // ---- should_keep_instance：决定哪些「不可用」的旧服务会被清出用户配置 ----
+    // 这些测试守住的是**破坏性行为**：判错会静默删除用户配置。
+    // 特别注意 deepl：它同时出现在 builtin_translate_list（保留）与
+    // UNUSABLE_TRANSLATE_BUILTIN（待清理）里——看似矛盾，实际是靠
+    // 「配置对象是否为空」来区分「默认塞进去的」与「用户真的配过的」。
+
+    use super::{should_keep_instance, UNUSABLE_TRANSLATE_BUILTIN, UNUSABLE_TTS_BUILTIN};
+
+    #[test]
+    fn a_user_configured_deepl_is_never_pruned() {
+        // 用户填了密钥 -> 必须保留，否则升级一次配置就没了
+        for cfg in [json!({"authKey": "k"}), json!({"type": "api", "authKey": "k"})] {
+            assert!(
+                should_keep_instance("deepl", UNUSABLE_TRANSLATE_BUILTIN, Some(&cfg)),
+                "a deepl instance with a real config must survive pruning"
+            );
+        }
+    }
+
+    #[test]
+    fn a_never_configured_deepl_is_pruned() {
+        // 空对象 = 「从没配过」，是升级用户被默认塞进来的那种，应当清掉
+        assert!(!should_keep_instance(
+            "deepl",
+            UNUSABLE_TRANSLATE_BUILTIN,
+            Some(&json!({}))
+        ));
+        // 配置根本不存在（从未落盘）-> 清掉
+        assert!(!should_keep_instance("deepl", UNUSABLE_TRANSLATE_BUILTIN, None));
+    }
+
+    /// 非对象配置值一律**保留**——这是 `as_object().is_none_or(..)` 的实际语义，
+    /// 不是「非空对象才保留」。
+    ///
+    /// 对照真实配置文件确认过：服务配置要么是 `{}`（注册时写入的空对象），
+    /// 要么整个键不存在；不会出现 null / 字符串 / 数组。
+    /// 因此这条分支在实践中走不到，属于防御性代码。
+    /// 本测试把它**明确记录下来**，免得后人（包括我自己）误以为它判的是「非对象=没配置」
+    /// 而顺手「修正」成一个更严格、却会静默删用户配置的版本。
+    #[test]
+    fn a_non_object_config_is_conservatively_kept() {
+        for weird in [json!(null), json!("oops"), json!(42), json!([1, 2])] {
+            assert!(
+                should_keep_instance("deepl", UNUSABLE_TRANSLATE_BUILTIN, Some(&weird)),
+                "a non-object config ({weird}) is kept conservatively — pruning it risks \
+                 deleting something the user did configure"
+            );
+        }
+    }
+
+    #[test]
+    fn user_created_instances_are_never_pruned() {
+        // 含 @ 的是用户显式创建的实例，哪怕配置为空也不能删
+        for name in ["mydeepl@deepl", "self@lingva_tts", "@"] {
+            assert!(
+                should_keep_instance(name, UNUSABLE_TRANSLATE_BUILTIN, None),
+                "'{name}' is a user-created instance and must never be pruned"
+            );
+        }
+    }
+
+    #[test]
+    fn the_at_sign_check_is_redundant_under_the_current_lists() {
+        // 记录一个容易误判的事实：`instance.contains('@')` 这一项**不影响结果**。
+        // 论证：字符串相等要求逐字符相同，而名单里全是裸服务名，
+        // 所以含 @ 的实例名永远不 equal 名单项 -> !contains 已为 true。
+        // 这里直接对「删掉 @ 判定后的行为」做等价断言，
+        // 免得后人以为它挡掉了什么（我自己第一版测试就误以为它被测到了）。
+        fn without_at_check(instance: &str, unusable: &[&str]) -> bool {
+            if !unusable.contains(&instance) {
+                return true;
+            }
+            false // 名单命中且没有 @ 短路 -> 当作「未配置」处理
+        }
+        for name in ["mydeepl@deepl", "@deepl", "deepl@", "@"] {
+            assert_eq!(
+                should_keep_instance(name, UNUSABLE_TRANSLATE_BUILTIN, None),
+                without_at_check(name, UNUSABLE_TRANSLATE_BUILTIN),
+                "for '{name}' the @ check should not change the outcome"
+            );
+        }
+    }
+
+    #[test]
+    fn no_pruning_list_entry_contains_an_at_sign() {
+        // 上一条「@ 判定冗余」的论证依赖这个前提：名单里的项都是裸服务名。
+        // 谁要是往名单里加了一条含 @ 的项，冗余性就不成立了，
+        // 这条测试会先失败，提醒重新审视那段注释。
+        for name in UNUSABLE_TRANSLATE_BUILTIN.iter().chain(UNUSABLE_TTS_BUILTIN) {
+            assert!(
+                !name.contains('@'),
+                "'{name}' contains '@', which invalidates the documented reasoning that \
+                 the @ check in should_keep_instance is redundant"
+            );
+        }
+    }
+
+    #[test]
+    fn services_outside_the_unusable_list_are_always_kept() {
+        // 只有 bing/ecdict/lingva 这类「代码已删除」的服务才在清理名单里；
+        // 其余服务即使配置为空也必须保留（否则开箱即用的默认引擎会被删掉）。
+        for name in ["google", "yandex", "openai", "ollama", "local_mt"] {
+            assert!(
+                should_keep_instance(name, UNUSABLE_TRANSLATE_BUILTIN, None),
+                "'{name}' is not on the unusable list and must always be kept"
+            );
+        }
+    }
+
+    #[test]
+    fn the_unusable_lists_only_name_services_that_are_gone_or_gated() {
+        // 结构性护栏：清理名单里的每一项都必须是「代码已删除」（bing/ecdict/lingva）
+        // 或「需要用户显式配置才可用」（deepl / lingva_tts）。
+        // 若有人把仍在正常工作的服务加进来，用户配置会被静默清掉。
+        let intentionally_gated: &[&str] = &["deepl", "lingva_tts"];
+        let code_removed: &[&str] = &["bing", "ecdict", "lingva"];
+        for name in UNUSABLE_TRANSLATE_BUILTIN.iter().chain(UNUSABLE_TTS_BUILTIN) {
+            assert!(
+                intentionally_gated.contains(name) || code_removed.contains(name),
+                "'{name}' is on a pruning list but is neither removed from the code nor                  explicitly gated on user configuration — pruning it would silently                  delete working services from user config"
+            );
+        }
+    }
+
+    #[test]
+    fn the_tts_unusable_list_covers_the_gated_tts_service() {
+        // lingva_tts 的默认地址实测已死（CLAUDE.md §3.2），必须留在清理名单里；
+        // 同时它又在 builtin_tts_list 里（供自建），二者靠空配置判定区分。
+        assert!(UNUSABLE_TTS_BUILTIN.contains(&"lingva_tts"));
+        assert!(should_keep_instance(
+            "lingva_tts",
+            UNUSABLE_TTS_BUILTIN,
+            Some(&json!({"requestPath": "http://my-lingva"}))
+        ));
+        assert!(!should_keep_instance("lingva_tts", UNUSABLE_TTS_BUILTIN, Some(&json!({}))));
     }
 
     #[test]
