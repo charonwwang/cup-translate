@@ -20,6 +20,7 @@ import { useConfig } from '../../../../hooks/useConfig';
 import { LanguageFlag } from '../../../../utils/language';
 import { useToastStyle } from '../../../../hooks';
 import { osType } from '../../../../utils/env';
+import { nextPortValue } from '../../../../utils/port';
 
 let timer = null;
 
@@ -148,14 +149,14 @@ export default function General() {
                                             });
                                         }, 1000);
                                     }
-                                    if (v === '') {
-                                        setServerPort(0);
-                                    } else if (parseInt(v) > 65535) {
-                                        setServerPort(65535);
-                                    } else if (parseInt(v) < 0) {
-                                        setServerPort(0);
+                                    // NaN 不能被写进配置（见 utils/port.js 的注释）；
+                                    // 非法输入（'-' / '.' / 'e' 等中间态）一律忽略，保持原值
+                                    const next = nextPortValue(v);
+                                    if (next === null) {
+                                        // 空串 = 用户清空了输入框，按「未设置」处理为 0
+                                        setServerPort(v.trim() === '' ? 0 : serverPort);
                                     } else {
-                                        setServerPort(parseInt(v));
+                                        setServerPort(next);
                                     }
                                 }}
                                 className='max-w-[100px]'
@@ -581,12 +582,12 @@ export default function General() {
                                 label={t('config.general.proxy.port')}
                                 value={proxyPort}
                                 onValueChange={(v) => {
-                                    if (parseInt(v) > 65535) {
-                                        setProxyPort(65535);
-                                    } else if (parseInt(v) < 0) {
-                                        setProxyPort('');
+                                    // 同 server_port：拒绝非数字输入，避免 NaN -> null
+                                    const next = nextPortValue(v);
+                                    if (next === null) {
+                                        setProxyPort(v.trim() === '' ? '' : proxyPort);
                                     } else {
-                                        setProxyPort(parseInt(v));
+                                        setProxyPort(next);
                                     }
                                 }}
                                 className='ml-2'
