@@ -12,7 +12,10 @@ test('privileged translation view never injects remote HTML', async () => {
 test('desktop CSP does not disable browser web security', async () => {
     const config = JSON.parse(await readFile('src-tauri/tauri.conf.json', 'utf8'));
     const windows = config.tauri.windows ?? [];
-    assert.equal(windows.some((window) => window.additionalBrowserArgs?.includes('--disable-web-security')), false);
+    assert.equal(
+        windows.some((window) => window.additionalBrowserArgs?.includes('--disable-web-security')),
+        false
+    );
     assert.doesNotMatch(config.tauri.security.csp, /default-src \*/);
     assert.match(config.tauri.security.csp, /default-src 'self'/);
 

@@ -35,7 +35,7 @@ export async function translate(text, from, to, options = {}) {
 
     const headers = {
         'Content-Type': 'application/json',
-        'Authorization': token,
+        Authorization: token,
     };
 
     const body = {
@@ -43,8 +43,8 @@ export async function translate(text, from, to, options = {}) {
         messages: promptList,
         stream: true,
         thinking: {
-            type: "disabled",
-        }
+            type: 'disabled',
+        },
     };
 
     let result = '';
@@ -67,14 +67,14 @@ export async function translate(text, from, to, options = {}) {
 
                 // Convert binary data to string
                 buffer += decoder.decode(value, { stream: true });
-                
+
                 // Process complete events
                 const boundary = buffer.lastIndexOf('\n\n');
                 if (boundary !== -1) {
                     const event = buffer.slice(0, boundary);
                     buffer = buffer.slice(boundary + 2);
                     const chunks = event.split('\n\n');
-                    
+
                     for (const chunk of chunks) {
                         const text = chunk.replace(/^data:/, '').trim();
                         if (text === '[DONE]') {
@@ -99,7 +99,7 @@ export async function translate(text, from, to, options = {}) {
     } catch (error) {
         return Promise.reject(error);
     }
-    
+
     return result;
 }
 

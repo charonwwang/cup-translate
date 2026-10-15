@@ -4,14 +4,19 @@ import React from 'react';
 
 import * as builtinServices from '../../../../../../services/translate';
 import { PluginConfig } from '../../PluginConfig';
-import { ServiceSourceType, getServiceName, getServiceSouceType, whetherPluginService } from '../../../../../../utils/service_instance';
+import {
+    ServiceSourceType,
+    getServiceName,
+    getServiceSouceType,
+    whetherPluginService,
+} from '../../../../../../utils/service_instance';
 
 export default function ConfigModal(props) {
     const { serviceInstanceKey, pluginList, isOpen, onOpenChange, updateServiceInstanceList } = props;
 
-    const serviceSourceType = getServiceSouceType(serviceInstanceKey)
-    const pluginServiceFlag = whetherPluginService(serviceInstanceKey)
-    const serviceName = getServiceName(serviceInstanceKey)
+    const serviceSourceType = getServiceSouceType(serviceInstanceKey);
+    const pluginServiceFlag = whetherPluginService(serviceInstanceKey);
+    const serviceName = getServiceName(serviceInstanceKey);
 
     const { t } = useTranslation();
     const ConfigComponent = pluginServiceFlag ? PluginConfig : builtinServices[serviceName].Config;

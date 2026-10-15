@@ -1,8 +1,22 @@
 export function cropRectFromPointer(startX, startY, endX, endY, bounds, imageWidth, imageHeight) {
     if (
-        !bounds || bounds.width <= 0 || bounds.height <= 0 ||
-        imageWidth <= 0 || imageHeight <= 0 ||
-        ![startX, startY, endX, endY, bounds.left, bounds.top, bounds.width, bounds.height, imageWidth, imageHeight].every(Number.isFinite)
+        !bounds ||
+        bounds.width <= 0 ||
+        bounds.height <= 0 ||
+        imageWidth <= 0 ||
+        imageHeight <= 0 ||
+        ![
+            startX,
+            startY,
+            endX,
+            endY,
+            bounds.left,
+            bounds.top,
+            bounds.width,
+            bounds.height,
+            imageWidth,
+            imageHeight,
+        ].every(Number.isFinite)
     ) {
         return null;
     }

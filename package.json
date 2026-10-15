@@ -8,6 +8,8 @@
         "build": "vite build",
         "check": "pnpm build && pnpm test",
         "test": "node --test tests/*.test.mjs",
+        "format": "prettier --write \"src/**/*.{js,jsx}\" \"tests/**/*.mjs\"",
+        "format:check": "prettier --check \"src/**/*.{js,jsx}\" \"tests/**/*.mjs\"",
         "package:linux": "bash packaging/build-linux.sh deb",
         "package:linux:all": "bash packaging/build-linux.sh all",
         "preview": "vite preview",

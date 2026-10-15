@@ -34,7 +34,9 @@ export default function Screenshot() {
             }
         }
         void capture();
-        return () => { active = false; };
+        return () => {
+            active = false;
+        };
     }, []);
 
     return (
@@ -85,8 +87,13 @@ export default function Screenshot() {
                     setIsMoved(false);
                     const image = imgRef.current;
                     const crop = cropRectFromPointer(
-                        mouseDownX, mouseDownY, e.clientX, e.clientY,
-                        image?.getBoundingClientRect(), image?.naturalWidth, image?.naturalHeight
+                        mouseDownX,
+                        mouseDownY,
+                        e.clientX,
+                        e.clientY,
+                        image?.getBoundingClientRect(),
+                        image?.naturalWidth,
+                        image?.naturalHeight
                     );
                     if (!crop) {
                         await warn('Screenshot area is too small');

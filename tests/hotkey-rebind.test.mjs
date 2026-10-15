@@ -18,10 +18,7 @@ test('rebinding a hotkey unregisters the previous accelerator first', async () =
     const registerIdx = registerBody.indexOf('.register(hotkey.as_str(), handler)');
     assert.notEqual(unregisterIdx, -1, 'register() must call unregister_previous');
     assert.notEqual(registerIdx, -1, 'register() must register the new accelerator');
-    assert.ok(
-        unregisterIdx < registerIdx,
-        'unregister_previous must run before registering the new accelerator',
-    );
+    assert.ok(unregisterIdx < registerIdx, 'unregister_previous must run before registering the new accelerator');
 });
 
 test('hotkey registry tracks real bindings so rebinds can be undone', async () => {
@@ -36,10 +33,7 @@ test('hotkey registry tracks real bindings so rebinds can be undone', async () =
     assert.match(source, /set_registered_accelerator\(name, Some\(hotkey\.clone\(\)\)\)/);
     // 注册失败时不得写入记账（否则下次改键会去解绑一个不存在的键）
     const failBranch = source.slice(source.indexOf('Err(e) => {'));
-    assert.doesNotMatch(
-        failBranch.slice(0, failBranch.indexOf('Ok(())')),
-        /set_registered_accelerator\(name, Some/,
-    );
+    assert.doesNotMatch(failBranch.slice(0, failBranch.indexOf('Ok(())')), /set_registered_accelerator\(name, Some/);
 });
 
 test('emptying a hotkey unbinds it instead of leaving the old key active', async () => {
@@ -50,10 +44,7 @@ test('emptying a hotkey unbinds it instead of leaving the old key active', async
     const emptyReturnIdx = registerBody.indexOf('if hotkey.is_empty()');
     assert.notEqual(unregisterIdx, -1);
     assert.notEqual(emptyReturnIdx, -1);
-    assert.ok(
-        unregisterIdx < emptyReturnIdx,
-        'the previous binding must be released even when the new value is empty',
-    );
+    assert.ok(unregisterIdx < emptyReturnIdx, 'the previous binding must be released even when the new value is empty');
 });
 
 test('quitting keeps the hotkey registry consistent with real bindings', async () => {

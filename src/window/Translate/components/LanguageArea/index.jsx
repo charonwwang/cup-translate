@@ -16,7 +16,10 @@ export default function LanguageArea() {
     const [rememberLanguage] = useConfig('translate_remember_language', false);
     const [translateSourceLanguage, setTranslateSourceLanguage] = useConfig('translate_source_language', 'auto');
     // 目标语言默认为系统语言（中文系统→中文），而非硬编码 zh_cn
-    const [translateTargetLanguage, setTranslateTargetLanguage] = useConfig('translate_target_language', getSystemTargetLanguage());
+    const [translateTargetLanguage, setTranslateTargetLanguage] = useConfig(
+        'translate_target_language',
+        getSystemTargetLanguage()
+    );
     const [translateSecondLanguage] = useConfig('translate_second_language', 'en');
 
     const [sourceLanguage, setSourceLanguage] = useAtom(sourceLanguageAtom);

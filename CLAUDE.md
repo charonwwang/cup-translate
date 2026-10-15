@@ -251,8 +251,15 @@ src-tauri/src/             Rust 后端（17 个模块）
 
 改动后格式化：
 ```bash
-npx prettier --write <files>
+pnpm format          # 格式化 src/ 与 tests/
+pnpm format:check    # 只检查、不改动
+npx prettier --write <files>   # 格式化指定文件
 ```
+
+> **格式已由测试兜底**：`tests/formatting.test.mjs` 断言 `src/**/*.{js,jsx}`
+> 全部符合 `.prettierrc.json`，并断言该配置仍满足上面的 4 空格 / 单引号 /
+> 行宽 120 / 分号必需 / JSX 属性每行一个。CI **不跑** prettier，
+> 因此这条测试是唯一的自动化防线；若放宽配置，必须同步更新本节。
 
 ### 5.2 Rust
 - 遵循 `cargo fmt` / `cargo clippy`

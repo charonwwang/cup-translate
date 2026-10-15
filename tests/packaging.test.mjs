@@ -137,7 +137,7 @@ test('a corrupt service list does not disable cleanup for the other lists', asyn
     assert.equal(
         /serde_json::from_value::<Vec<String>>\(\w+\)\?/.test(fn),
         false,
-        'check_service_available must not use `?` on service list parsing',
+        'check_service_available must not use `?` on service list parsing'
     );
     // Each list must be handled independently, logging rather than aborting.
     assert.match(fn, /Skipping service check for \{\}/);

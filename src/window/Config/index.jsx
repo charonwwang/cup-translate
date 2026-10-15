@@ -62,7 +62,9 @@ export default function Config() {
                 />
                 <div className='config-titlebar h-[44px] flex justify-between'>
                     <div className='flex'>
-                        <h2 className='config-title m-auto ml-[20px]'>{t(`config.${location.pathname.slice(1)}.title`)}</h2>
+                        <h2 className='config-title m-auto ml-[20px]'>
+                            {t(`config.${location.pathname.slice(1)}.title`)}
+                        </h2>
                     </div>
 
                     <div className='flex'>{osType !== 'Darwin' && <WindowControl />}</div>

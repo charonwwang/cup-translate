@@ -16,7 +16,23 @@ import { translate } from './index';
 import { Language } from './index';
 
 // https://docs.bigmodel.cn/cn/guide/start/model-overview#%E6%96%87%E6%9C%AC%E6%A8%A1%E5%9E%8B
-const availableModels = ['glm-4.5', 'glm-4.5-x', 'glm-4.5-air', 'glm-4.5-airx', 'glm-4-plus', 'glm-4-air-250414', 'glm-4-long', 'glm-4-airx', 'glm-4-flashx-250414', 'glm-z1-air', 'glm-z1-airx', 'glm-z1-flashx', 'glm-4.5-flash', 'glm-4-flash-250414', 'glm-z1-flash']
+const availableModels = [
+    'glm-4.5',
+    'glm-4.5-x',
+    'glm-4.5-air',
+    'glm-4.5-airx',
+    'glm-4-plus',
+    'glm-4-air-250414',
+    'glm-4-long',
+    'glm-4-airx',
+    'glm-4-flashx-250414',
+    'glm-z1-air',
+    'glm-z1-airx',
+    'glm-z1-flashx',
+    'glm-4.5-flash',
+    'glm-4-flash-250414',
+    'glm-z1-flash',
+];
 
 export function Config(props) {
     const { instanceKey, updateServiceList, onClose } = props;
@@ -111,10 +127,8 @@ export function Config(props) {
                                 });
                             }}
                         >
-                            {availableModels.map(it => (
-                                <DropdownItem key={it}>
-                                    {it}
-                                </DropdownItem>
+                            {availableModels.map((it) => (
+                                <DropdownItem key={it}>{it}</DropdownItem>
                             ))}
                         </DropdownMenu>
                     </Dropdown>

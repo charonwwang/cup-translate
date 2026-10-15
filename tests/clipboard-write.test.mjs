@@ -103,18 +103,10 @@ test('no call site uses raw writeText without handling failure', async () => {
         }
     }
 
-    assert.deepEqual(
-        offenders,
-        [],
-        `these files call raw writeText and ignore failures: ${offenders.join(', ')}`,
-    );
+    assert.deepEqual(offenders, [], `these files call raw writeText and ignore failures: ${offenders.join(', ')}`);
 });
 
 test('the clipboard helper is actually used by the translate target area', async () => {
     const source = await readFile('src/window/Translate/components/TargetArea/index.jsx', 'utf8');
-    assert.match(
-        source,
-        /writeClipboardSafely/,
-        'TargetArea auto-copy must go through the failure-aware helper',
-    );
+    assert.match(source, /writeClipboardSafely/, 'TargetArea auto-copy must go through the failure-aware helper');
 });

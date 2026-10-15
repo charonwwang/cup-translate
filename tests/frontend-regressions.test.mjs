@@ -52,7 +52,7 @@ test('plugin list reload is actually subscribed in the translate window', async 
     assert.match(
         effectBody,
         /return \(\) => \{\s*unlistenReloadPluginListEvent\(\);\s*\};/,
-        'the reload listener must be unlistened on unmount',
+        'the reload listener must be unlistened on unmount'
     );
     assert.match(code, /const unlistenReloadPluginListEvent = \(\) => \{/);
 
