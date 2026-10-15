@@ -113,10 +113,27 @@ export async function recognize(base64, language, options = {}) {
     });
     if (res.ok) {
         const result = res.data;
-        if (result['Response']['ImageRecord']['Value']) {
+        // ⚠️ 必须逐层判断，不能直接 `result['Response']['ImageRecord']['Value']`。
+        //
+        // 腾讯云的接口在**失败时也返回 HTTP 200**，错误信息放在
+        // `Response.Error` 里、**不带** `ImageRecord` 字段。实测（无效凭据，仅看结构）：
+        //   {"Response":{"Error":{"Code":"AuthFailure.SignatureExpire",
+        //     "Message":"Signature expired. ..."},"RequestId":"..."}}
+        // 于是原来的三层链式访问会抛
+        //   TypeError: Cannot read properties of undefined (reading 'Value')
+        // 而前端 `TextArea` 是 `setError(e.toString())` 原样展示，
+        // 用户看到的就是这句 TypeError —— 与真正的原因（密钥错/签名过期）毫无关系，
+        // 也不知道该去改配置。
+        //
+        // 现在先取 Response，再取 ImageRecord，任何一层缺失都退回到
+        // `throw JSON.stringify(result)`，把服务端返回的原始错误如实带给用户。
+        const response = result && result['Response'];
+        const record = response && response['ImageRecord'];
+        const value = record && record['Value'];
+        if (value) {
             let source = '';
             let target = '';
-            for (let i of result['Response']['ImageRecord']['Value']) {
+            for (let i of value) {
                 source += i['SourceText'] + '\n';
                 target += i['TargetText'] + '\n';
             }
