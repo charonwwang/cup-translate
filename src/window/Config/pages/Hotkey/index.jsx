@@ -47,6 +47,7 @@ const keyMap = {
 
 export default function Hotkey() {
     const [selectionTranslate, setSelectionTranslate] = useConfig('hotkey_selection_translate', 'Alt+T');
+    const [clipboardTranslate, setClipboardTranslate] = useConfig('hotkey_clipboard_translate', 'Alt+Shift+T');
     const [inputTranslate, setInputTranslate] = useConfig('hotkey_input_translate', '');
     const [ocrRecognize, setOcrRecognize] = useConfig('hotkey_ocr_recognize', '');
     const [ocrTranslate, setOcrTranslate] = useConfig('hotkey_ocr_translate', '');
@@ -140,6 +141,37 @@ export default function Hotkey() {
                                     className={`${selectionTranslate === '' && 'hidden'}`}
                                     onPress={() => {
                                         registerHandler('hotkey_selection_translate', selectionTranslate);
+                                    }}
+                                >
+                                    {t('common.ok')}
+                                </Button>
+                            }
+                        />
+                    )}
+                </div>
+                <div className='config-item'>
+                    <h3 className='my-auto'>{t('config.hotkey.clipboard_translate')}</h3>
+                    {clipboardTranslate !== null && (
+                        <Input
+                            type='hotkey'
+                            variant='bordered'
+                            value={clipboardTranslate}
+                            label={t('config.hotkey.set_hotkey')}
+                            className='max-w-[50%]'
+                            onKeyDown={(e) => {
+                                keyDown(e, setClipboardTranslate);
+                            }}
+                            onFocus={() => {
+                                unregister(clipboardTranslate);
+                                setClipboardTranslate('');
+                            }}
+                            endContent={
+                                <Button
+                                    size='sm'
+                                    variant='flat'
+                                    className={`${clipboardTranslate === '' && 'hidden'}`}
+                                    onPress={() => {
+                                        registerHandler('hotkey_clipboard_translate', clipboardTranslate);
                                     }}
                                 >
                                     {t('common.ok')}

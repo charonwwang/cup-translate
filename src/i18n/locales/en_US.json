@@ -156,7 +156,8 @@
                 "ocr_translate": "Screenshot Translation",
                 "is_register": "The hotkey is already registered",
                 "success": "Hotkey register success",
-                "set_hotkey": "Press to Set Hotkey"
+                "set_hotkey": "Press to Set Hotkey",
+                "clipboard_translate": "Clipboard Translate"
             },
             "service": {
                 "label": "Service",
