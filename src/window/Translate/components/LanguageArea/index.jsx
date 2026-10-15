@@ -5,7 +5,7 @@ import React, { useEffect } from 'react';
 import { atom, useAtom, useAtomValue } from 'jotai';
 
 import { languageList } from '../../../../utils/language';
-import { getSystemTargetLanguage, getSmartTargetLanguage } from '../../../../utils/systemLanguage';
+import { getSystemTargetLanguage } from '../../../../utils/systemLanguage';
 import { detectLanguageAtom } from '../SourceArea';
 import { useConfig } from '../../../../hooks';
 
