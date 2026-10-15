@@ -270,13 +270,85 @@ fn translate_window() -> Window {
     window
 }
 
+/// 用 CGEvent 模拟 Cmd+C（不需要 Automation 权限，只需 Accessibility）
+#[cfg(target_os = "macos")]
+fn simulate_copy_with_cg_event() {
+    use core_graphics::event::{CGEvent, CGEventTapLocation, CGKeyCode};
+    use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
+    let source =
+        CGEventSource::new(CGEventSourceStateID::HIDSystemState).expect("create event source");
+    // Cmd down
+    let cmd_key: CGKeyCode = 0x37; // kVK_Command
+    let key_down = CGEvent::new_keyboard_event(source.clone(), cmd_key, true).expect("create key down");
+    key_down.set_flags(core_graphics::event::CGEventFlags::CGEventFlagCommand);
+    key_down.post(CGEventTapLocation::HID);
+    // C key down + up
+    let c_key: CGKeyCode = 0x08; // kVK_ANSI_C
+    let c_down = CGEvent::new_keyboard_event(source.clone(), c_key, true).expect("create c down");
+    c_down.set_flags(core_graphics::event::CGEventFlags::CGEventFlagCommand);
+    c_down.post(CGEventTapLocation::HID);
+    let c_up = CGEvent::new_keyboard_event(source.clone(), c_key, false).expect("create c up");
+    c_up.post(CGEventTapLocation::HID);
+    // Cmd up
+    let cmd_up = CGEvent::new_keyboard_event(source, cmd_key, false).expect("create cmd up");
+    cmd_up.post(CGEventTapLocation::HID);
+    // 等待剪贴板更新
+    std::thread::sleep(std::time::Duration::from_millis(80));
+}
+
 pub fn selection_translate() {
     use selection::get_text;
-    // Get Selected Text
-    let text = get_text();
+    // 短暂延迟让 AX API 有时间注册选区（快捷键触发瞬间选区可能还未就绪）
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    // Get Selected Text via AX API
+    let mut text = get_text();
+    // 重试一次：首次可能因时序问题读不到
+    if text.trim().is_empty() {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        text = get_text();
+    }
+
+    // 兜底 1：用 CGEvent 模拟 Cmd+C（不需要 Automation 权限）
+    if text.trim().is_empty() {
+        info!("selection_translate: trying CGEvent Cmd+C fallback");
+        #[cfg(target_os = "macos")]
+        simulate_copy_with_cg_event();
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        if let Ok(mut clipboard) = arboard::Clipboard::new() {
+            if let Ok(clip_text) = clipboard.get_text() {
+                if !clip_text.trim().is_empty() {
+                    info!("selection_translate: got text via CGEvent copy");
+                    text = clip_text;
+                }
+            }
+        }
+    }
+
+    // 兜底 2：直接读剪贴板内容（用户已复制文本时）
+    if text.trim().is_empty() {
+        if let Ok(mut clipboard) = arboard::Clipboard::new() {
+            if let Ok(clip_text) = clipboard.get_text() {
+                if !clip_text.trim().is_empty() {
+                    info!("selection_translate: fallback to clipboard content");
+                    text = clip_text;
+                }
+            }
+        }
+    }
+
     if text.trim().is_empty() {
         // Do not replace the previous translation or flash an empty window when
         // the hotkey is pressed without an active selection.
+        warn!("selection_translate: no text selected and clipboard is empty");
+        // 提示用户：macOS 可能阻止了 AppleScript 模拟按键，需要授权
+        let app_handle = APP.get();
+        if let Some(handle) = app_handle {
+            let identifier = handle.config().tauri.bundle.identifier.clone();
+            let _ = tauri::api::notification::Notification::new(&identifier)
+                .title("划词翻译")
+                .body("未获取到选中文本。请先选中文字再按快捷键，或复制文字后按快捷键翻译。若持续失败，请在 系统设置→隐私与安全→自动化 中允许本应用控制「系统事件」。")
+                .show();
+        }
         return;
     }
 
