@@ -24,6 +24,14 @@ import * as local from './utils/local';
 import * as aliyun from './utils/aliyun';
 
 let refreshTimer = null;
+// 轮询代次：`refreshQrCode()` 是 async，它的 `await aliyun.qrcode()` 返回前
+// useEffect 的 cleanup 可能**已经跑过**（此刻 refreshTimer 仍是 null，
+// clearInterval(null) 什么也清不掉）。随后 qrcode() 返回并调用 pollingStatus()，
+// 就会启动一个**没有任何人负责回收**的 2 秒轮询：组件已卸载/已切走，
+// 但它会一直每 2 秒向阿里云发状态查询，并在已卸载组件上 setState。
+// 用代次让 cleanup 能作废「迟到」的初始化——每次 cleanup 递增，
+// 迟到的回调发现代次变了就直接放弃，不再创建 timer。
+let refreshToken = 0;
 
 export default function Backup() {
     const [backupType, setBackupType] = useConfig('backup_type', 'webdav');
@@ -164,11 +172,17 @@ export default function Backup() {
     };
 
     const refreshQrCode = async () => {
+        const token = refreshToken;
         try {
             const { url, sid } = await aliyun.qrcode();
             setAliyunQrCodeUrl(url);
             if (refreshTimer) {
                 clearInterval(refreshTimer);
+            }
+            // 迟到的响应：期间 cleanup 已经跑过（组件卸载/切换备份类型），
+            // 此时**不能**再启动轮询，否则它会永远存活。
+            if (token !== refreshToken) {
+                return;
             }
             pollingStatus(sid);
         } catch (e) {
@@ -198,7 +212,11 @@ export default function Backup() {
         }
 
         return () => {
+            // 先递增代次，作废所有「二维码请求在途」的初始化，
+            // 再清当前 timer（此刻可能仍是 null，那正是原缺陷的成因）。
+            refreshToken += 1;
             clearInterval(refreshTimer);
+            refreshTimer = null;
         };
     }, [backupType]);
 
