@@ -4,10 +4,10 @@ import test from 'node:test';
 
 import { DEFAULT_TRANSLATE_SERVICE_INSTANCE_LIST } from '../src/services/translate/defaults.js';
 
-test('local offline model and Google are the priority translation engines', async () => {
-    // 用户需求：翻译引擎优先本地小模型 + 谷歌翻译
-    // local_mt 需先下载模型（OPUS-MT CT2 int8，79MB），未下载时优雅跳过
-    assert.deepEqual(DEFAULT_TRANSLATE_SERVICE_INSTANCE_LIST, ['google', 'local_mt']);
+test('Google is the default translation engine (free, no API key)', async () => {
+    // 默认仅 Google：免费、无需 API key、开箱即用
+    // local_mt（本地离线翻译）为可选引擎，用户主动下载模型后手动启用
+    assert.deepEqual(DEFAULT_TRANSLATE_SERVICE_INSTANCE_LIST, ['google']);
     for (const path of ['src/window/Translate/index.jsx', 'src/window/Config/pages/Service/Translate/index.jsx']) {
         const source = await readFile(path, 'utf8');
         assert.match(source, /DEFAULT_TRANSLATE_SERVICE_INSTANCE_LIST/);
