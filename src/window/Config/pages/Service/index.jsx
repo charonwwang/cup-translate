@@ -25,10 +25,16 @@ export default function Service() {
             if (await exists(`plugins/${serviceType}`, { dir: BaseDirectory.AppConfig })) {
                 const plugins = await readDir(`plugins/${serviceType}`, { dir: BaseDirectory.AppConfig });
                 for (const plugin of plugins) {
-                    const infoStr = await readTextFile(`plugins/${serviceType}/${plugin.name}/info.json`, {
-                        dir: BaseDirectory.AppConfig,
-                    });
-                    let pluginInfo = JSON.parse(infoStr);
+                    let pluginInfo;
+                    try {
+                        const infoStr = await readTextFile(`plugins/${serviceType}/${plugin.name}/info.json`, {
+                            dir: BaseDirectory.AppConfig,
+                        });
+                        pluginInfo = JSON.parse(infoStr);
+                    } catch (e) {
+                        console.error(`[plugin] skip broken plugin ${plugin.name}:`, e);
+                        continue;
+                    }
                     if ('icon' in pluginInfo) {
                         const appConfigDirPath = await appConfigDir();
                         const iconPath = await join(

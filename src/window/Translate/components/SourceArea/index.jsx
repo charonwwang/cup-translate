@@ -247,9 +247,18 @@ export default function SourceArea(props) {
         if (ttsServiceList && getServiceSouceType(ttsServiceList[0]) === ServiceSourceType.PLUGIN) {
             readTextFile(`plugins/tts/${getServiceName(ttsServiceList[0])}/info.json`, {
                 dir: BaseDirectory.AppConfig,
-            }).then((infoStr) => {
-                setTtsPluginInfo(JSON.parse(infoStr));
-            });
+            }).then(
+                (infoStr) => {
+                    try {
+                        setTtsPluginInfo(JSON.parse(infoStr));
+                    } catch (e) {
+                        console.error('[plugin] broken tts plugin info.json:', e);
+                    }
+                },
+                (e) => {
+                    console.error('[plugin] failed to read tts plugin info.json:', e);
+                }
+            );
         }
     }, [ttsServiceList]);
 

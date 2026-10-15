@@ -62,10 +62,16 @@ export default function Recognize() {
         if (await exists(`plugins/recognize`, { dir: BaseDirectory.AppConfig })) {
             const plugins = await readDir(`plugins/recognize`, { dir: BaseDirectory.AppConfig });
             for (const plugin of plugins) {
-                const infoStr = await readTextFile(`plugins/recognize/${plugin.name}/info.json`, {
-                    dir: BaseDirectory.AppConfig,
-                });
-                let pluginInfo = JSON.parse(infoStr);
+                let pluginInfo;
+                try {
+                    const infoStr = await readTextFile(`plugins/recognize/${plugin.name}/info.json`, {
+                        dir: BaseDirectory.AppConfig,
+                    });
+                    pluginInfo = JSON.parse(infoStr);
+                } catch (e) {
+                    console.error(`[plugin] skip broken plugin ${plugin.name}:`, e);
+                    continue;
+                }
                 if ('icon' in pluginInfo) {
                     const appConfigDirPath = await appConfigDir();
                     const iconPath = await join(
