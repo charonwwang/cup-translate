@@ -116,6 +116,7 @@ test('Rust service whitelists stay in sync with the frontend registries', async 
     };
 
     assert.deepEqual(extractList('builtin_translate_list'), await extractExports('src/services/translate/index.jsx'));
+    assert.deepEqual(extractList('builtin_recognize_list'), await extractExports('src/services/recognize/index.jsx'));
     assert.deepEqual(extractList('builtin_tts_list'), await extractExports('src/services/tts/index.jsx'));
     assert.deepEqual(extractList('builtin_collection_list'), await extractExports('src/services/collection/index.jsx'));
 });
