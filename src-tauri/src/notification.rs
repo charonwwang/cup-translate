@@ -224,41 +224,125 @@ mod tests {
         assert!(!text.title.trim().is_empty());
     }
 
+    /// 实参里是否存在「标识符被绑定到字符串字面量」的写法。
+    ///
+    /// 覆盖 `.body({ let msg = "Hardcoded"; msg })` 这类块表达式形态：
+    /// 只看实参整体是否为标识符会漏掉它（外层是 `{ ... }`）。
+    fn has_literal_binding(arg: &str) -> bool {
+        let bytes = arg.as_bytes();
+        for i in 0..bytes.len() {
+            if bytes[i] != b'=' {
+                continue;
+            }
+            // 排除 == / != / <= / >=
+            if i > 0 && matches!(bytes[i - 1], b'=' | b'!' | b'<' | b'>') {
+                continue;
+            }
+            if i + 1 < bytes.len() && bytes[i + 1] == b'=' {
+                continue;
+            }
+            if arg[i + 1..].trim_start().starts_with('"') {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// `has_literal_binding` 的边界自检：不能漏判，也不能把比较运算符误判成绑定。
+    #[test]
+    fn literal_binding_detector_selfcheck() {
+        // 应当判为「是字面量绑定」
+        assert!(has_literal_binding("{ let s = \"hi\"; s }"));
+        assert!(has_literal_binding("let s = \"hi\"; s"));
+        // 合法写法：不得误报
+        assert!(!has_literal_binding("text.title"));
+        assert!(!has_literal_binding("&e"));
+        assert!(!has_literal_binding("cwd"));
+        assert!(!has_literal_binding("text.body"));
+        // 比较运算符不得被当成赋值
+        assert!(!has_literal_binding("if a == \"x\" { 1 } else { 2 }"));
+        assert!(!has_literal_binding("if a != \"x\" { 1 } else { 2 }"));
+        assert!(!has_literal_binding("a <= \"x\""));
+    }
+
     /// 结构性护栏：所有**通知**的文案都必须来自本模块，不得再写死字符串。
     ///
     /// 修复前的情形正是「五条通知散落在三个文件里、各自硬编码」：
     /// window.rs 两条永远中文，server.rs / main.rs 三条永远英文，
     /// 都不看 app_language。这条测试扫描源码，防止有人再新加一条硬编码通知。
     ///
-    /// 注意只检查 `Notification::new(...)` 链上的 `.title(` / `.body(`——
+    /// **文件清单靠扫描目录发现，而不是硬编码**：早先的写法把
+    /// ["window.rs", "server.rs", "main.rs"] 写死，于是「清单无法自证完整性」——
+    /// 在第四个文件（实测过 tray.rs）里新加一条硬编码通知，测试照样全绿。
+    /// 现在遍历 `src/*.rs`，新增文件自动纳入。
+    ///
+    /// 判据是「通知链上的 .title(/.body( 实参不得**直接或间接**是字符串字面量」：
+    /// 早先只判 `arg.starts_with('"')`，于是两种写法都能逃逸——
+    ///   · `.body(format!("Hardcoded {}", x))`
+    ///   · `.body({ let s = "Hardcoded"; s })`
+    /// 现在额外检查该实参在**同一函数内**是否绑定到字面量。
+    ///
+    /// 注意只检查 `Notification::new(...)` 链上的字段——
     /// `WindowBuilder` 的 `.title(...)` 是窗口标题，不属于通知，不能误伤。
     #[test]
     fn notification_text_is_never_hardcoded_at_the_call_site() {
-        for (name, source) in [
-            ("window.rs", include_str!("window.rs")),
-            ("server.rs", include_str!("server.rs")),
-            ("main.rs", include_str!("main.rs")),
-        ] {
-            // 找出每个 `Notification::new(` 起、到 `.show()` 止的片段
-            let mut rest = source;
-            let mut checked = 0;
+        // 扫描目录发现所有源文件（`cargo test` 的 CWD 是 crate 根，即 src-tauri/）
+        let mut files: Vec<(String, String)> = Vec::new();
+        for entry in std::fs::read_dir("src").expect("cargo test should run from src-tauri/") {
+            let path = entry.expect("readable dir entry").path();
+            if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+                continue;
+            }
+            let name = path.file_name().unwrap().to_string_lossy().to_string();
+            let source = std::fs::read_to_string(&path).expect("readable source file");
+            files.push((name, source));
+        }
+        // 防止「一个文件都没扫到 -> 循环不执行 -> 恒真通过」
+        assert!(
+            files.len() >= 10,
+            "expected to scan the whole src/ tree, only found {} files",
+            files.len()
+        );
+
+        let mut total_calls = 0;
+        for (name, source) in &files {
+            // 本文件（notification.rs）是文案的**定义处**，允许出现字面量
+            if name == "notification.rs" {
+                continue;
+            }
+            let mut rest = source.as_str();
             while let Some(start) = rest.find("Notification::new(") {
                 let tail = &rest[start..];
                 let end = tail.find(".show()").unwrap_or(tail.len());
                 let call = &tail[..end];
-                checked += 1;
+                total_calls += 1;
 
-                // 允许的写法：.title(text.title) / .body(text.body) / .body(cwd) / .body(&e)
-                // 不允许：直接把字符串字面量塞进 .title( / .body(
                 for field in [".title(", ".body("] {
                     let mut scan = call;
                     while let Some(idx) = scan.find(field) {
                         let after = &scan[idx + field.len()..];
                         let arg_end = after.find(')').unwrap_or(after.len());
                         let arg = after[..arg_end].trim();
+
+                        // 直接字面量
                         assert!(
                             !arg.starts_with('"'),
                             "{name}: a notification {field}...{arg} uses a hardcoded string — \
+                             route it through notification.rs so it follows app_language"
+                        );
+                        // 间接形态：format!("...") / 变量绑定到字面量
+                        assert!(
+                            !arg.starts_with("format!("),
+                            "{name}: a notification {field}...{arg} formats a hardcoded string — \
+                             route it through notification.rs so it follows app_language"
+                        );
+                        // 间接形态之二：实参内部把某个标识符绑定到字符串字面量，
+                        // 例如 `.body({ let msg = "Hardcoded"; msg })`。
+                        // 不能只看实参「整体是不是标识符」——那种写法外层是块表达式，
+                        // 所以要找实参内部的 `= "` 绑定。
+                        assert!(
+                            !has_literal_binding(arg),
+                            "{name}: a notification {field}...{arg} binds a string literal — \
                              route it through notification.rs so it follows app_language"
                         );
                         scan = &after[arg_end..];
@@ -266,7 +350,11 @@ mod tests {
                 }
                 rest = &tail[end..];
             }
-            assert!(checked > 0, "{name} should contain at least one notification call");
         }
+        // 全仓至少应有一条通知调用，否则说明扫描逻辑失效
+        assert!(
+            total_calls > 0,
+            "no Notification::new( call found anywhere — the scan is broken"
+        );
     }
 }
