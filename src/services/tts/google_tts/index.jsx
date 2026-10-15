@@ -8,7 +8,16 @@ export async function tts(text, lang, options = {}) {
     if (!text || text.trim() === '') {
         return new Uint8Array(0);
     }
-    // Google TTS 语言代码映射
+    // Google TTS 语言代码映射。
+    // 键必须与 src/services/tts/*/info.ts 的 Language 枚举一致（它们是同一份
+    // 「项目支持的 TTS 语言」清单）。此前漏了 sv / pl / nl / nb_no / nn_no / km
+    // 六项，它们全部落到下面的 `|| 'en'`，于是**用户选这些语言却听到英文发音**。
+    // 实测 Google 的 translate_tts 对这六个代码均返回 HTTP 200：
+    //     tl=sv / pl / nl / no / km  -> 200
+    // 唯一**确实**不被支持的是蒙古语 mn_cy，实测 mn / mn-Cyrl / mn-MN 全为
+    // HTTP 400，因此它继续回退英文（唯一不可避免的一项）。
+    // 挪威语两个变体（书面语 nb / 新挪威语 nn）都用 Google 的 'no'，
+    // 与 lingva 的映射保持一致。
     const langMap = {
         zh_cn: 'zh-CN',
         zh_tw: 'zh-TW',
@@ -32,6 +41,12 @@ export async function tts(text, lang, options = {}) {
         uk: 'uk',
         fa: 'fa',
         he: 'he',
+        sv: 'sv',
+        pl: 'pl',
+        nl: 'nl',
+        nb_no: 'no',
+        nn_no: 'no',
+        km: 'km',
     };
     const googleLang = langMap[lang] || 'en';
 
