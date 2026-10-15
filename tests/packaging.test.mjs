@@ -120,6 +120,42 @@ test('Rust service whitelists stay in sync with the frontend registries', async 
     assert.deepEqual(extractList('builtin_collection_list'), await extractExports('src/services/collection/index.jsx'));
 });
 
+test('a corrupt service list does not disable cleanup for the other lists', async () => {
+    // Regression guard: check_service_available() used `?` on each serde parse, so one
+    // malformed list (e.g. a non-string element) aborted the whole function and the
+    // remaining translate/tts/collection lists silently stopped being pruned. The
+    // caller ignored the Result, so nothing was logged either.
+    const source = await readFile('src-tauri/src/config.rs', 'utf8');
+    const start = source.indexOf('pub fn check_service_available');
+    assert.notEqual(start, -1, 'check_service_available must exist');
+    const body = source.slice(start);
+    const end = body.indexOf('\n}\n');
+    assert.notEqual(end, -1, 'check_service_available body must be delimited');
+    const fn = body.slice(0, end);
+
+    // Must not short-circuit the whole function on an invalid list value.
+    assert.equal(
+        /serde_json::from_value::<Vec<String>>\(\w+\)\?/.test(fn),
+        false,
+        'check_service_available must not use `?` on service list parsing',
+    );
+    // Each list must be handled independently, logging rather than aborting.
+    assert.match(fn, /Skipping service check for \{\}/);
+
+    // All four lists must still be checked.
+    for (const key of [
+        'recognize_service_list',
+        'translate_service_list',
+        'tts_service_list',
+        'collection_service_list',
+    ]) {
+        assert.ok(fn.includes(key), `${key} must still be checked`);
+    }
+
+    // The caller must not silently swallow the error.
+    assert.doesNotMatch(source, /let _ = check_service_available\(\);/);
+});
+
 test('AppStream metainfo carries cup-translate branding, not the upstream identity', async () => {
     // CLAUDE.md §1.1: this fork must not claim the upstream pot/Pot trademark or identity.
     const metainfo = await readFile('packaging/cup-translate.metainfo.xml', 'utf8');

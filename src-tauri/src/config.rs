@@ -55,7 +55,9 @@ pub fn init_config(app: &mut tauri::App) {
         }
     }
     app.manage(StoreWrapper(Mutex::new(store)));
-    let _ = check_service_available();
+    if let Err(e) = check_service_available() {
+        warn!("Service availability check failed: {:?}", e);
+    }
     prune_unconfigured_dead_services();
 }
 
@@ -198,41 +200,38 @@ pub fn check_service_available() -> Result<(), Error> {
     let plugin_translate_list: Vec<String> = get_plugin_list("translate").unwrap_or_default();
     let plugin_tts_list: Vec<String> = get_plugin_list("tts").unwrap_or_default();
     let plugin_collection_list: Vec<String> = get_plugin_list("collection").unwrap_or_default();
-    if let Some(recognize_service_list) = get("recognize_service_list") {
-        let recognize_service_list: Vec<String> = serde_json::from_value(recognize_service_list)?;
-        check_available(
-            recognize_service_list,
-            builtin_recognize_list,
-            plugin_recognize_list,
+
+    // 每个服务列表独立校验：某个列表的值损坏（例如被手工改成非字符串数组）时，
+    // 只跳过它自己，不能让其余列表一并失去清理（早先用 `?` 会在第一个坏列表处
+    // 直接返回 Err，导致后续列表永远不被校验，且调用方 `let _ =` 又会吞掉错误）。
+    let checks: [(&str, &[&str], &Vec<String>); 4] = [
+        (
             "recognize_service_list",
-        );
-    }
-    if let Some(translate_service_list) = get("translate_service_list") {
-        let translate_service_list: Vec<String> = serde_json::from_value(translate_service_list)?;
-        check_available(
-            translate_service_list,
-            builtin_translate_list,
-            plugin_translate_list,
+            &builtin_recognize_list,
+            &plugin_recognize_list,
+        ),
+        (
             "translate_service_list",
-        );
-    }
-    if let Some(tts_service_list) = get("tts_service_list") {
-        let tts_service_list: Vec<String> = serde_json::from_value(tts_service_list)?;
-        check_available(
-            tts_service_list,
-            builtin_tts_list,
-            plugin_tts_list,
-            "tts_service_list",
-        );
-    }
-    if let Some(collection_service_list) = get("collection_service_list") {
-        let collection_service_list: Vec<String> = serde_json::from_value(collection_service_list)?;
-        check_available(
-            collection_service_list,
-            builtin_collection_list,
-            plugin_collection_list,
+            &builtin_translate_list,
+            &plugin_translate_list,
+        ),
+        ("tts_service_list", &builtin_tts_list, &plugin_tts_list),
+        (
             "collection_service_list",
-        );
+            &builtin_collection_list,
+            &plugin_collection_list,
+        ),
+    ];
+    for (key, builtin, plugin) in checks {
+        let Some(value) = get(key) else {
+            continue;
+        };
+        match serde_json::from_value::<Vec<String>>(value) {
+            Ok(list) => check_available(list, builtin.to_vec(), plugin.clone(), key),
+            Err(e) => {
+                warn!("Skipping service check for {}: invalid value ({:?})", key, e);
+            }
+        }
     }
     Ok(())
 }
