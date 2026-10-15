@@ -16,14 +16,15 @@ use tauri::WindowBuilder;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use window_shadows::set_shadow;
 
-// Get daemon window instance
-fn get_daemon_window() -> Window {
-    let app_handle = APP.get().unwrap();
+// Get daemon window instance. Returns None when AppHandle is not yet initialized
+// (should not happen after setup) instead of panicking.
+fn get_daemon_window() -> Option<Window> {
+    let app_handle = APP.get()?;
     match app_handle.get_window("daemon") {
-        Some(v) => v,
+        Some(v) => Some(v),
         None => {
             warn!("Daemon window not found, create new daemon window!");
-            WindowBuilder::new(
+            match WindowBuilder::new(
                 app_handle,
                 "daemon",
                 tauri::WindowUrl::App("daemon.html".into()),
@@ -31,7 +32,13 @@ fn get_daemon_window() -> Window {
             .title("Daemon")
             .visible(false)
             .build()
-            .unwrap()
+            {
+                Ok(v) => Some(v),
+                Err(e) => {
+                    warn!("Failed to create daemon window: {e:?}");
+                    None
+                }
+            }
         }
     }
 }
@@ -41,7 +48,7 @@ fn get_daemon_window() -> Window {
 // display edge cases) instead of panicking the whole app.
 fn get_current_monitor(x: i32, y: i32) -> Option<Monitor> {
     info!("Mouse position: {}, {}", x, y);
-    let daemon_window = get_daemon_window();
+    let daemon_window = get_daemon_window()?;
     let monitors = match daemon_window.available_monitors() {
         Ok(v) => v,
         Err(e) => {
@@ -76,6 +83,22 @@ fn window_monitor_or_default(window: &tauri::Window) -> Option<Monitor> {
 /// 无可用显示器时的保守 DPI（逻辑坐标即物理坐标）
 const FALLBACK_DPI: f64 = 1.0;
 
+/// 安全写入 StringWrapper 状态；AppHandle 未初始化或锁中毒时记录警告而非 panic。
+fn set_text_state(text: &str) {
+    let Some(app_handle) = APP.get() else {
+        warn!("set_text_state: app not initialized, dropping text state");
+        return;
+    };
+    let state: tauri::State<StringWrapper> = app_handle.state();
+    let lock_result = state.0.lock();
+    match lock_result {
+        Ok(mut guard) => {
+            guard.replace_range(.., text);
+        }
+        Err(_) => warn!("set_text_state: string state mutex poisoned, dropping text state"),
+    }
+}
+
 // Creating a window on the mouse monitor
 fn build_window(label: &str, title: &str) -> (Window, bool) {
     use mouse_position::mouse_position::{Mouse, Position};
@@ -96,7 +119,9 @@ fn build_window(label: &str, title: &str) -> (Window, bool) {
     match app_handle.get_window(label) {
         Some(v) => {
             info!("Window existence: {}", label);
-            v.set_focus().unwrap();
+            if let Err(e) = v.set_focus() {
+                warn!("Failed to focus window {label}: {e:?}");
+            }
             (v, true)
         }
         None => {
@@ -240,10 +265,8 @@ pub fn selection_translate() {
         return;
     }
 
-    let app_handle = APP.get().unwrap();
     // Write into State
-    let state: tauri::State<StringWrapper> = app_handle.state();
-    state.0.lock().unwrap().replace_range(.., &text);
+    set_text_state(&text);
 
     let window = translate_window();
     if let Err(error) = window.emit("new_text", text) {
@@ -255,45 +278,36 @@ pub fn selection_translate() {
 }
 
 pub fn input_translate() {
-    let app_handle = APP.get().unwrap();
     // Clear State
-    let state: tauri::State<StringWrapper> = app_handle.state();
-    state
-        .0
-        .lock()
-        .unwrap()
-        .replace_range(.., "[INPUT_TRANSLATE]");
+    set_text_state("[INPUT_TRANSLATE]");
     let window = translate_window();
-    let position_type = match get_str("translate_window_position") {
-        Some(v) => v,
-        None => "mouse".to_string(),
-    };
+    let position_type = get_str("translate_window_position").unwrap_or_else(|| "mouse".to_string());
     if position_type == "mouse" {
-        window.center().unwrap();
+        if let Err(e) = window.center() {
+            warn!("Failed to center input_translate window: {e:?}");
+        }
     }
 
-    window.emit("new_text", "[INPUT_TRANSLATE]").unwrap();
+    if let Err(e) = window.emit("new_text", "[INPUT_TRANSLATE]") {
+        warn!("Failed to emit new_text to input_translate window: {e:?}");
+    }
 }
 
 pub fn text_translate(text: String) {
-    let app_handle = APP.get().unwrap();
     // Clear State
-    let state: tauri::State<StringWrapper> = app_handle.state();
-    state.0.lock().unwrap().replace_range(.., &text);
+    set_text_state(&text);
     let window = translate_window();
-    window.emit("new_text", text).unwrap();
+    if let Err(e) = window.emit("new_text", text) {
+        warn!("Failed to emit new_text to translate window: {e:?}");
+    }
 }
 
 pub fn image_translate() {
-    let app_handle = APP.get().unwrap();
-    let state: tauri::State<StringWrapper> = app_handle.state();
-    state
-        .0
-        .lock()
-        .unwrap()
-        .replace_range(.., "[IMAGE_TRANSLATE]");
+    set_text_state("[IMAGE_TRANSLATE]");
     let window = translate_window();
-    window.emit("new_text", "[IMAGE_TRANSLATE]").unwrap();
+    if let Err(e) = window.emit("new_text", "[IMAGE_TRANSLATE]") {
+        warn!("Failed to emit new_text to image_translate window: {e:?}");
+    }
 }
 
 pub fn recognize_window() {
@@ -352,12 +366,21 @@ fn screenshot_window() -> Window {
 pub fn ocr_recognize() {
     #[cfg(target_os = "macos")]
     {
-        let app_handle = APP.get().unwrap();
-        let mut app_cache_dir_path = cache_dir().expect("Get Cache Dir Failed");
+        let Some(app_handle) = APP.get() else {
+            warn!("ocr_recognize: app not initialized, skipping");
+            return;
+        };
+        let Some(mut app_cache_dir_path) = cache_dir() else {
+            warn!("ocr_recognize: cannot resolve cache dir, skipping");
+            return;
+        };
         app_cache_dir_path.push(&app_handle.config().tauri.bundle.identifier);
         if !app_cache_dir_path.exists() {
             // 创建目录
-            fs::create_dir_all(&app_cache_dir_path).expect("Create Cache Dir Failed");
+            if let Err(e) = fs::create_dir_all(&app_cache_dir_path) {
+                warn!("ocr_recognize: cannot create cache dir: {e:?}, skipping");
+                return;
+            }
         }
         app_cache_dir_path.push("pot_screenshot_cut.png");
 
@@ -385,12 +408,21 @@ pub fn ocr_recognize() {
 pub fn ocr_translate() {
     #[cfg(target_os = "macos")]
     {
-        let app_handle = APP.get().unwrap();
-        let mut app_cache_dir_path = cache_dir().expect("Get Cache Dir Failed");
+        let Some(app_handle) = APP.get() else {
+            warn!("ocr_translate: app not initialized, skipping");
+            return;
+        };
+        let Some(mut app_cache_dir_path) = cache_dir() else {
+            warn!("ocr_translate: cannot resolve cache dir, skipping");
+            return;
+        };
         app_cache_dir_path.push(&app_handle.config().tauri.bundle.identifier);
         if !app_cache_dir_path.exists() {
             // 创建目录
-            fs::create_dir_all(&app_cache_dir_path).expect("Create Cache Dir Failed");
+            if let Err(e) = fs::create_dir_all(&app_cache_dir_path) {
+                warn!("ocr_translate: cannot create cache dir: {e:?}, skipping");
+                return;
+            }
         }
         app_cache_dir_path.push("pot_screenshot_cut.png");
 
