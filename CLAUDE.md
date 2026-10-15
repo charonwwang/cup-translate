@@ -56,8 +56,12 @@
 - 本地离线翻译（ct2rs/CTranslate2）需要 `cmake` + C++ 工具链（§2 的系统依赖已含）。
 - 改动构建相关文件后，跑自检确认没破坏环境：
   ```bash
-  bash scripts/check-linux-build-env.sh   # 24 项，应全部通过
+  bash scripts/check-linux-build-env.sh   # Linux 上 24 项应全部通过
   ```
+  > **非 Linux 平台会跳过 §2/§3**（pkg-config 开发包与链接库检查）——它们是
+  > Linux 专有的 WebKitGTK 兼容层，在 macOS/Windows 上既不存在也不影响构建。
+  > 跳过项**不计入失败**，脚本在这些平台上只检查跨平台项并在结尾说明
+  > 「本平台的构建环境未被本脚本检查」，避免把无关缺项误报成环境损坏。
 
 ### 2.1 标准构建命令
 

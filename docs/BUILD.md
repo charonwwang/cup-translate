@@ -4,6 +4,15 @@
 > 在新系统上构建时会踩到的**真实坑**与解决方案。
 >
 > 实测环境：Ubuntu 24.04 (GNOME)，Node 22+ / pnpm 9+ / Rust stable；2026 年已验证 Linux x86_64 的 `.deb`、`.rpm`、AppImage 构建，AppImage 已隔离启动。Windows/macOS 尚待各自 CI 运行验证。
+>
+> **平台范围**：本文 §2/§3 的 pkg-config 开发包与 `.so` 软链是 **Linux 专有**的
+> WebKitGTK 兼容层，macOS/Windows 上没有对应物。macOS 构建见 §6.6。
+>
+> **环境自检**：`bash scripts/check-linux-build-env.sh`。该脚本会检测平台——
+> 在 Linux 上检查全部 24 项；在 macOS/Windows 上**跳过**上述 Linux 专项检查
+> （跳过项不计入失败），只检查跨平台项（基础工具、wry 版本、pnpm 放行、
+> 品牌与上游隔离），并在结尾说明「本平台的构建环境未被本脚本检查」。
+> 因此**不要**把非 Linux 平台上的跳过项当成环境损坏。
 
 ---
 
