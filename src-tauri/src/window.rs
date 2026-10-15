@@ -425,9 +425,12 @@ pub fn selection_translate() {
         let app_handle = APP.get();
         if let Some(handle) = app_handle {
             let identifier = handle.config().tauri.bundle.identifier.clone();
+            // 文案按 app_language 本地化：修复前这里永远发中文，
+            // 把界面切成英文的用户会收到看不懂的通知（见 notification.rs）。
+            let text = crate::notification::text(crate::notification::NotificationKind::SelectionTranslateEmpty);
             let _ = tauri::api::notification::Notification::new(&identifier)
-                .title("划词翻译")
-                .body("未获取到选中文本。请先选中文字再按快捷键。若持续失败，请在 系统设置→隐私与安全→自动化 中允许本应用控制「系统事件」。")
+                .title(text.title)
+                .body(text.body)
                 .show();
         }
         return;
@@ -453,9 +456,10 @@ pub fn clipboard_translate() {
         let app_handle = APP.get();
         if let Some(handle) = app_handle {
             let identifier = handle.config().tauri.bundle.identifier.clone();
+            let text = crate::notification::text(crate::notification::NotificationKind::ClipboardTranslateEmpty);
             let _ = tauri::api::notification::Notification::new(&identifier)
-                .title("剪贴板翻译")
-                .body("剪贴板为空。请先复制文本（Cmd+C）再按快捷键。")
+                .title(text.title)
+                .body(text.body)
                 .show();
         }
         return;

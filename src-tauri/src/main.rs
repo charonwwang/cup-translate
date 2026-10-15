@@ -9,6 +9,7 @@ mod error;
 mod hotkey;
 mod lang_detect;
 mod local_mt;
+mod notification;
 mod screenshot;
 mod server;
 mod system_ocr;
@@ -48,8 +49,11 @@ pub struct StringWrapper(pub Mutex<String>);
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, cwd| {
+            // 文案按 app_language 本地化（见 notification.rs）。
+            // body 仍用 cwd：那是本次尝试的启动路径，属于诊断信息，不需要翻译。
+            let text = notification::text(notification::NotificationKind::AlreadyRunning);
             if let Err(e) = Notification::new(&app.config().tauri.bundle.identifier)
-                .title("The program is already running. Please do not start it again!")
+                .title(text.title)
                 .body(cwd)
                 .icon("cup-translate")
                 .show()
@@ -100,8 +104,10 @@ fn main() {
             match register_shortcut("all") {
                 Ok(()) => {}
                 Err(e) => {
+                    // 同上：标题本地化，body 保留原始错误（诊断信息）。
+                    let text = notification::text(notification::NotificationKind::HotkeyRegisterFailed);
                     if let Err(ne) = Notification::new(app.config().tauri.bundle.identifier.clone())
-                        .title("Failed to register global shortcut")
+                        .title(text.title)
                         .body(&e)
                         .icon("cup-translate")
                         .show()

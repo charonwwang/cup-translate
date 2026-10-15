@@ -28,9 +28,11 @@ pub fn start_server() {
             Err(e) => {
                 if let Some(app_handle) = APP.get() {
                     let identifier = app_handle.config().tauri.bundle.identifier.clone();
+                    // 文案按 app_language 本地化（见 notification.rs）
+                    let text = crate::notification::text(crate::notification::NotificationKind::ServerStartFailed);
                     let _ = notification::Notification::new(&identifier)
-                        .title("Server start failed")
-                        .body("Please Change Server Port and restart the application")
+                        .title(text.title)
+                        .body(text.body)
                         .show();
                 }
                 warn!("Server start failed: {}", e);
