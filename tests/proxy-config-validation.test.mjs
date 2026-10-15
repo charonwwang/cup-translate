@@ -126,6 +126,109 @@ test('the proxy host and port are required together, matching the Rust guard', a
     assert.match(body, /\*value != 0/, 'set_proxy must reject port 0');
 });
 
+test('the editable proxy fields are exactly the ones the backend reads', async () => {
+    // 契约：**用户能编辑的代理字段** 必须 **⊆ Rust `set_proxy()` 真正读取的键**。
+    //
+    // 背景（本轮实测）：代理区块有 5 个字段：
+    //   proxy_host / proxy_port / no_proxy   -> 可编辑，且 `set_proxy()` 都读取
+    //   proxy_username / proxy_password      -> `isDisabled`，且 `set_proxy()` **不读**
+    //     （`grep proxy_username src-tauri/` 无任何命中：拼出的代理 URL 是
+    //      `format!("http://{}:{}", host, port)`，没有凭据的位置）
+    //
+    // 当前状态**自洽**——不可编辑的字段不被读取，不构成缺陷。但这个自洽
+    // **没有任何护栏**：若有人去掉 `isDisabled`，用户就能填入一组永远不生效的
+    // 代理凭据，界面不会有任何提示。这就是「能填但静默无效」那类问题。
+    //
+    // **刻意不列举已知字段**：本测试从左到右扫描整个代理区块，把所有
+    // `useConfig('proxy_*')` / `useConfig('no_proxy')` 都收进来。
+    // 列举已知清单的写法无法发现**新增**的字段（清单自证不了完整性，
+    // 与 round 58 的 `UI_LANGUAGES` 是同一个坑）——实测确认那版会让
+    // 「新增一个可编辑但后端不读的字段」静默逃逸。
+    const jsx = await readFile('src/window/Config/pages/General/index.jsx', 'utf8');
+    const rust = await readFile('src-tauri/src/cmd.rs', 'utf8');
+
+    const setProxyStart = rust.indexOf('pub fn set_proxy()');
+    assert.notEqual(setProxyStart, -1, 'set_proxy should exist');
+    const setProxyBody = rust.slice(setProxyStart, rust.indexOf('\n}', setProxyStart));
+    const readKeys = new Set([...setProxyBody.matchAll(/get\("([a-z_]+)"\)/g)].map((m) => m[1]));
+
+    // 配置绑定在组件顶部声明（`const [x, setX] = useConfig('proxy_x', ...)`），
+    // 渲染在代理 Card 里，两处不在一起——所以要分开取。
+    //
+    // 声明侧：扫**整个文件**里所有 `proxy_*` / `no_proxy` 绑定。这是**发现式**的，
+    // 新增字段会自动进入检查范围（列举已知键做不到这点，实测会静默逃逸）。
+    const declared = [...jsx.matchAll(/\[\s*(\w+)\s*,\s*\w+\s*\]\s*=\s*useConfig\('((?:proxy_\w+|no_proxy))'/g)].map(
+        (m) => ({ variable: m[1], key: m[2] })
+    );
+    assert.ok(
+        declared.length >= 5,
+        `expected at least 5 proxy config bindings, found ${declared.length}: ${declared.map((d) => d.key).join(', ')}`
+    );
+
+    // 渲染侧：代理 Card 的范围，从 proxy.title 那行到该 Card 的 `</Card>`。
+    const allLines = jsx.split('\n');
+    const regionStart = allLines.findIndex((l) => l.includes("t('config.general.proxy.title')"));
+    assert.notEqual(regionStart, -1, 'the proxy section must exist');
+    const regionEnd = allLines.findIndex((l, i) => i > regionStart && l.includes('</Card>'));
+    assert.notEqual(regionEnd, -1, 'the proxy section must be closed by </Card>');
+    const region = allLines.slice(regionStart, regionEnd).join('\n');
+
+    // 每个绑定的键都要能在代理区块内找到它的控件，并判定是否禁用。
+    // 控件有两种形态：`proxy_enable` 是 `<Switch isSelected>`，其余是 `<Input value>`。
+    // 只认 `<Input>` 会把开关误判成「未渲染」——实测踩过。
+    // `proxy_enable` 是**开关**而非代理参数：它不参与 `set_proxy()` 拼 URL，
+    // 而是在启动时由 main.rs 读取（`get("proxy_enable") == Some(true)` 才调用
+    // set_proxy）。因此它属于「可编辑但不被 set_proxy 读取」，是**契约内的例外**，
+    // 显式登记以免被上面的断言误伤。
+    const editable = [];
+    const disabled = [];
+    const unbound = [];
+    for (const { key, variable: name } of declared) {
+        const inputAt = region.indexOf(`value={${name}}`);
+        const isInput = inputAt !== -1;
+        const switchAt = region.indexOf(`isSelected={${name}}`);
+        const isSwitch = switchAt !== -1;
+
+        if (!isInput && !isSwitch) {
+            unbound.push(key);
+            continue;
+        }
+
+        // 从控件起点往回找最近的 <Input / <Switch，往下找最近的 />
+        const at = isInput ? inputAt : switchAt;
+        const before = region.slice(0, at);
+        const openAt = Math.max(before.lastIndexOf('<Input'), before.lastIndexOf('<Switch'));
+        assert.notEqual(openAt, -1, `${key} must be rendered by an <Input> or <Switch>`);
+        const closeAt = region.indexOf('/>', at);
+        assert.notEqual(closeAt, -1, `${key}'s control must be self-closed`);
+        const block = region.slice(openAt, closeAt + 2);
+        (block.includes('isDisabled') ? disabled : editable).push(key);
+    }
+
+    assert.deepEqual(
+        unbound,
+        [],
+        `these proxy config keys are bound in the section but never rendered by an input: ${unbound.join(', ')}`
+    );
+    assert.ok(editable.length >= 2, `expected several editable proxy fields, found ${editable.length}`);
+
+    // 例外：开关本身不参与 set_proxy 的参数解析（见上）
+    const switchesNotParameters = new Set(['proxy_enable']);
+    const notRead = editable.filter((key) => !readKeys.has(key) && !switchesNotParameters.has(key));
+    assert.deepEqual(
+        notRead,
+        [],
+        `these proxy fields are editable but never read by set_proxy, so typing in them does nothing: ${notRead.join(', ')}`
+    );
+
+    const readButDisabled = disabled.filter((key) => readKeys.has(key));
+    assert.deepEqual(
+        readButDisabled,
+        [],
+        `these proxy fields are disabled in the UI but the backend reads them — enable them instead: ${readButDisabled.join(', ')}`
+    );
+});
+
 test('the WebDav backup button refuses to run without a URL and account', async () => {
     // 修复前 webdav 分支**没有任何前置校验**：空 url 被原样传给 Rust，
     // 最终用户看到的是 reqwest 的原始报错（用真实 url crate 实测过）：
