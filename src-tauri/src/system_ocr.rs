@@ -84,20 +84,52 @@ pub fn system_ocr(app_handle: tauri::AppHandle, lang: &str) -> Result<String, St
         None => return Err("Failed to resolve ocr binary".to_string()),
     };
 
+    /// 确保随包分发的 OCR 二进制可执行。
+///
+/// 仓库里该文件权限是 0644（见 `src-tauri/resources/ocr-*-apple-darwin`），
+/// 因此首次运行必须补上 +x。但原先每次 OCR 调用都会 spawn 一次 `chmod`，
+/// 属于无谓开销；这里按路径缓存结果，只补一次。
+#[cfg(target_os = "macos")]
+fn ensure_executable(bin_path: &std::path::Path) -> Result<(), String> {
+    use std::collections::HashSet;
+    use std::sync::Mutex;
+    use std::sync::OnceLock;
+
+    static DONE: OnceLock<Mutex<HashSet<std::path::PathBuf>>> = OnceLock::new();
+    let done = DONE.get_or_init(|| Mutex::new(HashSet::new()));
+
+    let mut guard = match done.lock() {
+        Ok(guard) => guard,
+        Err(_) => {
+            // 锁中毒时退回「每次都 chmod」，功能不受影响
+            return chmod_executable(bin_path);
+        }
+    };
+    if guard.contains(bin_path) {
+        return Ok(());
+    }
+    chmod_executable(bin_path)?;
+    guard.insert(bin_path.to_path_buf());
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn chmod_executable(bin_path: &std::path::Path) -> Result<(), String> {
     match std::process::Command::new("chmod")
         .arg("+x")
-        .arg(&bin_path)
+        .arg(bin_path)
         .output()
     {
-        Ok(status) if status.status.success() => {}
-        Ok(status) => {
-            return Err(format!(
-                "Failed to make OCR binary executable: {}",
-                status.status
-            ))
-        }
-        Err(e) => return Err(e.to_string()),
+        Ok(status) if status.status.success() => Ok(()),
+        Ok(status) => Err(format!(
+            "Failed to make OCR binary executable: {}",
+            status.status
+        )),
+        Err(e) => Err(e.to_string()),
     }
+}
+
+    ensure_executable(&bin_path)?;
 
     let output = match std::process::Command::new(bin_path)
         .arg(&app_cache_dir_path)
