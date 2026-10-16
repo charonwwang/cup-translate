@@ -48,9 +48,17 @@
 
 ## 安装
 
-### 方式一：包管理器（推荐，需先构建）
+### macOS：下载 DMG
 
-目前**尚未发布预编译产物**，需自行构建：
+在 [Releases](https://github.com/charonwwang/cup-translate/releases/latest) 下载安装包：Apple Silicon 选择 `aarch64.dmg`，Intel 选择 `x64.dmg`。打开后将 App 拖入 Applications。
+
+当前版本使用 ad-hoc 签名，尚无 Developer ID 和 Apple 公证，首次打开可能出现系统安全提示。发布说明、对应源码包及校验和均随版本提供；旧更新地址的客户端请手动安装一次新版本。详见 [macOS 发布说明](docs/MACOS_RELEASE.md)。
+
+Windows/Linux 的测试安装包见 [Actions 构建验证](https://github.com/charonwwang/cup-translate/actions/workflows/build-desktop.yml)。构建验证产物与正式 Release 分开提供。
+
+### Linux：构建并安装
+
+也可自行构建安装包：
 
 ```bash
 # 1) 构建 + 打包（脚本会自动修正 .deb 的幽灵依赖）
@@ -71,7 +79,7 @@ cup-translate                                # 启动
 > `./cup-translate_*.AppImage --appimage-extract && ./squashfs-root/AppRun`
 > 构建 AppImage 时需安装 `patchelf`；打包脚本会包含 GStreamer 播放插件。
 
-### 方式二：源码运行（开发）
+### 源码运行（开发）
 
 > 📖 **Ubuntu 24.04 / Linux 用户请先看 [`docs/BUILD.md`](docs/BUILD.md)。**
 > 新版系统上 WebKitGTK 4.0 已被 4.1 取代，直接构建会失败；该文档给出实测通过的

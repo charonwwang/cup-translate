@@ -1,3 +1,5 @@
+> **cup-translate community fork:** Current macOS installers, matching GPL-3.0 source and checksums are available in [this repository’s Releases](https://github.com/charonwwang/cup-translate/releases/latest). The macOS app is ad-hoc signed, without Apple notarization. See the [current project README](README.md) and [release setup](docs/MACOS_RELEASE.md). The upstream Pot documentation and attribution below are retained for reference.
+
 <img width="200px" src="public/icon.svg" align="left"/>
 
 # Pot (A cute translator)
