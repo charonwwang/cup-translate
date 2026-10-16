@@ -160,3 +160,59 @@ test('the google retry failure keeps its diagnostic detail', async () => {
     assert.match(line, /lastErr/, 'must still interpolate the underlying error');
     assert.match(line, /429/, 'must still explain what 429 means');
 });
+
+/**
+ * 5xx 是**镜像端**的瞬时故障，应当换下一个镜像再试；
+ * 4xx 是**请求本身**有问题，换镜像无意义（上一条测试已守住）。
+ *
+ * 修改前的行为：分支只对 429 走 `continue`，其余（含全部 5xx）一律 `break`，
+ * 于是 `ENDPOINTS` 里的 4 个镜像**只对 429 生效** ——
+ * 「某镜像挂了就换下一个」这个兜底对 5xx 完全没起作用。
+ *
+ * 严重性：**健壮性缺口，未证明用户可见**。本机实测 4 个镜像当下均返回 200，
+ * 无法诱发真实 5xx，故这里用受控响应验证逻辑本身，而非声称线上出现过。
+ */
+test('real translate: a 5xx mirror failure falls through to the next mirror', async () => {
+    const { translate, attempted, slept } = await loadRealTranslate({
+        responses: [
+            { ok: false, status: 503 }, // 第一个镜像挂了
+            { ok: true, status: 200, data: [[['你好', 'hello', null, null]], null] },
+        ],
+    });
+
+    assert.equal(await translate('hello', 'en', 'zh', { config: {} }), '你好');
+    assert.equal(
+        attempted.length,
+        2,
+        'a 503 from the first mirror must fall through to the second, not give up immediately'
+    );
+    // 换了镜像才成功，两个 URL 必须不同（否则等于没换）
+    assert.notEqual(attempted[0], attempted[1], 'the retry must use a different mirror URL');
+    assert.deepEqual(slept, [2000], 'a 5xx retry backs off like the 429 path');
+});
+
+test('real translate: 5xx on every mirror still surfaces an actionable error', async () => {
+    const { translate, attempted, slept } = await loadRealTranslate({
+        responses: [{ ok: false, status: 502 }],
+    });
+
+    await assert.rejects(
+        () => translate('hello', 'en', 'zh', { config: {} }),
+        (e) => String(e).includes('Google translate request failed') && String(e).includes('502'),
+        'must still fail with the underlying status after exhausting retries'
+    );
+    assert.equal(attempted.length, 5, 'must exhaust all attempts before giving up');
+    assert.deepEqual(slept, [2000, 4000, 8000, 16000], 'and must not sleep after the final attempt');
+});
+
+test('real translate: 4xx is still not retried (the 5xx change must not loosen this)', async () => {
+    // 反向守卫：把 5xx 纳入重试**不能**顺手把 4xx 也带上
+    for (const status of [400, 401, 403, 404]) {
+        const { translate, attempted, slept } = await loadRealTranslate({
+            responses: [{ ok: false, status }],
+        });
+        await assert.rejects(() => translate('hello', 'en', 'zh', { config: {} }));
+        assert.equal(attempted.length, 1, `HTTP ${status} must fail immediately without switching mirrors`);
+        assert.deepEqual(slept, [], `HTTP ${status} must not back off`);
+    }
+});

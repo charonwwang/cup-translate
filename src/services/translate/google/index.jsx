@@ -49,6 +49,25 @@ function sleep(ms) {
 const MAX_ATTEMPTS = 5;
 const backoffMs = (attempt) => 2000 * Math.pow(2, Math.min(attempt, 4));
 
+/**
+ * 是否值得**换一个镜像**再试。
+ *
+ * 4xx 与 5xx 的语义完全不同，不能同等对待：
+ *   · 4xx（400/401/403/404）＝ 请求本身有问题，换哪个镜像都一样，重试纯浪费
+ *     —— 立即失败是对的（`translate-retry.test.mjs` 有一条断言守着这一点）；
+ *   · 5xx（500/502/503/504）＝ 镜像端的**瞬时**故障，换一个镜像很可能直接成功。
+ *
+ * 本函数存在的原因：原先的分支只对 429 走 `continue`，其余（含全部 5xx）
+ * 一律 `break`，于是 `ENDPOINTS` 那 4 个镜像**只对 429 生效**。
+ * 而这条多镜像链路的意义恰恰是「某个镜像不可用时换下一个」——
+ * 对 5xx 不轮换等于把这个兜底废掉一半。
+ *
+ * 严重性说明：这是**健壮性缺口**，未能证明已有用户因此受损
+ * （本机实测 4 个镜像当下均返回 200，无法诱发 5xx）。
+ * 改动保持最小：只把 5xx 从「立即放弃」挪到「换镜像重试」，4xx 行为不变。
+ */
+const isRetryableStatus = (status) => status === 429 || (status >= 500 && status <= 599);
+
 export async function translate(text, from, to, options = {}) {
     const { config } = options;
 
@@ -73,8 +92,8 @@ export async function translate(text, from, to, options = {}) {
             res = await tryTranslate(url, text, from, to);
             if (res.ok) break;
             lastErr = `HTTP ${res.status}`;
-            if (res.status === 429) {
-                // 429 限流：指数退避后重试
+            if (isRetryableStatus(res.status)) {
+                // 429 限流 / 5xx 镜像故障：退避后换下一个镜像重试
                 if (willRetry) {
                     await sleep(backoffMs(attempt));
                 }
