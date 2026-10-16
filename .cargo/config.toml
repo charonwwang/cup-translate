@@ -1,0 +1,4 @@
+# ct2rs builds CTranslate2 with the static MSVC runtime. Its Rust/C++ bridge,
+# sentencepiece, and the executable must use the same runtime to avoid LNK2038.
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = ["-C", "target-feature=+crt-static"]
