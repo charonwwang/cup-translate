@@ -181,3 +181,11 @@ test('same-repository publishing uses the public endpoint and narrowly scoped wo
     assert.match(triggers, /workflow_dispatch:/);
     assert.doesNotMatch(triggers, /push:/);
 });
+
+test('version tags trigger the macOS publisher with the triggering tag as checkout and release input', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const workflow = await readFile('.github/workflows/macos-release.yml', 'utf8');
+    assert.match(workflow, /push:\n        tags: \["v\*"\]/);
+    assert.match(workflow, /ref: \$\{\{ inputs\.tag \|\| github\.ref_name \}\}/);
+    assert.match(workflow, /RELEASE_TAG: \$\{\{ inputs\.tag \|\| github\.ref_name \}\}/);
+});

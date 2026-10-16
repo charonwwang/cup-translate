@@ -1,5 +1,7 @@
 name: Release macOS
 on:
+    push:
+        tags: ["v*"]
     workflow_dispatch:
         inputs:
             tag:
@@ -23,7 +25,7 @@ jobs:
             RELEASE_REPOSITORY: ${{ github.repository }}
             GITHUB_TOKEN: ${{ github.token }}
             TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-            RELEASE_TAG: ${{ inputs.tag }}
+            RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         steps:
             - name: Validate release configuration before building
               shell: bash
@@ -56,14 +58,14 @@ jobs:
                       arch: x64
         runs-on: ${{ matrix.os }}
         env:
-            RELEASE_TAG: ${{ inputs.tag }}
+            RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
             RELEASE_REPOSITORY: ${{ github.repository }}
             RELEASE_TARGET: ${{ matrix.target }}
             RELEASE_OUTPUT: release-assets
         steps:
             - uses: actions/checkout@v4
               with:
-                  ref: ${{ inputs.tag }}
+                  ref: ${{ inputs.tag || github.ref_name }}
                   persist-credentials: false
                   fetch-depth: 0
             - uses: actions/setup-node@v4
@@ -134,12 +136,12 @@ jobs:
         environment: macos-release
         runs-on: ubuntu-latest
         env:
-            RELEASE_TAG: ${{ inputs.tag }}
+            RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
             RELEASE_REPOSITORY: ${{ github.repository }}
         steps:
             - uses: actions/checkout@v4
               with:
-                  ref: ${{ inputs.tag }}
+                  ref: ${{ inputs.tag || github.ref_name }}
                   persist-credentials: false
             - uses: actions/setup-node@v4
               with:

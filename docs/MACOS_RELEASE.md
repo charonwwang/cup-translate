@@ -38,8 +38,8 @@ CI 导入证书，通过 Tauri 签名与公证，并校验 app 的签名与公�
 ## 发布步骤与校验
 
 1. 审查并提交这次改动，确保新 workflow、打包脚本、客户端和测试都包含在版本中。推送到当前公开源码仓库。本文不代表已自动提交、推送或发布。
-2. 建立并推送高于已安装版本的稳定标签，如 `v3.0.8`。旧 `Package` workflow 已改为手动入口，不再随标签自动发布，避免抢占同版本 Release。macOS 版本使用 **Release macOS**，不要对同一标签同时运行两套发布流程。旧流程的 Release 不会设为 latest。
-3. 手动运行 **Release macOS**，输入该标签。标签必须包含新脚本，且发布期间不要移动标签。
+2. 建立并推送高于已安装版本的稳定标签，如 `v3.0.9`；推送标签会自动启动 **Release macOS**（默认无 Apple 证书模式）。旧 `Package` workflow 已改为手动入口，不再随标签自动发布，避免抢占同版本 Release。macOS 版本使用 **Release macOS**，不要对同一标签同时运行两套发布流程。旧流程的 Release 不会设为 latest。
+3. 也可手动运行 **Release macOS**，输入该标签（不要与同标签的自动运行重复发布）。标签必须包含新脚本，且发布期间不要移动标签。
 4. CI 在 Apple Silicon 和 Intel runner 分别构建，统一 package/Cargo/Tauri 版本、配置公开更新端点，执行前端测试。发布阶段使用同一标签生成对应源码包，验证两份更新包签名，再创建草稿、上传所有附件，最后公开并标记 latest。
 5. 公开附件：两份 DMG、两份 `.app.tar.gz` 及 `.sig`、对应源码包、`update.json`、`SHA256SUMS`。失败草稿可以重跑补齐；已发布版本不可覆盖，应发布新版本。
 6. 未登录访问 `https://github.com/charonwwang/cup-translate/releases/latest/download/update.json` 应返回 JSON；两个 darwin 平台的更新包均应能匿名下载。
@@ -50,3 +50,7 @@ CI 导入证书，通过 Tauri 签名与公证，并校验 app 的签名与公�
 公开更新清单采用版本 Release 的 `releases/latest/download/update.json`，不删除旧版本附件。Tauri 安装前验证签名；CI 也会提前验证，防止现有 Secret 与内置公钥不匹配。务必离线备份更新签名私钥，丢失后不能直接换公钥让旧客户端自动信任新密钥。
 
 当前流程新增的是 macOS 双架构公开分发。Windows/Linux 和 fixed-runtime 的旧清单机制未统一迁移，不应宣称这些平台已完成新流程的端到端更新验证。
+
+## Windows/Linux 构建验证
+
+`Verify Windows and Linux builds` 在 master 的源码或构建配置变化时自动运行，也支持手动运行。覆盖 Windows x64/x86/ARM64 和 Linux x64/x86/ARM64/ARMv7；生成安装包供验证，仅上传 Actions artifacts，不发布 Release，不使用签名私钥。Linux 容器使用 Bookworm，严格刷新 apt 索引并安装 CMake；Windows 锁定含 Win32 常量类型修复的 find-msvc-tools 0.1.14。

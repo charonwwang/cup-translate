@@ -1,0 +1,71 @@
+name: Verify Windows and Linux builds
+on:
+    push:
+        branches: [master]
+        paths:
+            - 'src-tauri/**'
+            - 'src/**'
+            - 'public/**'
+            - 'package.json'
+            - 'pnpm-lock.yaml'
+            - '.github/actions/**'
+            - '.github/workflows/build-desktop.yml'
+    workflow_dispatch:
+permissions:
+    contents: read
+concurrency:
+    group: desktop-build-${{ github.ref }}
+    cancel-in-progress: true
+jobs:
+    windows:
+        runs-on: windows-latest
+        timeout-minutes: 60
+        strategy:
+            fail-fast: false
+            matrix:
+                target: [x86_64-pc-windows-msvc, i686-pc-windows-msvc, aarch64-pc-windows-msvc]
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+            - uses: pnpm/action-setup@v4
+              with:
+                  version: 9
+            - uses: dtolnay/rust-toolchain@stable
+              with:
+                  targets: ${{ matrix.target }}
+            - run: pnpm install --frozen-lockfile
+            - run: pnpm test
+            - name: Build unsigned installer without publishing
+              shell: pwsh
+              run: |
+                  pnpm tauri build --target '${{ matrix.target }}' -b nsis --config '{"tauri":{"updater":{"active":false}}}'
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: verify-windows-${{ matrix.target }}
+                  path: src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
+                  if-no-files-found: error
+    linux:
+        runs-on: ubuntu-latest
+        timeout-minutes: 60
+        strategy:
+            fail-fast: false
+            matrix:
+                target: [x86_64-unknown-linux-gnu, i686-unknown-linux-gnu, aarch64-unknown-linux-gnu, armv7-unknown-linux-gnueabihf]
+        steps:
+            - uses: actions/checkout@v4
+            - name: Build Debian and RPM packages without publishing
+              uses: ./.github/actions/build-for-linux
+              env:
+                  BUILD_VERIFY_ONLY: 'true'
+              with:
+                  target: ${{ matrix.target }}
+                  toolchain: stable
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: verify-linux-${{ matrix.target }}
+                  path: |
+                      src-tauri/target/${{ matrix.target }}/release/bundle/deb/*.deb
+                      src-tauri/target/${{ matrix.target }}/release/bundle/rpm/*.rpm
+                  if-no-files-found: error
