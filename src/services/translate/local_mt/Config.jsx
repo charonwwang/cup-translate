@@ -115,13 +115,15 @@ export function Config(props) {
                             <div className='my-auto mx-0'>
                                 {status === undefined
                                     ? t('services.translate.local_mt.checking')
-                                    : status.installed
-                                      ? t(
-                                            status.loaded
-                                                ? 'services.translate.local_mt.loaded'
-                                                : 'services.translate.local_mt.installed'
-                                        )
-                                      : t('services.translate.local_mt.not_installed')}
+                                    : status.supported === false
+                                      ? t('services.translate.local_mt.unsupported_arch')
+                                      : status.installed
+                                        ? t(
+                                              status.loaded
+                                                  ? 'services.translate.local_mt.loaded'
+                                                  : 'services.translate.local_mt.installed'
+                                          )
+                                        : t('services.translate.local_mt.not_installed')}
                             </div>
                             {status?.loaded && (
                                 <Button
@@ -163,7 +165,7 @@ export function Config(props) {
                             ) : (
                                 <Button
                                     color='primary'
-                                    isDisabled={busy !== ''}
+                                    isDisabled={busy !== '' || status?.supported === false}
                                     isLoading={busy === `download-${pair}`}
                                     onPress={async () => {
                                         setBusy(`download-${pair}`);

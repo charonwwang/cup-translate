@@ -36,3 +36,24 @@ test('desktop verification builds installers without granting publication permis
     ])
         assert.ok(workflow.includes(target));
 });
+
+test('legacy 32-bit clients retain IPC commands without compiling the unsupported CTranslate2 backend', async () => {
+    const cargo = await readFile('src-tauri/Cargo.toml', 'utf8');
+    const main = await readFile('src-tauri/src/main.rs', 'utf8');
+    const stub = await readFile('src-tauri/src/local_mt_unsupported.rs', 'utf8');
+    assert.match(
+        cargo,
+        /\[target\.'cfg\(any\(target_arch = "x86_64", target_arch = "aarch64"\)\)'\.dependencies\]\s*ct2rs/
+    );
+    assert.match(main, /path = "local_mt_unsupported.rs"/);
+    for (const name of [
+        'local_mt_model_status',
+        'local_mt_download_model',
+        'local_mt_delete_model',
+        'local_mt_unload_model',
+        'local_mt_translate',
+    ])
+        assert.ok(stub.includes(`pub async fn ${name}`));
+    assert.match(stub, /"supported":false/);
+    assert.match(stub, /Err\(UNSUPPORTED.into\(\)\)/);
+});

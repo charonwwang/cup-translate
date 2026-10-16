@@ -385,7 +385,8 @@
                     "mode_thorough": "更多搜尋 · beam 5",
                     "memory_hint": "模型按需載入，閒置約 2 分鐘後自動釋放（每 30 秒檢查）。更多搜尋會增加 CPU 開銷，不保證每句譯文更好。",
                     "loaded": "模型已駐留記憶體",
-                    "unload": "釋放模型記憶體"
+                    "unload": "釋放模型記憶體",
+                    "unsupported_arch": "內建本地翻譯需要 64 位元 x86 或 ARM 版本，線上翻譯仍可使用。"
                 }
             },
             "recognize": {

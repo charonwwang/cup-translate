@@ -371,7 +371,8 @@
                     "mode_thorough": "Extended search · beam 5",
                     "memory_hint": "Model weights load on demand and are released after about 2 minutes idle (checked every 30 seconds). Extended search uses more CPU and does not guarantee better translations.",
                     "loaded": "Loaded in memory",
-                    "unload": "Release model memory"
+                    "unload": "Release model memory",
+                    "unsupported_arch": "Embedded local translation requires a 64-bit x86 or ARM build. Online translation is available."
                 },
                 "ecdict": {
                     "title": "ECDict(Online)"

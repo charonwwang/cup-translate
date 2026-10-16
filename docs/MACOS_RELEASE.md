@@ -54,3 +54,5 @@ CI 导入证书，通过 Tauri 签名与公证，并校验 app 的签名与公�
 ## Windows/Linux 构建验证
 
 `Verify Windows and Linux builds` 在 master 的源码或构建配置变化时自动运行，也支持手动运行。覆盖 Windows x64/x86/ARM64 和 Linux x64/x86/ARM64/ARMv7；生成安装包供验证，仅上传 Actions artifacts，不发布 Release，不使用签名私钥。Linux 容器使用 Bookworm，严格刷新 apt 索引并安装 CMake；Windows 锁定含 Win32 常量类型修复的 find-msvc-tools 0.1.14。
+
+内置 CTranslate2 引擎只在 x86_64 / aarch64 版本编译。32 位 x86 / ARMv7 客户端保留在线翻译、OCR 和其他功能，本地模型设置明确提示架构不支持并禁用下载。不会尝试编译没有 32 位 CPU dispatch 实现的引擎。
