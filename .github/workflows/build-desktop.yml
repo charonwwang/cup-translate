@@ -7,6 +7,7 @@ on:
             - 'src/**'
             - 'tests/**'
             - '.gitattributes'
+            - '.github/tauri.verify.conf.json'
             - 'public/**'
             - 'package.json'
             - 'pnpm-lock.yaml'
@@ -17,7 +18,7 @@ permissions:
     contents: read
 concurrency:
     group: desktop-build-${{ github.ref }}
-    cancel-in-progress: true
+    cancel-in-progress: false
 jobs:
     windows:
         runs-on: windows-latest
@@ -42,7 +43,7 @@ jobs:
             - name: Build unsigned installer without publishing
               shell: pwsh
               run: |
-                  pnpm tauri build --target '${{ matrix.target }}' -b nsis --config '{"tauri":{"updater":{"active":false}}}'
+                  pnpm tauri build --target '${{ matrix.target }}' -b nsis --config .github/tauri.verify.conf.json
             - uses: actions/upload-artifact@v4
               with:
                   name: verify-windows-${{ matrix.target }}
