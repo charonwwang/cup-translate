@@ -1,3 +1,5 @@
+import { Button } from '@nextui-org/react';
+import { useTranslation } from 'react-i18next';
 import { fetchWithTimeout as fetch } from '../../../utils/fetchWithTimeout';
 import { chunkText } from './chunkText';
 
@@ -8,26 +10,7 @@ export async function tts(text, lang, options = {}) {
     if (!text || text.trim() === '') {
         return new Uint8Array(0);
     }
-    // Google TTS 语言代码映射。
-    // 键必须覆盖 `src/services/tts/*/info.ts` 的 Language 枚举（那是「项目支持的
-    // TTS 语言」权威清单），否则会落到下面的 `|| 'en'` 而**静默说英文**。
-    // 此前漏了 sv / pl / nl / nb_no / nn_no / km 六项，正是这个后果；
-    // `tests/google-tts-language-map.test.mjs` 现在守着「枚举 ⊆ map」这条契约。
-    //
-    // ⚠️ 两种**不同**的失败模式，不要混为一谈（2026-10 实测复核）：
-    //
-    //   1. `mn_cy`（蒙古语，来自 lingva 的枚举）**不在本表**，故回退 `tl=en`，
-    //      请求成功返回音频 —— 用户选蒙古语却听到**英文发音**，界面上没有任何提示。
-    //      实测 tl=mn / mn-Cyrl / mn-MN 均为 HTTP 400，即 Google 确实不支持，回退是
-    //      当前唯一可行选择，但它是「静默错误」而非「报错」。
-    //   2. `fa`（波斯语）**在本表**、代码正确（`fa` 就是 Google 的波斯语代码），
-    //      但 Google 的 translate_tts 端点对 `tl=fa` **稳定返回 HTTP 400**
-    //      —— 实测 referer / client=tw-ob|gtx|t 四种组合全为 400，且连试两次一致；
-    //      同一端点 tl=en / zh-CN 均 200，故不是网络或参数问题。
-    //      （对照：Google 的**翻译**端点 tl=fa 正常返回「سلام」，说明是 TTS 端点的
-    //      语言覆盖问题，与本项目无关。）此时会抛
-    //      `Google TTS request failed: HTTP 400`，用户看到明确的失败提示。
-    //      本表**不再**收录所谓「唯一不支持」的说法 —— 那种表述已两次被实测推翻。
+    // Unsupported languages must fail explicitly rather than silently speak English.
     const langMap = {
         zh_cn: 'zh-CN',
         zh_tw: 'zh-TW',
@@ -58,7 +41,8 @@ export async function tts(text, lang, options = {}) {
         nn_no: 'no', // 书面语 nb 与新挪威语 nn 共用 Google 的 'no'，与 lingva 的映射一致
         km: 'km',
     };
-    const googleLang = langMap[lang] || 'en';
+    const googleLang = langMap[lang];
+    if (!googleLang) throw new Error(`Google speech does not support ${lang}`);
 
     const chunks = chunkText(text);
 
@@ -95,5 +79,60 @@ export async function tts(text, lang, options = {}) {
 
 export const info = {
     display: 'Google TTS',
+    name: 'google_tts',
+    icon: '/logo/google.svg',
     server: 'translate.google.com',
 };
+
+export const Language = Object.freeze(
+    Object.fromEntries(
+        [
+            'zh_cn',
+            'zh_tw',
+            'en',
+            'ja',
+            'ko',
+            'fr',
+            'de',
+            'es',
+            'ru',
+            'it',
+            'tr',
+            'pt_pt',
+            'pt_br',
+            'ar',
+            'hi',
+            'th',
+            'vi',
+            'id',
+            'ms',
+            'uk',
+            'fa',
+            'he',
+            'sv',
+            'pl',
+            'nl',
+            'nb_no',
+            'nn_no',
+            'km',
+        ].map((key) => [key, key])
+    )
+);
+
+export function Config({ onClose, updateServiceList, instanceKey }) {
+    const { t } = useTranslation();
+    return (
+        <>
+            <p>{t('translate.google_speech_hint')}</p>
+            <Button
+                color='primary'
+                onPress={() => {
+                    updateServiceList(instanceKey);
+                    onClose();
+                }}
+            >
+                {t('common.ok')}
+            </Button>
+        </>
+    );
+}

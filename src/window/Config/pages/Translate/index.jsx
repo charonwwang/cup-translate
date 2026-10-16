@@ -37,8 +37,11 @@ export default function Translate() {
 
     return (
         <>
-            <Card className='mb-[10px]'>
-                <CardBody>
+            <Card
+                data-cup-card
+                className='mb-[10px]'
+            >
+                <CardBody data-cup-body>
                     <div className='config-item'>
                         <h3 className='my-auto mx-0'>{t('config.translate.source_language')}</h3>
                         {sourceLanguage !== null && (
@@ -134,8 +137,11 @@ export default function Translate() {
                     </div>
                 </CardBody>
             </Card>
-            <Card className='mb-[10px]'>
-                <CardBody>
+            <Card
+                data-cup-card
+                className='mb-[10px]'
+            >
+                <CardBody data-cup-body>
                     <div className='config-item'>
                         <h3 className='my-auto mx-0'>{t('config.translate.auto_copy')}</h3>
                         {autoCopy !== null && (
@@ -218,8 +224,8 @@ export default function Translate() {
                     </div>
                 </CardBody>
             </Card>
-            <Card>
-                <CardBody>
+            <Card data-cup-card>
+                <CardBody data-cup-body>
                     {/* <div className='config-item'>
                         <h3 className='my-auto mx-0'>{t('config.translate.font_size.title')}</h3>
                         {translateFontSize !== null && (

@@ -15,7 +15,9 @@
         "preview": "vite preview",
         "tauri": "tauri",
         "updater": "node updater/updater.mjs",
-        "updater:fixRuntime": "node updater/updater-for-fix-runtime.mjs"
+        "updater:fixRuntime": "node updater/updater-for-fix-runtime.mjs",
+        "package:macos:local": "tauri build --bundles app && bash packaging/sign-macos-local.sh",
+        "package:macos:dmg": "tauri build --bundles app && node packaging/package-macos.mjs"
     },
     "dependencies": {
         "@nextui-org/react": "^2.4.8",

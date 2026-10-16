@@ -1,10 +1,7 @@
 name: Package
-# NOTE (cup-translate): upstream triggered a full Windows/macOS/Linux release
-# build on every push to master. This fork only builds on version tags, so
-# ordinary pushes don't burn Actions minutes or publish artifacts.
+# Legacy multi-platform packaging is manual to avoid racing the macOS
+# publisher on the same version release. Select a version tag when dispatching.
 on:
-    push:
-        tags: ["v*"]
     workflow_dispatch:
 permissions:
     contents: write
@@ -88,6 +85,7 @@ jobs:
               if: startsWith(github.ref, 'refs/tags')
               uses: softprops/action-gh-release@v3
               with:
+                  make_latest: false
                   body_path: CHANGELOG
                   token: ${{ secrets.GITHUB_TOKEN }}
                   files: .scripts/popclip/cup-translate.popclipextz
@@ -95,6 +93,7 @@ jobs:
               if: startsWith(github.ref, 'refs/tags')
               uses: softprops/action-gh-release@v3
               with:
+                  make_latest: false
                   body_path: CHANGELOG
                   token: ${{ secrets.GITHUB_TOKEN }}
                   files: .scripts/snipdo/cup-translate.pbar
@@ -181,6 +180,7 @@ jobs:
               if: startsWith(github.ref, 'refs/tags')
               uses: softprops/action-gh-release@v3
               with:
+                  make_latest: false
                   body_path: CHANGELOG
                   token: ${{ secrets.GITHUB_TOKEN }}
                   files: src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
@@ -188,6 +188,7 @@ jobs:
               if: startsWith(github.ref, 'refs/tags')
               uses: softprops/action-gh-release@v3
               with:
+                  make_latest: false
                   body_path: CHANGELOG
                   token: ${{ secrets.GITHUB_TOKEN }}
                   files: src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz*
@@ -251,6 +252,7 @@ jobs:
               if: startsWith(github.ref, 'refs/tags')
               uses: softprops/action-gh-release@v3
               with:
+                  make_latest: false
                   body_path: CHANGELOG
                   token: ${{ secrets.GITHUB_TOKEN }}
                   files: src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*setup*
@@ -328,6 +330,7 @@ jobs:
               if: startsWith(github.ref, 'refs/tags')
               uses: softprops/action-gh-release@v3
               with:
+                  make_latest: false
                   body_path: CHANGELOG
                   token: ${{ secrets.GITHUB_TOKEN }}
                   files: src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*setup*
@@ -394,6 +397,7 @@ jobs:
               if: startsWith(github.ref, 'refs/tags') && matrix.target == 'x86_64-unknown-linux-gnu'
               uses: softprops/action-gh-release@v3
               with:
+                  make_latest: false
                   body_path: CHANGELOG
                   token: ${{ secrets.GITHUB_TOKEN }}
                   files: src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage*
@@ -401,6 +405,7 @@ jobs:
               if: startsWith(github.ref, 'refs/tags')
               uses: softprops/action-gh-release@v3
               with:
+                  make_latest: false
                   body_path: CHANGELOG
                   token: ${{ secrets.GITHUB_TOKEN }}
                   files: src-tauri/target/${{ matrix.target }}/release/bundle/deb/*.deb
@@ -408,6 +413,7 @@ jobs:
               if: startsWith(github.ref, 'refs/tags')
               uses: softprops/action-gh-release@v3
               with:
+                  make_latest: false
                   body_path: CHANGELOG
                   token: ${{ secrets.GITHUB_TOKEN }}
                   files: src-tauri/target/${{ matrix.target }}/release/bundle/rpm/*.rpm
@@ -445,6 +451,7 @@ jobs:
             - name: Upload Release
               uses: softprops/action-gh-release@v3
               with:
+                  make_latest: false
                   body: ${{env.VERSION}}
                   tag_name: updater
                   token: ${{ secrets.GITHUB_TOKEN }}

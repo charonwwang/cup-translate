@@ -1,0 +1,375 @@
+{
+  "date": "2026-10-16",
+  "pair": "en-zh",
+  "threads": 2,
+  "model_revision": "06fb49e2f6cb0485043ae703a4c2afddd4e700d7",
+  "samples_per_mode": 10,
+  "load_ms": 70.850042,
+  "process_peak_rss_bytes": 191791104,
+  "entry_js_bytes": 443278,
+  "entry_js_gzip_bytes": 129291,
+  "results": [
+    {
+      "mode": "fast",
+      "source": "Hello, world.",
+      "output": "你好, 这个世界.",
+      "ms": 48.468625
+    },
+    {
+      "mode": "fast",
+      "source": "Please do not close this window.",
+      "output": "请不要关闭此窗口 。",
+      "ms": 22.438792
+    },
+    {
+      "mode": "fast",
+      "source": "The request timed out. Please try again later.",
+      "output": "请求已超时, 请稍后再试 。",
+      "ms": 35.562334
+    },
+    {
+      "mode": "fast",
+      "source": "She carefully documented the intermittent memory leak before filing the bug report.",
+      "output": "她仔细记录了间歇性内存泄漏 之后才提交错误报告",
+      "ms": 45.755708
+    },
+    {
+      "mode": "fast",
+      "source": "The meeting has been postponed until next Friday.",
+      "output": "会议推迟到下星期五举行。",
+      "ms": 19.994958
+    },
+    {
+      "mode": "fast",
+      "source": "I used to live here, but I don't anymore.",
+      "output": "我以前住在这里,但现在不住这里了",
+      "ms": 30.766041
+    },
+    {
+      "mode": "fast",
+      "source": "The model is loaded only when needed and released after two minutes of inactivity.",
+      "output": "模型只有在需要时才装上,并在两分钟的无活动后释放。",
+      "ms": 49.188750000000006
+    },
+    {
+      "mode": "fast",
+      "source": "Translate the selected text, not the previous clipboard contents.",
+      "output": "翻译选中的文本, 而不是上一个剪贴板内容 。",
+      "ms": 45.788792
+    },
+    {
+      "mode": "fast",
+      "source": "Version 3.0.7 fixes 12 issues and uses 2 worker threads.",
+      "output": "版本3.0.7处理12个问题,使用2个工人线。",
+      "ms": 45.735125000000004
+    },
+    {
+      "mode": "fast",
+      "source": "Your data stays on this device.",
+      "output": "你的数据留在这个设备上",
+      "ms": 20.139208
+    },
+    {
+      "mode": "balanced",
+      "source": "Hello, world.",
+      "output": "你好, 这个世界.",
+      "ms": 19.675666
+    },
+    {
+      "mode": "balanced",
+      "source": "Please do not close this window.",
+      "output": "请不要关闭此窗口 。",
+      "ms": 26.050084000000002
+    },
+    {
+      "mode": "balanced",
+      "source": "The request timed out. Please try again later.",
+      "output": "请求已超时 稍后再试",
+      "ms": 35.722249999999995
+    },
+    {
+      "mode": "balanced",
+      "source": "She carefully documented the intermittent memory leak before filing the bug report.",
+      "output": "她在提交错误报告前仔细记录了间歇性内存泄漏。",
+      "ms": 50.007291
+    },
+    {
+      "mode": "balanced",
+      "source": "The meeting has been postponed until next Friday.",
+      "output": "会议推迟到下星期五举行。",
+      "ms": 25.67625
+    },
+    {
+      "mode": "balanced",
+      "source": "I used to live here, but I don't anymore.",
+      "output": "我曾经住在这里,但我不再住。",
+      "ms": 32.395875
+    },
+    {
+      "mode": "balanced",
+      "source": "The model is loaded only when needed and released after two minutes of inactivity.",
+      "output": "该模型仅在需要时才装上,并在两分钟的无活动后释放。",
+      "ms": 56.878209
+    },
+    {
+      "mode": "balanced",
+      "source": "Translate the selected text, not the previous clipboard contents.",
+      "output": "翻译选中的文本, 而不是上一个剪贴板内容 。",
+      "ms": 52.916
+    },
+    {
+      "mode": "balanced",
+      "source": "Version 3.0.7 fixes 12 issues and uses 2 worker threads.",
+      "output": "版本3.0.7处理12个问题,使用2个工人线。",
+      "ms": 56.282334000000006
+    },
+    {
+      "mode": "balanced",
+      "source": "Your data stays on this device.",
+      "output": "你的数据留在这个设备上",
+      "ms": 25.176417
+    },
+    {
+      "mode": "thorough",
+      "source": "Hello, world.",
+      "output": "哈罗,世界。",
+      "ms": 28.456542000000002
+    },
+    {
+      "mode": "thorough",
+      "source": "Please do not close this window.",
+      "output": "请不要关闭此窗口 。",
+      "ms": 39.49425
+    },
+    {
+      "mode": "thorough",
+      "source": "The request timed out. Please try again later.",
+      "output": "请求已超时。 请稍后再试 。",
+      "ms": 64.515208
+    },
+    {
+      "mode": "thorough",
+      "source": "She carefully documented the intermittent memory leak before filing the bug report.",
+      "output": "她在提交错误报告前仔细记录了间歇性内存泄漏的情况。",
+      "ms": 85.673125
+    },
+    {
+      "mode": "thorough",
+      "source": "The meeting has been postponed until next Friday.",
+      "output": "会议推迟到下星期五举行。",
+      "ms": 39.186082999999996
+    },
+    {
+      "mode": "thorough",
+      "source": "I used to live here, but I don't anymore.",
+      "output": "我曾经住在这里,但我不再住。",
+      "ms": 50.258790999999995
+    },
+    {
+      "mode": "thorough",
+      "source": "The model is loaded only when needed and released after two minutes of inactivity.",
+      "output": "该模型只有在需要时才装入,并在两分钟的无活动后释放。",
+      "ms": 90.360375
+    },
+    {
+      "mode": "thorough",
+      "source": "Translate the selected text, not the previous clipboard contents.",
+      "output": "翻译选中的文本, 而不是上一个剪贴板内容 。",
+      "ms": 84.222917
+    },
+    {
+      "mode": "thorough",
+      "source": "Version 3.0.7 fixes 12 issues and uses 2 worker threads.",
+      "output": "版本3.0.7处理12个问题,使用2个工人线。",
+      "ms": 91.772333
+    },
+    {
+      "mode": "thorough",
+      "source": "Your data stays on this device.",
+      "output": "你的数据留在这个设备上",
+      "ms": 41.882334
+    }
+  ],
+  "before_source_marker_fix": [
+    {
+      "mode": "fast",
+      "source": "Hello, world.",
+      "output": "你好,世界好,你好吗?",
+      "ms": 32.131874999999994
+    },
+    {
+      "mode": "fast",
+      "source": "Please do not close this window.",
+      "output": "请不要关闭此窗口 。",
+      "ms": 24.90675
+    },
+    {
+      "mode": "fast",
+      "source": "The request timed out. Please try again later.",
+      "output": "请求已超时 。 请稍后再试一次 。",
+      "ms": 43.0465
+    },
+    {
+      "mode": "fast",
+      "source": "She carefully documented the intermittent memory leak before filing the bug report.",
+      "output": "她仔细记录了间歇性内存漏漏出后 才提交错误报告",
+      "ms": 53.866
+    },
+    {
+      "mode": "fast",
+      "source": "The meeting has been postponed until next Friday.",
+      "output": "会议推迟到下星期五举行。",
+      "ms": 22.713333
+    },
+    {
+      "mode": "fast",
+      "source": "I used to live here, but I don't anymore.",
+      "output": "我以前住在这里,但现在不住这里了",
+      "ms": 33.44725
+    },
+    {
+      "mode": "fast",
+      "source": "The model is loaded only when needed and released after two minutes of inactivity.",
+      "output": "模型只有在需要时才装上,并在两分钟的无活动后释放出来。",
+      "ms": 54.064792
+    },
+    {
+      "mode": "fast",
+      "source": "Translate the selected text, not the previous clipboard contents.",
+      "output": "翻译选中的文本, 而不是上一个剪贴板内容 。",
+      "ms": 48.690625000000004
+    },
+    {
+      "mode": "fast",
+      "source": "Version 3.0.7 fixes 12 issues and uses 2 worker threads.",
+      "output": "3.0.7版第3.07版为12期订了12期,使用2条工人线。",
+      "ms": 63.69425
+    },
+    {
+      "mode": "fast",
+      "source": "Your data stays on this device.",
+      "output": "您的数据留在这个设备上",
+      "ms": 22.238166
+    },
+    {
+      "mode": "balanced",
+      "source": "Hello, world.",
+      "output": "你好,世界好,你好吗?",
+      "ms": 31.397833
+    },
+    {
+      "mode": "balanced",
+      "source": "Please do not close this window.",
+      "output": "请不要关闭此窗口 。",
+      "ms": 33.554624999999994
+    },
+    {
+      "mode": "balanced",
+      "source": "The request timed out. Please try again later.",
+      "output": "请求已超时 。 请稍后再试一次 。",
+      "ms": 49.788958
+    },
+    {
+      "mode": "balanced",
+      "source": "She carefully documented the intermittent memory leak before filing the bug report.",
+      "output": "她在提交错误报告前仔细记录了间歇性内存漏漏出的情况。",
+      "ms": 63.57658300000001
+    },
+    {
+      "mode": "balanced",
+      "source": "The meeting has been postponed until next Friday.",
+      "output": "会议推迟到下星期五举行。",
+      "ms": 30.169
+    },
+    {
+      "mode": "balanced",
+      "source": "I used to live here, but I don't anymore.",
+      "output": "我以前住在这里,但现在不住这里了",
+      "ms": 43.030542
+    },
+    {
+      "mode": "balanced",
+      "source": "The model is loaded only when needed and released after two minutes of inactivity.",
+      "output": "模型只有在需要时才装上,并在两分钟的无活动后放行。",
+      "ms": 65.88199999999999
+    },
+    {
+      "mode": "balanced",
+      "source": "Translate the selected text, not the previous clipboard contents.",
+      "output": "翻译选中的文本, 而不是上一个剪贴板内容 。",
+      "ms": 58.11875
+    },
+    {
+      "mode": "balanced",
+      "source": "Version 3.0.7 fixes 12 issues and uses 2 worker threads.",
+      "output": "第3.0.7版第3.07版为12期订了12期,使用2条工人线。",
+      "ms": 85.554958
+    },
+    {
+      "mode": "balanced",
+      "source": "Your data stays on this device.",
+      "output": "你的数据留在这个设备上",
+      "ms": 27.141083
+    },
+    {
+      "mode": "thorough",
+      "source": "Hello, world.",
+      "output": "哈罗,世界。",
+      "ms": 44.36925
+    },
+    {
+      "mode": "thorough",
+      "source": "Please do not close this window.",
+      "output": "请不要关闭此窗口 。",
+      "ms": 64.887083
+    },
+    {
+      "mode": "thorough",
+      "source": "The request timed out. Please try again later.",
+      "output": "请求已超时 。 请稍后再试一次 。",
+      "ms": 94.113416
+    },
+    {
+      "mode": "thorough",
+      "source": "She carefully documented the intermittent memory leak before filing the bug report.",
+      "output": "在提交错误报告前,她仔细记录了间歇性内存漏漏出的情况。",
+      "ms": 137.183625
+    },
+    {
+      "mode": "thorough",
+      "source": "The meeting has been postponed until next Friday.",
+      "output": "会议推迟到下星期五举行。",
+      "ms": 50.202083
+    },
+    {
+      "mode": "thorough",
+      "source": "I used to live here, but I don't anymore.",
+      "output": "我以前住在这里,但我不再住在这里了",
+      "ms": 76.271833
+    },
+    {
+      "mode": "thorough",
+      "source": "The model is loaded only when needed and released after two minutes of inactivity.",
+      "output": "模型只有在需要时才装上,并在两分钟的无活动后释放出来。",
+      "ms": 123.38708299999999
+    },
+    {
+      "mode": "thorough",
+      "source": "Translate the selected text, not the previous clipboard contents.",
+      "output": "翻译选中的文本, 而不是上一个剪贴板内容 。",
+      "ms": 109.50975
+    },
+    {
+      "mode": "thorough",
+      "source": "Version 3.0.7 fixes 12 issues and uses 2 worker threads.",
+      "output": "3.0.7版第3.0.7版确定了12期,使用2条工人线。",
+      "ms": 134.36766699999998
+    },
+    {
+      "mode": "thorough",
+      "source": "Your data stays on this device.",
+      "output": "你的数据留在这个设备上",
+      "ms": 44.110625
+    }
+  ]
+}

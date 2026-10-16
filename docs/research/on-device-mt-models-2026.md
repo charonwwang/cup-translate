@@ -1,5 +1,7 @@
 # 桌面端本地小模型机器翻译 · 选型事实调研（2026）
 
+> 2026-10-16 更新：本地引擎已修正目标语言标记的位置与模型文件哈希，旧样例输出/占用不能直接代表当前实现。最新实测见 [交互与性能修正记录](performance-and-interaction-2026-10-16.md)。
+
 > 调研方式：HuggingFace API（经 hf-mirror.com 镜像）、arXiv、GitHub API。
 > 所有体积数字来自 HF API `?blobs=true` 的**真实字节数**，非估算。
 > ⚠️ 环境说明：本机 `huggingface.co` 不可达，全部 HF 数据经 **hf-mirror.com** 获取，数字与官方一致。

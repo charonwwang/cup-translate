@@ -88,7 +88,11 @@ fn detect_by_charset(text: &str) -> Option<&'static str> {
 }
 
 #[tauri::command]
-pub fn lang_detect(text: &str) -> Result<&str, ()> {
+pub async fn lang_detect(text: String) -> Result<&'static str, ()> {
+    tauri::async_runtime::spawn_blocking(move || detect_language(&text)).await.map_err(|_| ())?
+}
+
+fn detect_language(text: &str) -> Result<&'static str, ()> {
     let trimmed = text.trim();
     let char_count = trimmed.chars().count();
     // 超短文本（<8 字符）n-gram 检测不可靠（如 "hello" 被误判为意大利语），

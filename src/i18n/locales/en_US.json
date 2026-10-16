@@ -10,7 +10,8 @@
             "clear": "Clear",
             "copied": "Copied to clipboard",
             "language_not_supported": "The selected language is not supported by this service",
-            "clipboard_failed": "Failed to copy to clipboard"
+            "clipboard_failed": "Failed to copy to clipboard",
+            "close": "Close"
         },
         "languages": {
             "auto": "Auto Detect",
@@ -160,7 +161,20 @@
                 "is_register": "The hotkey is already registered",
                 "success": "Hotkey register success",
                 "set_hotkey": "Press to Set Hotkey",
-                "clipboard_translate": "Clipboard Translate"
+                "clipboard_translate": "Clipboard Translate",
+                "disabled": "Disabled",
+                "disable": "Disable shortcut",
+                "cancel": "Discard changes",
+                "record_hint": "Record a shortcut, then confirm to save.",
+                "selection_translate_description": "Translate selected text",
+                "clipboard_translate_description": "Translate copied clipboard content",
+                "duplicate": "Another action already uses this shortcut.",
+                "conflict_failed": "The system rejected this shortcut; it may be reserved or occupied. Your previous binding is retained.",
+                "conflict_scope": "Duplicates are checked while editing; saving attempts native registration. Some system shortcuts and keyboard monitors cannot be detected. Verify after saving.",
+                "permission_granted": "Accessibility access granted",
+                "permission_needed": "Selection translation needs Accessibility access",
+                "check_permission": "Check access",
+                "conflict_details": "About shortcut conflicts"
             },
             "service": {
                 "label": "Service",
@@ -184,7 +198,12 @@
                 "label": "History",
                 "title": "History",
                 "clear_failed": "Failed to clear history",
-                "update_failed": "Failed to update the entry"
+                "update_failed": "Failed to update the entry",
+                "source_text": "Original",
+                "translated_text": "Translation",
+                "copy_failed": "Copy failed. Please retry.",
+                "edit": "Edit record",
+                "detail": "Translation record"
             },
             "backup": {
                 "label": "Backup",
@@ -223,6 +242,30 @@
                 "qq_group": "QQ Group",
                 "telegram": "Telegram",
                 "discussion": "Github Discussion"
+            },
+            "ui": {
+                "navigation": "Settings navigation",
+                "general_description": "Make Cup feel at home on your desktop.",
+                "translate_description": "Translate without interrupting your reading.",
+                "recognize_description": "Extract text from images when you need it.",
+                "hotkey_description": "Keep your frequent actions within reach.",
+                "service_description": "Choose and configure your translation engines and extensions.",
+                "history_description": "Revisit the words and ideas you have translated.",
+                "backup_description": "Keep your preferences ready for another device.",
+                "about_description": "A small tool for reading across languages."
+            },
+            "transfer": {
+                "title": "Move your settings",
+                "description": "Export preferences and service settings as JSON. History, plugin files and models are not included.",
+                "secrets": "Include API keys and passwords (saved as plain text)",
+                "export": "Export JSON",
+                "import": "Import JSON",
+                "preview": "Validated {{count}} settings. Import merges and replaces matching settings, preserving omitted settings and keys.",
+                "apply": "Import these settings",
+                "exported": "Settings exported.",
+                "imported": "Settings imported. Restart to apply all changes.",
+                "failed": "Operation failed. Check the file format, setting types and file permissions.",
+                "restart": "Restart app"
             }
         },
         "updater": {
@@ -233,7 +276,11 @@
             "downloading": "Downloading…",
             "installing": "Installing…",
             "cancel": "Cancel",
-            "installed": "Install completed, Restart the application for the changes to take effect"
+            "installed": "Install completed, Restart the application for the changes to take effect",
+            "check_failed": "Unable to check for updates. Check your connection and the public release manifest.",
+            "install_failed": "Update failed. Check again to retry; your current version remains available.",
+            "retry": "Check again",
+            "checking": "Checking"
         },
         "services": {
             "help": "Configuration Guide",
@@ -317,7 +364,14 @@
                     "not_installed": "Not downloaded",
                     "download_model": "Download model",
                     "delete_model": "Delete model",
-                    "download_done": "Model downloaded"
+                    "download_done": "Model downloaded",
+                    "search_mode": "Decoding search",
+                    "mode_fast": "Fast · beam 1",
+                    "mode_balanced": "Balanced · beam 2",
+                    "mode_thorough": "Extended search · beam 5",
+                    "memory_hint": "Model weights load on demand and are released after about 2 minutes idle (checked every 30 seconds). Extended search uses more CPU and does not guarantee better translations.",
+                    "loaded": "Loaded in memory",
+                    "unload": "Release model memory"
                 },
                 "ecdict": {
                     "title": "ECDict(Online)"
@@ -465,8 +519,7 @@
                     "help": "Uses the system-installed espeak-ng / espeak / speech-dispatcher to synthesize speech: fully offline, zero configuration. If no engine is found, install espeak-ng (sudo apt install espeak-ng)."
                 },
                 "google_tts": {
-                    "title": "Google TTS",
-                    "help": "Uses Google Translate TTS service: free, no installation required, works out of the box."
+                    "title": "Google TTS"
                 }
             },
             "collection": {
@@ -487,10 +540,38 @@
             "recognizing": "Recognizing…",
             "speak": "Speak",
             "copy": "Copy",
-            "retry": "Try again",
+            "retry": "Retry",
             "unconfigured_skip": "Not configured, skipped (no request sent)",
             "delete_newline": "Delete Newline",
-            "translate_back": "Translation back to the original"
+            "translate_back": "Translation back to the original",
+            "reorder": "Drag to reorder translation engines",
+            "expand": "Expand result",
+            "collapse": "Collapse result",
+            "result": "Translation result",
+            "source": "Source text",
+            "input_hint": "Enter text to translate…",
+            "examples": "Examples",
+            "fewer_examples": "Show fewer examples",
+            "more_examples": "Show more examples",
+            "copy_result": "Copy translation",
+            "pin": "Keep window on top",
+            "swap_languages": "Swap languages",
+            "stop_speaking": "Stop reading",
+            "show_translation": "Show translation",
+            "back_translation": "Back translation",
+            "empty_back_translation": "Back translation is empty",
+            "speech_failed": "Speech unavailable. Check your connection or change the speech service in Settings.",
+            "copy_back_translation": "Copy back translation",
+            "speech_service": "Speech service",
+            "follow_engine": "Follow engine",
+            "local_speech": "Local speech",
+            "configured_speech": "First configured speech service",
+            "local_speech_hint": "Local translation needs a separate local voice, or select Google online speech.",
+            "speech_policy_hint": "Google / Lingva use matching speech. Other online engines use Google; local translation needs local speech or Google.",
+            "google_speech_hint": "Google online speech requires a network connection; no API key is needed.",
+            "follow_engine_hint": "Automatically select speech for this engine",
+            "google_speech_short": "Online speech · Network required",
+            "local_speech_short": "System voice · Offline speech"
         },
         "recognize": {
             "recognize": "Recognize",

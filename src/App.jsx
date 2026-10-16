@@ -2,26 +2,21 @@ import { appWindow } from '@tauri-apps/api/window';
 import { BrowserRouter } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { warn } from 'tauri-plugin-log-api';
-import React, { useEffect } from 'react';
+import React, { useEffect, lazy, Suspense } from 'react';
 import { useTheme } from 'next-themes';
 
 import { invoke } from '@tauri-apps/api/tauri';
-import Screenshot from './window/Screenshot';
-import Translate from './window/Translate';
-import Recognize from './window/Recognize';
-import Updater from './window/Updater';
 import { store } from './utils/store';
-import Config from './window/Config';
 import { useConfig } from './hooks';
 import './style.css';
 import './i18n';
 
 const windowMap = {
-    translate: <Translate />,
-    screenshot: <Screenshot />,
-    recognize: <Recognize />,
-    config: <Config />,
-    updater: <Updater />,
+    translate: lazy(() => import('./window/Translate')),
+    screenshot: lazy(() => import('./window/Screenshot')),
+    recognize: lazy(() => import('./window/Recognize')),
+    config: lazy(() => import('./window/Config')),
+    updater: lazy(() => import('./window/Updater')),
 };
 
 export default function App() {
@@ -108,14 +103,30 @@ export default function App() {
 
     useEffect(() => {
         if (appFont !== null && appFallbackFont !== null) {
-            document.documentElement.style.fontFamily = `"${appFont === 'default' ? 'sans-serif' : appFont}","${
-                appFallbackFont === 'default' ? 'sans-serif' : appFallbackFont
-            }"`;
+            document.documentElement.style.fontFamily = `"${appFont === 'default' ? '-apple-system' : appFont}","${
+                appFallbackFont === 'default' ? 'Segoe UI' : appFallbackFont
+            }", system-ui, sans-serif`;
         }
         if (appFontSize !== null) {
             document.documentElement.style.fontSize = `${appFontSize}px`;
         }
     }, [appFont, appFallbackFont, appFontSize]);
 
-    return <BrowserRouter>{windowMap[appWindow.label]}</BrowserRouter>;
+    const ActiveWindow = windowMap[appWindow.label];
+    return (
+        <BrowserRouter>
+            <Suspense
+                fallback={
+                    <div
+                        role='status'
+                        className='p-6 text-sm text-default-500'
+                    >
+                        cup-translate
+                    </div>
+                }
+            >
+                {ActiveWindow && <ActiveWindow />}
+            </Suspense>
+        </BrowserRouter>
+    );
 }

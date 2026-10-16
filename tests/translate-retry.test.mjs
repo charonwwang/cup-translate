@@ -1,3 +1,4 @@
+import { createRequestCache } from '../src/utils/requestCache.js';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
@@ -26,9 +27,11 @@ async function loadRealTranslate({ responses }) {
 
     const slept = [];
     const attempted = [];
+    const requestOptions = [];
     let call = 0;
     // 与源码中 `fetchWithTimeout as fetch` 的别名对应
-    const fetch = async (url) => {
+    const fetch = async (url, options) => {
+        requestOptions.push(options);
         attempted.push(url);
         const next = responses[Math.min(call, responses.length - 1)];
         call += 1;
@@ -38,12 +41,12 @@ async function loadRealTranslate({ responses }) {
         return next;
     };
 
-    const factory = new Function('fetch', '__slept', `${body}\nreturn { translate };`);
-    return { translate: factory(fetch, slept).translate, slept, attempted };
+    const factory = new Function('fetch', '__slept', 'createRequestCache', `${body}\nreturn { translate };`);
+    return { translate: factory(fetch, slept, createRequestCache).translate, slept, attempted, requestOptions };
 }
 
 test('real translate: no backoff sleep after the final attempt', async () => {
-    // 全部 5 次都失败（网络异常），观察真实实现睡了哪些时长
+    // 全部 3 次都失败（网络异常），观察真实实现睡了哪些时长
     const { translate, slept, attempted } = await loadRealTranslate({ responses: ['throw'] });
 
     await assert.rejects(
@@ -52,16 +55,12 @@ test('real translate: no backoff sleep after the final attempt', async () => {
         'must surface an actionable failure'
     );
 
-    assert.equal(attempted.length, 5, 'must still retry all 5 attempts');
-    assert.deepEqual(
-        slept,
-        [2000, 4000, 8000, 16000],
-        `must not sleep after the last attempt; got ${JSON.stringify(slept)}`
-    );
+    assert.equal(attempted.length, 3, 'must retry at most 3 attempts');
+    assert.deepEqual(slept, [250, 500], `must not sleep after the last attempt; got ${JSON.stringify(slept)}`);
     assert.equal(
         slept.reduce((a, b) => a + b, 0),
-        30000,
-        'total wait should be 30s, not 62s'
+        750,
+        'total backoff should be bounded at 750ms'
     );
 });
 
@@ -87,7 +86,7 @@ test('real translate: 429 retries with exponential backoff then succeeds', async
 
     assert.equal(await translate('hello', 'en', 'zh', { config: {} }), '你好');
     assert.equal(attempted.length, 3, 'should succeed on the third attempt');
-    assert.deepEqual(slept, [2000, 4000], 'backoff applies between retries only');
+    assert.deepEqual(slept, [250, 500], 'backoff applies between retries only');
 });
 
 test('real translate: a first-try success never sleeps', async () => {
@@ -100,11 +99,11 @@ test('real translate: a first-try success never sleeps', async () => {
 });
 
 test('real translate: 429 on the last attempt does not sleep either', async () => {
-    // 恰好第 5 次才返回 429：仍不应在抛错前再睡一次
+    // 最后一次仍返回 429：仍不应在抛错前再睡一次
     const { translate, slept } = await loadRealTranslate({ responses: [{ ok: false, status: 429 }] });
 
     await assert.rejects(() => translate('hello', 'en', 'zh', { config: {} }));
-    assert.deepEqual(slept, [2000, 4000, 8000, 16000], 'the 429 path must also skip the final sleep');
+    assert.deepEqual(slept, [250, 500], 'the 429 path must also skip the final sleep');
 });
 
 // ---------------------------------------------------------------------------
@@ -188,7 +187,7 @@ test('real translate: a 5xx mirror failure falls through to the next mirror', as
     );
     // 换了镜像才成功，两个 URL 必须不同（否则等于没换）
     assert.notEqual(attempted[0], attempted[1], 'the retry must use a different mirror URL');
-    assert.deepEqual(slept, [2000], 'a 5xx retry backs off like the 429 path');
+    assert.deepEqual(slept, [250], 'a 5xx retry backs off like the 429 path');
 });
 
 test('real translate: 5xx on every mirror still surfaces an actionable error', async () => {
@@ -201,8 +200,8 @@ test('real translate: 5xx on every mirror still surfaces an actionable error', a
         (e) => String(e).includes('Google translate request failed') && String(e).includes('502'),
         'must still fail with the underlying status after exhausting retries'
     );
-    assert.equal(attempted.length, 5, 'must exhaust all attempts before giving up');
-    assert.deepEqual(slept, [2000, 4000, 8000, 16000], 'and must not sleep after the final attempt');
+    assert.equal(attempted.length, 3, 'must exhaust all attempts before giving up');
+    assert.deepEqual(slept, [250, 500], 'and must not sleep after the final attempt');
 });
 
 test('real translate: 4xx is still not retried (the 5xx change must not loosen this)', async () => {
@@ -215,4 +214,16 @@ test('real translate: 4xx is still not retried (the 5xx change must not loosen t
         assert.equal(attempted.length, 1, `HTTP ${status} must fail immediately without switching mirrors`);
         assert.deepEqual(slept, [], `HTTP ${status} must not back off`);
     }
+});
+
+test('real Google service coalesces identical requests and separates endpoint configurations', async () => {
+    const { translate, attempted, requestOptions } = await loadRealTranslate({
+        responses: [{ ok: true, status: 200, data: [[['你好', 'hello']], null] }],
+    });
+    await Promise.all([translate('hello', 'en', 'zh'), translate('hello', 'en', 'zh')]);
+    await translate('hello', 'en', 'zh');
+    assert.equal(attempted.length, 1);
+    await translate('hello', 'en', 'zh', { config: { custom_url: 'https://example.test' } });
+    assert.equal(attempted.length, 2);
+    assert.ok(requestOptions.every((options) => options.timeout === 6));
 });

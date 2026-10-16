@@ -1,17 +1,15 @@
+import { useSpeech } from '../../../../hooks/useSpeech';
 import { Button, Card, CardBody, CardFooter, ButtonGroup, Chip, Tooltip, Spacer } from '@nextui-org/react';
 import { BaseDirectory, readTextFile } from '@tauri-apps/api/fs';
 import React, { useEffect, useRef, useState } from 'react';
-import { HiOutlineVolumeUp } from 'react-icons/hi';
+import { LuSquare, LuLoader2, LuVolume2, LuCopy, LuWrapText, LuLanguages } from 'react-icons/lu';
 import { appWindow } from '@tauri-apps/api/window';
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import { listen } from '@tauri-apps/api/event';
-import { MdContentCopy } from 'react-icons/md';
-import { MdSmartButton } from 'react-icons/md';
 import { useTranslation } from 'react-i18next';
-import { HiTranslate } from 'react-icons/hi';
 import { LuDelete } from 'react-icons/lu';
 import { invoke } from '@tauri-apps/api';
-import { atom, useAtom } from 'jotai';
+import { atom, useAtom, useSetAtom } from 'jotai';
 import { getServiceName, getServiceSouceType, ServiceSourceType } from '../../../../utils/service_instance';
 import { useConfig, useSyncAtom, useVoice, useToastStyle } from '../../../../hooks';
 import { clipboardFailureMessage, writeClipboardSafely } from '../../../../utils/clipboard';
@@ -31,6 +29,7 @@ export default function SourceArea(props) {
     const { pluginList, serviceInstanceConfigMap } = props;
     const [appFontSize] = useConfig('app_font_size', 16);
     const [sourceText, setSourceText, syncSourceText] = useSyncAtom(sourceTextAtom);
+    const commitSourceText = useSetAtom(sourceTextAtom);
     const [detectLanguage, setDetectLanguage] = useAtom(detectLanguageAtom);
     const [incrementalTranslate] = useConfig('incremental_translate', false);
     const [dynamicTranslate] = useConfig('dynamic_translate', false);
@@ -42,6 +41,7 @@ export default function SourceArea(props) {
     const [hideSource] = useConfig('hide_source', false);
     const [ttsPluginInfo, setTtsPluginInfo] = useState();
     const [windowType, setWindowType] = useState('[SELECTION_TRANSLATE]');
+    const initialTextLoaded = useRef(false);
     const toastStyle = useToastStyle();
 
     /**
@@ -62,7 +62,10 @@ export default function SourceArea(props) {
     const { t } = useTranslation();
     const textAreaRef = useRef();
     const handleNewTextRef = useRef();
+    const [speechPolicy] = useConfig('speech_policy', 'engine');
     const speak = useVoice();
+    const speech = useSpeech(sourceText);
+    const speechLabel = speech.status === 'idle' ? t('translate.speak') : t('translate.stop_speaking');
 
     const handleNewText = async (text) => {
         text = text.trim();
@@ -200,7 +203,24 @@ export default function SourceArea(props) {
     // latest service/config values after the settings window changes them.
     handleNewTextRef.current = handleNewText;
 
-    const keyDown = (event) => {
+    const keyDown = async (event) => {
+        if (event.altKey && event.shiftKey && event.code === 'KeyU') {
+            event.preventDefault();
+            const originText = textAreaRef.current.value;
+            const selectionStart = textAreaRef.current.selectionStart;
+            const selectionEnd = textAreaRef.current.selectionEnd;
+            const selectionText = originText.substring(selectionStart, selectionEnd);
+
+            const convertedText = transformVarName(selectionText);
+            const targetText =
+                originText.substring(0, selectionStart) + convertedText + originText.substring(selectionEnd);
+
+            await changeSourceText(targetText);
+            textAreaRef.current.selectionStart = selectionStart;
+            textAreaRef.current.selectionEnd = selectionStart + convertedText.length;
+        }
+
+        if (event.isComposing) return;
         if (event.key === 'Enter' && !event.shiftKey) {
             event.preventDefault();
             detect_language(sourceText).then(() => {
@@ -208,12 +228,15 @@ export default function SourceArea(props) {
             });
         }
         if (event.key === 'Escape') {
+            event.preventDefault();
+            event.stopPropagation();
             appWindow.close();
         }
     };
 
     const handleSpeak = async () => {
-        const instanceKey = ttsServiceList[0];
+        const instanceKey =
+            speechPolicy === 'local' ? 'local_tts' : speechPolicy === 'configured' ? ttsServiceList[0] : 'google_tts';
         let detected = detectLanguage;
         if (detected === '') {
             detected = await detect(sourceText);
@@ -229,12 +252,12 @@ export default function SourceArea(props) {
                 config: pluginConfig,
                 utils,
             });
-            speak(data);
+            return data;
         } else {
             if (!(detected in builtinTtsServices[getServiceName(instanceKey)].Language)) {
                 throw new Error(t('common.language_not_supported'));
             }
-            const instanceConfig = serviceInstanceConfigMap[instanceKey];
+            const instanceConfig = serviceInstanceConfigMap[instanceKey] || {};
             let data = await builtinTtsServices[getServiceName(instanceKey)].tts(
                 sourceText,
                 builtinTtsServices[getServiceName(instanceKey)].Language[detected],
@@ -242,7 +265,7 @@ export default function SourceArea(props) {
                     config: instanceConfig,
                 }
             );
-            speak(data);
+            return data;
         }
     };
 
@@ -269,7 +292,7 @@ export default function SourceArea(props) {
     }, [hideWindow]);
 
     useEffect(() => {
-        if (ttsServiceList && getServiceSouceType(ttsServiceList[0]) === ServiceSourceType.PLUGIN) {
+        if (ttsServiceList?.length > 0 && getServiceSouceType(ttsServiceList[0]) === ServiceSourceType.PLUGIN) {
             readTextFile(`plugins/tts/${getServiceName(ttsServiceList[0])}/info.json`, {
                 dir: BaseDirectory.AppConfig,
             }).then(
@@ -295,16 +318,20 @@ export default function SourceArea(props) {
             recognizeServiceList !== null &&
             hideWindow !== null
         ) {
-            invoke('get_text').then((v) => {
-                handleNewText(v);
-            });
+            if (initialTextLoaded.current) return;
+            initialTextLoaded.current = true;
+            invoke('get_text')
+                .then((v) => {
+                    handleNewTextRef.current(v);
+                })
+                .catch((reason) => logError('Failed to read initial text: ' + reason));
         }
     }, [deleteNewline, incrementalTranslate, recognizeLanguage, recognizeServiceList, hideWindow]);
 
     useEffect(() => {
-        textAreaRef.current.style.height = '50px';
+        textAreaRef.current.style.height = '42px';
         textAreaRef.current.style.height = textAreaRef.current.scrollHeight + 'px';
-    }, [sourceText]);
+    }, [sourceText, appFontSize]);
 
     const detect_language = async (text) => {
         setDetectLanguage(await detect(text));
@@ -417,37 +444,26 @@ export default function SourceArea(props) {
 
         return str2;
     };
-    useEffect(() => {
-        textAreaRef.current.addEventListener('keydown', async (event) => {
-            if (event.altKey && event.shiftKey && event.code === 'KeyU') {
-                const originText = textAreaRef.current.value;
-                const selectionStart = textAreaRef.current.selectionStart;
-                const selectionEnd = textAreaRef.current.selectionEnd;
-                const selectionText = originText.substring(selectionStart, selectionEnd);
-
-                const convertedText = transformVarName(selectionText);
-                const targetText =
-                    originText.substring(0, selectionStart) + convertedText + originText.substring(selectionEnd);
-
-                await changeSourceText(targetText);
-                textAreaRef.current.selectionStart = selectionStart;
-                textAreaRef.current.selectionEnd = selectionStart + convertedText.length;
-            }
-        });
-    }, [textAreaRef]);
 
     return (
-        <div className={hideSource && windowType !== '[INPUT_TRANSLATE]' && 'hidden'}>
+        <div className={hideSource && windowType !== '[INPUT_TRANSLATE]' ? 'hidden' : ''}>
             <Card
                 shadow='none'
-                className='source-panel bg-content1 rounded-[14px] mt-[1px] pb-0'
+                className='source-panel bg-content1 mt-[1px] pb-0'
             >
-                <Toaster />
-                <CardBody className='bg-content1 p-[12px] pb-0 max-h-[40vh] overflow-y-auto'>
+                <CardBody
+                    data-cup-body
+                    className='bg-content1 p-[12px] pb-0 max-h-[40vh] overflow-y-auto'
+                >
                     <textarea
                         autoFocus
                         ref={textAreaRef}
-                        className={`text-[${appFontSize}px] bg-content1 h-full resize-none outline-none`}
+                        className='source-text bg-transparent h-full resize-none outline-none'
+                        style={{
+                            fontSize: `${(appFontSize || 16) * (sourceText.trim().split(/\s+/).length === 1 && sourceText.length < 35 ? 1.6875 : 1)}px`,
+                        }}
+                        aria-label={t('translate.source')}
+                        placeholder={t('translate.input_hint')}
                         value={sourceText}
                         onKeyDown={keyDown}
                         onChange={(e) => {
@@ -457,21 +473,36 @@ export default function SourceArea(props) {
                     />
                 </CardBody>
 
-                <CardFooter className='bg-content1 rounded-none rounded-b-[10px] flex justify-between px-[12px] p-[5px]'>
+                <CardFooter
+                    data-cup-footer
+                    className='bg-content1 rounded-none rounded-b-[10px] flex justify-between px-[12px] p-[5px]'
+                >
                     <div className='flex justify-start'>
                         <ButtonGroup className='mr-[5px]'>
-                            <Tooltip content={t('translate.speak')}>
+                            <Tooltip content={speechLabel}>
                                 <Button
                                     isIconOnly
                                     variant='light'
                                     size='sm'
+                                    isDisabled={!sourceText}
+                                    aria-label={speechLabel}
+                                    className='speech-button'
+                                    data-active={speech.status !== 'idle'}
+                                    aria-pressed={speech.status !== 'idle'}
                                     onPress={() => {
-                                        handleSpeak().catch((e) => {
-                                            toast.error(e.toString(), { style: toastStyle });
+                                        speech.toggle(handleSpeak).catch((e) => {
+                                            logError(`[speech] ${e}`);
+                                            toast.error(t('translate.speech_failed'), { style: toastStyle });
                                         });
                                     }}
                                 >
-                                    <HiOutlineVolumeUp className='text-[16px]' />
+                                    {speech.status === 'loading' ? (
+                                        <LuLoader2 className='animate-spin text-[16px]' />
+                                    ) : speech.status === 'playing' ? (
+                                        <LuSquare className='text-[14px]' />
+                                    ) : (
+                                        <LuVolume2 className='text-[16px]' />
+                                    )}
                                 </Button>
                             </Tooltip>
                             <Tooltip content={t('translate.copy')}>
@@ -479,11 +510,12 @@ export default function SourceArea(props) {
                                     isIconOnly
                                     variant='light'
                                     size='sm'
+                                    aria-label={t('translate.copy')}
                                     onPress={() => {
                                         copyToClipboard(sourceText);
                                     }}
                                 >
-                                    <MdContentCopy className='text-[16px]' />
+                                    <LuCopy className='text-[16px]' />
                                 </Button>
                             </Tooltip>
                             <Tooltip content={t('translate.delete_newline')}>
@@ -491,6 +523,7 @@ export default function SourceArea(props) {
                                     isIconOnly
                                     variant='light'
                                     size='sm'
+                                    aria-label={t('translate.delete_newline')}
                                     onPress={() => {
                                         const newText = sourceText.replace(/\-\s+/g, '').replace(/\s+/g, ' ');
                                         setSourceText(newText);
@@ -499,7 +532,7 @@ export default function SourceArea(props) {
                                         });
                                     }}
                                 >
-                                    <MdSmartButton className='text-[16px]' />
+                                    <LuWrapText className='text-[16px]' />
                                 </Button>
                             </Tooltip>
                             <Tooltip content={t('common.clear')}>
@@ -507,9 +540,12 @@ export default function SourceArea(props) {
                                     variant='light'
                                     size='sm'
                                     isIconOnly
+                                    aria-label={t('common.clear')}
                                     isDisabled={sourceText === ''}
                                     onPress={() => {
                                         setSourceText('');
+                                        commitSourceText('');
+                                        setDetectLanguage('');
                                     }}
                                 >
                                     <LuDelete className='text-[16px]' />
@@ -519,7 +555,7 @@ export default function SourceArea(props) {
                         {detectLanguage !== '' && (
                             <Chip
                                 size='sm'
-                                color='secondary'
+                                color='primary'
                                 variant='dot'
                                 className='my-auto'
                             >
@@ -533,8 +569,9 @@ export default function SourceArea(props) {
                             color='primary'
                             variant='light'
                             isIconOnly
+                            aria-label={t('translate.translate')}
                             className='text-[14px] font-bold'
-                            startContent={<HiTranslate className='text-[16px]' />}
+                            startContent={<LuLanguages className='text-[16px]' />}
                             onPress={() => {
                                 detect_language(sourceText).then(() => {
                                     syncSourceText();

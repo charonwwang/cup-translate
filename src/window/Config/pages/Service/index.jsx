@@ -68,7 +68,7 @@ export default function Service() {
     }, []);
     return (
         pluginList !== null && (
-            <Tabs className='flex justify-center max-h-[calc(100%-40px)] overflow-y-auto'>
+            <Tabs className='service-tabs flex justify-center'>
                 <Tab
                     key='translate'
                     title={t(`config.service.translate`)}

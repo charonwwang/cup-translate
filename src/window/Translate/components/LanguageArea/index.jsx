@@ -58,7 +58,10 @@ export default function LanguageArea() {
             shadow='none'
             className='language-panel bg-content2 h-[40px] rounded-[12px]'
         >
-            <CardFooter className='bg-content2 flex justify-between p-0 rounded-[10px]'>
+            <CardFooter
+                data-cup-footer
+                className='bg-content2 flex justify-between p-0 rounded-[10px]'
+            >
                 <div className='flex'>
                     <Dropdown>
                         <DropdownTrigger>
@@ -88,6 +91,7 @@ export default function LanguageArea() {
                         isIconOnly
                         size='sm'
                         variant='light'
+                        aria-label={t('translate.swap_languages')}
                         className='text-[20px]'
                         onPress={async () => {
                             if (sourceLanguage !== 'auto') {

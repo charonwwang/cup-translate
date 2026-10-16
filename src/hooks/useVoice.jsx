@@ -50,6 +50,7 @@ export const useVoice = () => {
         _playToken += 1;
         const token = _playToken;
         const audioContext = getAudioContext();
+        if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
         audioContext
             .decodeAudioData(new Uint8Array(data).buffer)
             .then((buffer) => {

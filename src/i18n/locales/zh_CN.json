@@ -10,7 +10,8 @@
             "clear": "清空",
             "copied": "已复制到剪贴板",
             "language_not_supported": "当前服务不支持所选语言",
-            "clipboard_failed": "复制到剪贴板失败"
+            "clipboard_failed": "复制到剪贴板失败",
+            "close": "关闭"
         },
         "languages": {
             "auto": "自动检测",
@@ -160,7 +161,20 @@
                 "is_register": "快捷键已被注册",
                 "success": "快捷键注册成功",
                 "set_hotkey": "按下按键设置快捷键",
-                "clipboard_translate": "剪贴板翻译"
+                "clipboard_translate": "剪贴板翻译",
+                "disabled": "未启用",
+                "disable": "禁用快捷键",
+                "cancel": "放弃修改",
+                "record_hint": "点击输入框录入组合键，点确定保存。",
+                "selection_translate_description": "翻译当前选中的文字",
+                "clipboard_translate_description": "翻译已复制的剪贴板内容",
+                "duplicate": "此快捷键已被本软件另一项功能使用。",
+                "conflict_failed": "系统未能注册此快捷键，可能已被系统或其他软件占用。原快捷键保留，请换一个组合。",
+                "conflict_scope": "录入时检查软件内重复；确认时由系统尝试注册，检测可识别的占用。部分系统保留键或其他软件的监听无法完整检测，注册成功后仍需实际验证。",
+                "permission_granted": "辅助功能已授权",
+                "permission_needed": "划词翻译需要辅助功能权限",
+                "check_permission": "检查权限",
+                "conflict_details": "冲突检测说明"
             },
             "service": {
                 "label": "服务设置",
@@ -184,7 +198,12 @@
                 "label": "历史记录",
                 "title": "历史记录",
                 "clear_failed": "清空历史记录失败",
-                "update_failed": "更新该条记录失败"
+                "update_failed": "更新该条记录失败",
+                "source_text": "原文",
+                "translated_text": "译文",
+                "copy_failed": "复制失败，请重试",
+                "edit": "编辑记录",
+                "detail": "翻译记录"
             },
             "backup": {
                 "label": "备份设置",
@@ -223,6 +242,30 @@
                 "qq_group": "QQ 群",
                 "telegram": "Telegram",
                 "discussion": "Github 讨论"
+            },
+            "ui": {
+                "navigation": "设置导航",
+                "general_description": "让 Cup 适合你的桌面与阅读习惯。",
+                "translate_description": "让翻译融入阅读，不打断思路。",
+                "recognize_description": "在需要时，从图片中提取文字。",
+                "hotkey_description": "让常用操作触手可及。",
+                "service_description": "管理翻译引擎及按需启用的扩展能力。",
+                "history_description": "回顾翻译过的词句，继续上次的阅读。",
+                "backup_description": "备份你的偏好，在其他设备上继续使用。",
+                "about_description": "一个帮助你跨越语言阅读的轻巧工具。"
+            },
+            "transfer": {
+                "title": "配置迁移",
+                "description": "将偏好与服务设置保存为 JSON，在另一台设备导入。历史记录、插件文件和模型文件不包含在内。",
+                "secrets": "包含 API 密钥和密码（文件将以明文保存）",
+                "export": "导出 JSON",
+                "import": "导入 JSON",
+                "preview": "已校验 {{count}} 项配置。导入将合并并覆盖同名设置，未包含的设置与密钥保留。",
+                "apply": "导入这些设置",
+                "exported": "配置已导出。",
+                "imported": "配置已导入，重启软件后完整生效。",
+                "failed": "操作失败，请检查文件格式、配置类型及文件读写权限。",
+                "restart": "重启软件"
             }
         },
         "updater": {
@@ -233,7 +276,11 @@
             "downloading": "下载中…",
             "installing": "安装中…",
             "cancel": "取消",
-            "installed": "安装完成，重启应用生效"
+            "installed": "安装完成，重启应用生效",
+            "check_failed": "无法检查更新。请检查网络，或确认公开下载仓库已发布 update.json。",
+            "install_failed": "更新未完成。请重新检查后重试；当前版本仍可继续使用。",
+            "retry": "重新检查",
+            "checking": "正在检查"
         },
         "services": {
             "help": "配置指南",
@@ -317,7 +364,14 @@
                     "not_installed": "未下载",
                     "download_model": "下载模型",
                     "delete_model": "删除模型",
-                    "download_done": "模型下载完成"
+                    "download_done": "模型下载完成",
+                    "search_mode": "解码搜索模式",
+                    "mode_fast": "快速 · beam 1",
+                    "mode_balanced": "均衡 · beam 2",
+                    "mode_thorough": "更多搜索 · beam 5",
+                    "memory_hint": "模型按需加载，空闲约 2 分钟后自动释放（每 30 秒检查）。更多搜索会增加 CPU 开销，不保证每句译文更好。",
+                    "loaded": "模型已驻留内存",
+                    "unload": "释放模型内存"
                 },
                 "ecdict": {
                     "title": "ECDict(在线)"
@@ -465,8 +519,7 @@
                     "help": "使用系统已安装的 espeak-ng / espeak / speech-dispatcher 合成语音：完全离线、零配置。若提示未找到引擎，请安装 espeak-ng（sudo apt install espeak-ng）。"
                 },
                 "google_tts": {
-                    "title": "Google 语音合成",
-                    "help": "使用 Google 翻译的 TTS 服务：免费、无需安装、开箱即用。"
+                    "title": "Google TTS"
                 }
             },
             "collection": {
@@ -490,7 +543,35 @@
             "retry": "重试",
             "unconfigured_skip": "未配置，已跳过（未发送请求）",
             "delete_newline": "删除换行",
-            "translate_back": "翻译回原文"
+            "translate_back": "翻译回原文",
+            "reorder": "拖动调整引擎顺序",
+            "expand": "展开译文",
+            "collapse": "收起译文",
+            "result": "翻译结果",
+            "source": "原文",
+            "input_hint": "输入要翻译的文本…",
+            "examples": "例句",
+            "fewer_examples": "收起更多例句",
+            "more_examples": "展开更多例句",
+            "copy_result": "复制译文",
+            "pin": "窗口置顶",
+            "swap_languages": "交换语言",
+            "stop_speaking": "停止朗读",
+            "show_translation": "显示译文",
+            "back_translation": "回译",
+            "empty_back_translation": "回译结果为空",
+            "speech_failed": "朗读失败，请检查网络或在设置 → 服务 → 语音合成中切换 Google / 本地朗读。",
+            "copy_back_translation": "复制回译",
+            "speech_service": "朗读服务",
+            "follow_engine": "跟随引擎",
+            "local_speech": "本地语音",
+            "configured_speech": "使用语音服务列表首项",
+            "local_speech_hint": "本地翻译需要独立的本地语音，也可选择 Google 联网朗读。",
+            "speech_policy_hint": "Google / Lingva 使用对应朗读。其他在线引擎使用 Google；本地翻译需选择本地语音或 Google。",
+            "google_speech_hint": "使用 Google 在线朗读，无需 API 密钥，需要网络连接。",
+            "follow_engine_hint": "自动选择当前引擎的朗读服务",
+            "google_speech_short": "在线语音 · 需要网络",
+            "local_speech_short": "系统语音 · 离线朗读"
         },
         "recognize": {
             "recognize": "重新识别",

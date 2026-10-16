@@ -106,7 +106,7 @@ fn main() {
             {
                 app.set_activation_policy(tauri::ActivationPolicy::Accessory);
                 let trusted =
-                    macos_accessibility_client::accessibility::application_is_trusted_with_prompt();
+                    macos_accessibility_client::accessibility::application_is_trusted();
                 info!("MacOS Accessibility Trusted: {}", trusted);
             }
             // Global AppHandle
@@ -130,7 +130,8 @@ fn main() {
                 Ok(()) => {}
                 Err(e) => {
                     // 同上：标题本地化，body 保留原始错误（诊断信息）。
-                    let text = notification::text(notification::NotificationKind::HotkeyRegisterFailed);
+                    let text =
+                        notification::text(notification::NotificationKind::HotkeyRegisterFailed);
                     if let Err(ne) = Notification::new(app.config().tauri.bundle.identifier.clone())
                         .title(text.title)
                         .body(&e)
@@ -158,13 +159,15 @@ fn main() {
             let detect_engine = resolve_detect_engine(get("translate_detect_engine"));
             // 把迁移后的值落盘，让配置自洽（用户下次打开设置页看到的就是实际生效值）。
             // 只在「读取到的值与生效值不同」时写，避免每次启动都无谓改写配置文件。
-            if get("translate_detect_engine").as_ref().and_then(|v| v.as_str())
+            if get("translate_detect_engine")
+                .as_ref()
+                .and_then(|v| v.as_str())
                 != Some(detect_engine.as_str())
             {
                 set("translate_detect_engine", &detect_engine);
             }
             if detect_engine == "local" {
-                init_lang_detect();
+                std::thread::spawn(init_lang_detect);
             }
             let clipboard_monitor = match get_bool("clipboard_monitor") {
                 Some(v) => v,
@@ -191,6 +194,7 @@ fn main() {
             run_binary,
             open_devtools,
             register_shortcut_by_frontend,
+            accessibility_permission,
             update_tray,
             updater_window,
             screenshot,
@@ -203,6 +207,7 @@ fn main() {
             local_mt_model_status,
             local_mt_download_model,
             local_mt_delete_model,
+            local_mt_unload_model,
             local_mt_translate,
             tts_speak
         ])

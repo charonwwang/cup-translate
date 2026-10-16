@@ -1,14 +1,13 @@
 import { useLocation, useRoutes } from 'react-router-dom';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, Suspense } from 'react';
 import { appWindow } from '@tauri-apps/api/window';
-import { Card, Divider } from '@nextui-org/react';
 import { useTranslation } from 'react-i18next';
 
 import WindowControl from '../../components/WindowControl';
 import SideBar from './components/SideBar';
-import { osType } from '../../utils/env';
-import { useConfig } from '../../hooks';
+import { osType, appVersion } from '../../utils/env';
 import routes from './routes';
+import { useConfig } from '../../hooks';
 import './style.css';
 
 export default function Config() {
@@ -16,6 +15,10 @@ export default function Config() {
     const { t } = useTranslation();
     const location = useLocation();
     const page = useRoutes(routes);
+    const contentRef = useRef(null);
+    useEffect(() => {
+        contentRef.current?.scrollTo({ top: 0 });
+    }, [location.pathname]);
 
     useEffect(() => {
         if (appWindow.label === 'config') {
@@ -23,61 +26,55 @@ export default function Config() {
         }
     }, []);
 
+    const pageKey = location.pathname.slice(1) || 'general';
+
     return (
-        <>
-            <Card
-                shadow='none'
-                className={`${
-                    transparent ? 'bg-background/90' : 'bg-content1'
-                } config-sidebar float-left w-[216px] h-screen rounded-none ${
-                    osType === 'Linux' && 'rounded-l-[10px] border-1'
-                } border-r-1 border-default-100 select-none cursor-default`}
-            >
-                <div className='h-[35px] p-[5px]'>
-                    <div
-                        className='w-full h-full'
-                        data-tauri-drag-region='true'
+        <div
+            className={`config-shell ${transparent ? 'config-translucent' : ''} select-none cursor-default ${osType === 'Linux' ? 'rounded-[10px] border border-default-100' : ''}`}
+        >
+            <aside className='config-sidebar'>
+                <div
+                    className='h-[35px] shrink-0'
+                    data-tauri-drag-region='true'
+                />
+                <div
+                    className='config-brand'
+                    data-tauri-drag-region='true'
+                >
+                    <img
+                        alt=''
+                        src='/icon.png'
+                        className='config-logo'
+                        draggable={false}
                     />
-                </div>
-                <div className='p-[5px]'>
-                    <div data-tauri-drag-region='true'>
-                        <img
-                            alt='cup-translate logo'
-                            src='/icon.png'
-                            className='config-logo h-[42px] w-[42px] mx-auto mb-[18px]'
-                            draggable={false}
-                        />
-                    </div>
+                    <span>cup-translate</span>
                 </div>
                 <SideBar />
-            </Card>
-            <div
-                className={`bg-background config-main ml-[216px] h-screen select-none cursor-default ${
-                    osType === 'Linux' && 'rounded-r-[10px] border-1 border-l-0 border-default-100'
-                }`}
-            >
+                <div className='config-version'>cup-translate · {appVersion}</div>
+            </aside>
+            <div className='config-main'>
                 <div
+                    className='config-titlebar'
                     data-tauri-drag-region='true'
-                    className='top-[5px] left-[221px] right-[5px] h-[30px] fixed'
-                />
-                <div className='config-titlebar h-[44px] flex justify-between'>
-                    <div className='flex'>
-                        <h2 className='config-title m-auto ml-[20px]'>
-                            {t(`config.${location.pathname.slice(1)}.title`)}
-                        </h2>
-                    </div>
-
-                    <div className='flex'>{osType !== 'Darwin' && <WindowControl />}</div>
-                </div>
-                <Divider />
-                <div
-                    className={`config-content p-[22px] overflow-y-auto ${
-                        osType === 'Linux' ? 'h-[calc(100vh-38px)]' : 'h-[calc(100vh-36px)]'
-                    }`}
                 >
-                    {page}
+                    <span className='config-title'>{t(`config.${pageKey}.title`)}</span>
+                    {osType !== 'Darwin' && <WindowControl />}
                 </div>
+                <main
+                    ref={contentRef}
+                    tabIndex={0}
+                    aria-label={t(`config.${pageKey}.title`)}
+                    className='config-content'
+                >
+                    <div className='config-page-heading'>
+                        <h1>{t(`config.${pageKey}.title`)}</h1>
+                        <p>{t(`config.ui.${pageKey}_description`)}</p>
+                    </div>
+                    <div className='config-page-body'>
+                        <Suspense fallback={<div role='status'>cup-translate</div>}>{page}</Suspense>
+                    </div>
+                </main>
             </div>
-        </>
+        </div>
     );
 }

@@ -1,13 +1,14 @@
+import { Toaster } from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
 import { readDir, BaseDirectory, readTextFile, exists } from '@tauri-apps/api/fs';
 import { DragDropContext, Draggable, Droppable } from 'react-beautiful-dnd';
 import { appWindow, currentMonitor } from '@tauri-apps/api/window';
 import { appConfigDir, join } from '@tauri-apps/api/path';
 import { convertFileSrc } from '@tauri-apps/api/tauri';
 import { Spacer, Button } from '@nextui-org/react';
-import { AiFillCloseCircle } from 'react-icons/ai';
 import React, { useState, useEffect } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import { BsPinFill } from 'react-icons/bs';
+import { LuPin, LuX } from 'react-icons/lu';
 
 import LanguageArea from './components/LanguageArea';
 import SourceArea from './components/SourceArea';
@@ -39,12 +40,16 @@ const listenBlur = () => {
     });
 };
 
-let unlisten = listenBlur();
+let unlisten = null;
 // 取消 blur 监听
 const unlistenBlur = () => {
-    unlisten.then((f) => {
-        f();
-    });
+    const pending = unlisten;
+    unlisten = null;
+    if (blurTimeout) {
+        clearTimeout(blurTimeout);
+        blurTimeout = null;
+    }
+    pending?.then((stop) => stop()).catch((error) => info(`Blur listener cleanup failed: ${error}`));
 };
 
 // 插件列表变更监听（独立变量）。
@@ -80,6 +85,7 @@ void listen('tauri://move', () => {
 });
 
 export default function Translate() {
+    const { t } = useTranslation();
     const [closeOnBlur] = useConfig('translate_close_on_blur', true);
     const [alwaysOnTop] = useConfig('translate_always_on_top', false);
     const [windowPosition] = useConfig('translate_window_position', 'mouse');
@@ -108,20 +114,16 @@ export default function Translate() {
         const items = reorder(translateServiceInstanceList, result.source.index, result.destination.index);
         setTranslateServiceInstanceList(items);
     };
-    // 是否自动关闭窗口
+    // Reconcile both directions when a preference changes, including manual pinning.
     useEffect(() => {
-        if (closeOnBlur !== null && !closeOnBlur) {
-            unlistenBlur();
-        }
-    }, [closeOnBlur]);
-    // 是否默认置顶
-    useEffect(() => {
-        if (alwaysOnTop !== null && alwaysOnTop) {
-            appWindow.setAlwaysOnTop(true);
-            unlistenBlur();
-            setPined(true);
-        }
+        if (alwaysOnTop !== null) setPined(Boolean(alwaysOnTop));
     }, [alwaysOnTop]);
+    useEffect(() => {
+        appWindow.setAlwaysOnTop(pined).catch((error) => info(`Window pin failed: ${error}`));
+        unlistenBlur();
+        if (closeOnBlur === true && !pined) unlisten = listenBlur();
+        return unlistenBlur;
+    }, [closeOnBlur, pined]);
     // 保存窗口位置
     useEffect(() => {
         if (windowPosition !== null && windowPosition === 'pre_state') {
@@ -262,6 +264,10 @@ export default function Translate() {
         collectionServiceInstanceList,
     ]);
 
+    const primaryServiceKey = translateServiceInstanceList?.find(
+        (key) => serviceInstanceConfigMap?.[key]?.enable ?? true
+    );
+
     return (
         pluginList && (
             <div
@@ -269,33 +275,30 @@ export default function Translate() {
                     osType === 'Linux' && 'rounded-[10px] border-1 border-default-100'
                 }`}
             >
+                <Toaster />
                 <div
-                    className='fixed top-[5px] left-[5px] right-[5px] h-[30px]'
                     data-tauri-drag-region='true'
-                />
-                <div
-                    className={`translate-titlebar h-[44px] w-full flex ${osType === 'Darwin' ? 'justify-end' : 'justify-between'}`}
+                    className={`translate-titlebar ${osType === 'Darwin' ? 'translate-titlebar-macos' : ''} h-[44px] w-full flex ${osType === 'Darwin' ? 'justify-end' : 'justify-between'}`}
                 >
+                    <span
+                        className='window-brand'
+                        data-tauri-drag-region='true'
+                    >
+                        cup-translate
+                    </span>
                     <Button
                         isIconOnly
                         size='sm'
                         variant='flat'
                         disableAnimation
                         className='my-auto bg-transparent'
+                        aria-label={t('translate.pin')}
+                        aria-pressed={pined}
                         onPress={() => {
-                            if (pined) {
-                                if (closeOnBlur) {
-                                    unlisten = listenBlur();
-                                }
-                                appWindow.setAlwaysOnTop(false);
-                            } else {
-                                unlistenBlur();
-                                appWindow.setAlwaysOnTop(true);
-                            }
                             setPined(!pined);
                         }}
                     >
-                        <BsPinFill className={`text-[20px] ${pined ? 'text-primary' : 'text-default-400'}`} />
+                        <LuPin className={`text-[20px] ${pined ? 'text-primary' : 'text-default-400'}`} />
                     </Button>
                     <Button
                         isIconOnly
@@ -303,15 +306,19 @@ export default function Translate() {
                         variant='flat'
                         disableAnimation
                         className={`my-auto ${osType === 'Darwin' && 'hidden'} bg-transparent`}
+                        aria-label={t('common.close')}
                         onPress={() => {
                             void appWindow.close();
                         }}
                     >
-                        <AiFillCloseCircle className='text-[20px] text-default-400' />
+                        <LuX className='text-[20px] text-default-400' />
                     </Button>
                 </div>
-                <div className={`${osType === 'Linux' ? 'h-[calc(100vh-46px)]' : 'h-[calc(100vh-44px)]'} px-[8px]`}>
+                <div className={`${osType === 'Linux' ? 'h-[calc(100vh-46px)]' : 'h-[calc(100vh-44px)]'} `}>
                     <div className='translate-scroll h-full overflow-y-auto'>
+                        <div className={`${hideLanguage && 'hidden'}`}>
+                            <LanguageArea />
+                        </div>
                         <div>
                             {serviceInstanceConfigMap !== null && (
                                 <SourceArea
@@ -319,10 +326,6 @@ export default function Translate() {
                                     serviceInstanceConfigMap={serviceInstanceConfigMap}
                                 />
                             )}
-                        </div>
-                        <div className={`${hideLanguage && 'hidden'}`}>
-                            <LanguageArea />
-                            <Spacer y={2} />
                         </div>
                         <DragDropContext onDragEnd={onDragEnd}>
                             <Droppable
@@ -354,6 +357,7 @@ export default function Translate() {
                                                                 <TargetArea
                                                                     {...provided.dragHandleProps}
                                                                     index={index}
+                                                                    primary={serviceInstanceKey === primaryServiceKey}
                                                                     name={serviceInstanceKey}
                                                                     translateServiceInstanceList={
                                                                         translateServiceInstanceList

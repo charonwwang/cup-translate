@@ -1,4 +1,4 @@
-import { Button, Input } from '@nextui-org/react';
+import { Button, Input, Select, SelectItem } from '@nextui-org/react';
 import toast, { Toaster } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/tauri';
@@ -20,6 +20,7 @@ export function Config(props) {
         {
             [INSTANCE_NAME_CONFIG_KEY]: t('services.translate.local_mt.title'),
             threads: '2',
+            quality: 'balanced',
         },
         { sync: false }
     );
@@ -69,6 +70,9 @@ export function Config(props) {
                 <div className='config-item'>
                     <Input
                         label={t('services.translate.local_mt.threads')}
+                        type='number'
+                        min={1}
+                        max={64}
                         labelPlacement='outside-left'
                         value={config['threads']}
                         variant='bordered'
@@ -85,6 +89,19 @@ export function Config(props) {
                         }}
                     />
                 </div>
+                <div className='config-item'>
+                    <Select
+                        aria-label={t('services.translate.local_mt.search_mode')}
+                        label={t('services.translate.local_mt.search_mode')}
+                        selectedKeys={[config.quality ?? 'balanced']}
+                        onSelectionChange={(keys) => setConfig({ ...config, quality: [...keys][0] ?? 'balanced' })}
+                    >
+                        {['fast', 'balanced', 'thorough'].map((mode) => (
+                            <SelectItem key={mode}>{t(`services.translate.local_mt.mode_${mode}`)}</SelectItem>
+                        ))}
+                    </Select>
+                </div>
+                <p className='text-xs text-default-500'>{t('services.translate.local_mt.memory_hint')}</p>
                 {PAIRS.map((pair) => {
                     const status = statusMap[pair];
                     return (
@@ -99,12 +116,36 @@ export function Config(props) {
                                 {status === undefined
                                     ? t('services.translate.local_mt.checking')
                                     : status.installed
-                                      ? t('services.translate.local_mt.installed')
+                                      ? t(
+                                            status.loaded
+                                                ? 'services.translate.local_mt.loaded'
+                                                : 'services.translate.local_mt.installed'
+                                        )
                                       : t('services.translate.local_mt.not_installed')}
                             </div>
+                            {status?.loaded && (
+                                <Button
+                                    size='sm'
+                                    isDisabled={busy !== ''}
+                                    onPress={async () => {
+                                        setBusy(`unload-${pair}`);
+                                        try {
+                                            await invoke('local_mt_unload_model', { pair });
+                                            await refreshStatus();
+                                        } catch (error) {
+                                            toast.error(String(error), { style: toastStyle });
+                                        } finally {
+                                            setBusy('');
+                                        }
+                                    }}
+                                >
+                                    {t('services.translate.local_mt.unload')}
+                                </Button>
+                            )}
                             {status !== undefined && status.installed ? (
                                 <Button
                                     color='danger'
+                                    isDisabled={busy !== ''}
                                     isLoading={busy === `delete-${pair}`}
                                     onPress={async () => {
                                         setBusy(`delete-${pair}`);
@@ -122,6 +163,7 @@ export function Config(props) {
                             ) : (
                                 <Button
                                     color='primary'
+                                    isDisabled={busy !== ''}
                                     isLoading={busy === `download-${pair}`}
                                     onPress={async () => {
                                         setBusy(`download-${pair}`);

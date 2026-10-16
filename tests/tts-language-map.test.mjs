@@ -89,7 +89,7 @@ test('google_tts maps every supported TTS language', async () => {
     for (const [key, value] of Object.entries({ sv: 'sv', pl: 'pl', nl: 'nl', km: 'km', nb_no: 'no', nn_no: 'no' })) {
         assert.equal(langMap[key], value, `${key} must map to ${value}`);
     }
-    assert.match(code, /langMap\[lang\] \|\| 'en'/);
+    assert.match(code, /if \(!googleLang\) throw new Error/);
 });
 
 test('google_tts does not send a language Google cannot synthesize', async () => {
@@ -110,7 +110,7 @@ test('google_tts does not send a language Google cannot synthesize', async () =>
  * 请求会 400，用户从「听到英文」变成「直接报错」—— 那不是本轮的修复目标
  * （Google 侧不支持，本项目无法通过改映射解决）。
  */
-test('known-unsupported TTS languages keep their documented failure mode', async () => {
+test('unsupported TTS languages explicitly fail instead of speaking English', async () => {
     const langMap = extractLangMap(await readFile(GOOGLE_TTS, 'utf8'));
 
     // fa（波斯语）：Google 的 translate_tts 对 tl=fa 稳定返回 400。
@@ -133,5 +133,5 @@ test('known-unsupported TTS languages keep their documented failure mode', async
 
     // 回退语句本身必须仍在，上面的两条语义都依赖它
     const code = stripComments(await readFile(GOOGLE_TTS, 'utf8'));
-    assert.match(code, /langMap\[lang\] \|\| 'en'/);
+    assert.match(code, /if \(!googleLang\) throw new Error/);
 });

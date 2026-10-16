@@ -1,5 +1,7 @@
 use crate::config::{get_str, set};
-use crate::window::{clipboard_translate, input_translate, ocr_recognize, ocr_translate, selection_translate};
+use crate::window::{
+    clipboard_translate, input_translate, ocr_recognize, ocr_translate, selection_translate,
+};
 use crate::APP;
 use log::{info, warn};
 use std::collections::HashMap;
@@ -54,7 +56,10 @@ fn unregister_previous(app_handle: &AppHandle, name: &str) -> Option<String> {
         .unregister(previous.as_str())
     {
         // 旧绑定可能已被系统或其他模块释放，记日志但不阻断新键注册
-        warn!("Failed to unregister previous shortcut {} for {}: {:?}", previous, name, e);
+        warn!(
+            "Failed to unregister previous shortcut {} for {}: {:?}",
+            previous, name, e
+        );
         return None;
     }
     info!("Unregistered previous shortcut: {} for {}", previous, name);
@@ -91,14 +96,37 @@ fn resolve_hotkey(stored: Option<String>, default_key: &str) -> String {
 /// `key` 的语义是**默认值**，不是强制值——最终取值见 [`resolve_hotkey`]。
 /// 首次运行（config 中无该键）时会把默认值写回 config，
 /// 使设置页显示的内容与实际生效的快捷键一致。
+fn resolve_requested_hotkey(
+    stored: Option<String>,
+    default: &str,
+    requested: Option<&str>,
+) -> String {
+    requested
+        .map(str::to_owned)
+        .unwrap_or_else(|| resolve_hotkey(stored, default))
+}
+
 fn register<F>(app_handle: &AppHandle, name: &str, handler: F, key: &str) -> Result<(), String>
+where
+    F: Fn() + Send + 'static,
+{
+    register_requested(app_handle, name, handler, key, None)
+}
+
+fn register_requested<F>(
+    app_handle: &AppHandle,
+    name: &str,
+    handler: F,
+    key: &str,
+    requested: Option<&str>,
+) -> Result<(), String>
 where
     F: Fn() + Send + 'static,
 {
     let stored = get_str(name);
     let is_first_run = stored.is_none();
-    let hotkey = resolve_hotkey(stored, key);
-    if is_first_run {
+    let hotkey = resolve_requested_hotkey(stored, key, requested);
+    if is_first_run && requested.is_none() {
         // 落地默认值，避免「界面显示为空、实际却已绑定」
         set(name, hotkey.clone());
     }
@@ -107,9 +135,20 @@ where
     // 记下解绑掉的值，一旦新键注册失败就把它装回去——
     // 否则用户会「旧键没了、新键也没生效」，等于凭空丢了一个快捷键
     // （新键被别的功能或别的程序占用时很容易触发）。
+    if registered_accelerator(name).as_deref() == Some(hotkey.as_str()) {
+        if requested.is_some() {
+            set(name, hotkey.clone());
+        }
+        return Ok(());
+    }
+    #[cfg(target_os = "macos")]
+    if !hotkey.is_empty() { probe_macos_shortcut(&hotkey)?; }
     let previous = unregister_previous(app_handle, name);
 
     if hotkey.is_empty() {
+        if requested.is_some() {
+            set(name, hotkey.clone());
+        }
         return Ok(());
     }
 
@@ -119,10 +158,16 @@ where
     {
         Ok(()) => {
             set_registered_accelerator(name, Some(hotkey.clone()));
+            if requested.is_some() {
+                set(name, hotkey.clone());
+            }
             info!("Registered global shortcut: {} for {}", hotkey, name);
         }
         Err(e) => {
-            warn!("Failed to register global shortcut: {} for {} {:?}", hotkey, name, e);
+            warn!(
+                "Failed to register global shortcut: {} for {} {:?}",
+                hotkey, name, e
+            );
             // 回滚：把旧快捷键重新注册回去，保证用户至少不丢原有绑定
             if let Some(previous) = previous {
                 if let Some(handler) = handler_factory(name) {
@@ -172,7 +217,7 @@ pub fn register_shortcut(shortcut: &str) -> Result<(), String> {
             app_handle,
             "hotkey_selection_translate",
             selection_translate,
-            "",
+            "Alt+T",
         )?,
         "hotkey_clipboard_translate" => register(
             app_handle,
@@ -186,21 +231,26 @@ pub fn register_shortcut(shortcut: &str) -> Result<(), String> {
         "hotkey_ocr_recognize" => register(app_handle, "hotkey_ocr_recognize", ocr_recognize, "")?,
         "hotkey_ocr_translate" => register(app_handle, "hotkey_ocr_translate", ocr_translate, "")?,
         "all" => {
-            register(
-                app_handle,
-                "hotkey_selection_translate",
-                selection_translate,
-                "",
-            )?;
-            register(
-                app_handle,
-                "hotkey_clipboard_translate",
-                clipboard_translate,
-                "Alt+Shift+T",
-            )?;
-            register(app_handle, "hotkey_input_translate", input_translate, "")?;
-            register(app_handle, "hotkey_ocr_recognize", ocr_recognize, "")?;
-            register(app_handle, "hotkey_ocr_translate", ocr_translate, "")?;
+            let actions: [(&str, fn(), &str); 5] = [
+                ("hotkey_selection_translate", selection_translate, "Alt+T"),
+                (
+                    "hotkey_clipboard_translate",
+                    clipboard_translate,
+                    "Alt+Shift+T",
+                ),
+                ("hotkey_input_translate", input_translate, ""),
+                ("hotkey_ocr_recognize", ocr_recognize, ""),
+                ("hotkey_ocr_translate", ocr_translate, ""),
+            ];
+            let mut errors = Vec::new();
+            for (name, handler, default) in actions {
+                if let Err(error) = register(app_handle, name, handler, default) {
+                    errors.push(format!("{name}: {error}"));
+                }
+            }
+            if !errors.is_empty() {
+                return Err(errors.join("\n"));
+            }
         }
         _ => {}
     }
@@ -211,31 +261,42 @@ pub fn register_shortcut(shortcut: &str) -> Result<(), String> {
 pub fn register_shortcut_by_frontend(name: &str, shortcut: &str) -> Result<(), String> {
     let app_handle = APP.get().ok_or("App is not initialized")?;
     match name {
-        "hotkey_selection_translate" => register(
+        "hotkey_selection_translate" => register_requested(
             app_handle,
             "hotkey_selection_translate",
             selection_translate,
             shortcut,
+            Some(shortcut),
         )?,
-        "hotkey_clipboard_translate" => register(
+        "hotkey_clipboard_translate" => register_requested(
             app_handle,
             "hotkey_clipboard_translate",
             clipboard_translate,
             shortcut,
+            Some(shortcut),
         )?,
-        "hotkey_input_translate" => register(
+        "hotkey_input_translate" => register_requested(
             app_handle,
             "hotkey_input_translate",
             input_translate,
             shortcut,
+            Some(shortcut),
         )?,
-        "hotkey_ocr_recognize" => {
-            register(app_handle, "hotkey_ocr_recognize", ocr_recognize, shortcut)?
-        }
-        "hotkey_ocr_translate" => {
-            register(app_handle, "hotkey_ocr_translate", ocr_translate, shortcut)?
-        }
-        _ => {}
+        "hotkey_ocr_recognize" => register_requested(
+            app_handle,
+            "hotkey_ocr_recognize",
+            ocr_recognize,
+            shortcut,
+            Some(shortcut),
+        )?,
+        "hotkey_ocr_translate" => register_requested(
+            app_handle,
+            "hotkey_ocr_translate",
+            ocr_translate,
+            shortcut,
+            Some(shortcut),
+        )?,
+        _ => return Err(format!("Unknown shortcut action: {name}")),
     }
     Ok(())
 }
@@ -243,6 +304,26 @@ pub fn register_shortcut_by_frontend(name: &str, shortcut: &str) -> Result<(), S
 #[cfg(test)]
 mod tests {
     use super::{handler_factory, resolve_hotkey};
+
+    #[test]
+    fn submitted_shortcut_overrides_old_config_only_when_explicit() {
+        assert_eq!(
+            super::resolve_requested_hotkey(Some("Alt+T".into()), "Alt+T", Some("Alt+K")),
+            "Alt+K"
+        );
+        assert_eq!(
+            super::resolve_requested_hotkey(Some("Alt+T".into()), "Alt+T", Some("")),
+            ""
+        );
+        assert_eq!(
+            super::resolve_requested_hotkey(Some("Alt+K".into()), "Alt+T", None),
+            "Alt+K"
+        );
+        assert_eq!(
+            super::resolve_requested_hotkey(None, "Alt+T", None),
+            "Alt+T"
+        );
+    }
 
     #[test]
     fn user_config_always_wins_over_the_default() {
@@ -301,5 +382,98 @@ mod tests {
             );
         }
         assert!(handler_factory("not_a_hotkey").is_none());
+    }
+}
+
+#[tauri::command]
+pub fn accessibility_permission(request: bool) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        if request && !macos_accessibility_client::accessibility::application_is_trusted() {
+            return macos_accessibility_client::accessibility::application_is_trusted_with_prompt();
+        }
+        return macos_accessibility_client::accessibility::application_is_trusted();
+    }
+    #[cfg(not(target_os = "macos"))]
+    { let _ = request; true }
+}
+
+// The bundled tao 0.16 backend discards Carbon registration errors. Probe first
+// so occupied keys cannot be falsely reported as saved. The old binding remains.
+#[cfg(target_os = "macos")]
+fn probe_macos_shortcut(shortcut: &str) -> Result<(), String> {
+    use std::ffi::c_void;
+    #[repr(C)]
+    struct HotKeyId { signature: u32, id: u32 }
+    #[link(name = "Carbon", kind = "framework")]
+    extern "C" {
+        fn GetApplicationEventTarget() -> *mut c_void;
+        fn RegisterEventHotKey(key: u32, modifiers: u32, id: HotKeyId, target: *mut c_void, options: u32, reference: *mut *mut c_void) -> i32;
+        fn UnregisterEventHotKey(reference: *mut c_void) -> i32;
+    }
+    let mut modifiers = 0;
+    let mut key = None;
+    for part in shortcut.split('+') {
+        match part.to_ascii_lowercase().as_str() {
+            "ctrl" | "control" => modifiers |= 4096,
+            "shift" => modifiers |= 512,
+            "alt" | "option" => modifiers |= 2048,
+            "command" | "cmd" | "super" | "meta" | "commandorcontrol" | "cmdorctrl" => modifiers |= 256,
+            value => key = macos_keycode(value),
+        }
+    }
+    let key = key.ok_or("Unsupported shortcut key; choose a letter, digit, function key or navigation key")?;
+    unsafe {
+        let mut reference = std::ptr::null_mut();
+        let status = RegisterEventHotKey(key, modifiers, HotKeyId { signature: u32::from_be_bytes(*b"cupP"), id: 1 }, GetApplicationEventTarget(), 0, &mut reference);
+        if status != 0 { return Err(format!("Shortcut unavailable or occupied (macOS status {status})")); }
+        if !reference.is_null() { UnregisterEventHotKey(reference); }
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn macos_keycode(key: &str) -> Option<u32> {
+    let keys = ["a","s","d","f","h","g","z","x","c","v","§","b","q","w","e","r","y","t","1","2","3","4","6","5","=","9","7","-","8","0",
+        "]","o","u","[","i","p","enter","l","j","'","k",";","\\",",","/","n","m",".","tab","space","`","backspace"];
+    if let Some(index) = keys.iter().position(|value| *value == key) { return Some(index as u32); }
+    match key {
+        "esc" | "escape" => Some(53), "delete" => Some(117),
+        "left" => Some(123), "right" => Some(124), "down" => Some(125), "up" => Some(126),
+        "home" => Some(115), "end" => Some(119), "pageup" => Some(116), "pagedown" => Some(121),
+        "f1" => Some(122), "f2" => Some(120), "f3" => Some(99), "f4" => Some(118), "f5" => Some(96), "f6" => Some(97), "f7" => Some(98), "f8" => Some(100), "f9" => Some(101), "f10" => Some(109), "f11" => Some(103), "f12" => Some(111),
+        _ => None,
+    }
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod macos_probe_tests {
+    #[test]
+    fn carbon_probe_detects_an_occupied_hotkey() {
+        use std::ffi::c_void;
+        #[repr(C)]
+        struct Id { signature: u32, id: u32 }
+        #[link(name = "Carbon", kind = "framework")]
+        extern "C" {
+            fn GetApplicationEventTarget() -> *mut c_void;
+            fn RegisterEventHotKey(key: u32, modifiers: u32, id: Id, target: *mut c_void, options: u32, reference: *mut *mut c_void) -> i32;
+            fn UnregisterEventHotKey(reference: *mut c_void) -> i32;
+        }
+        unsafe {
+            let mut reference = std::ptr::null_mut();
+            let status = RegisterEventHotKey(111, 4096 | 512 | 2048, Id {signature: u32::from_be_bytes(*b"cupT"), id: 99}, GetApplicationEventTarget(), 0, &mut reference);
+            let probe = super::probe_macos_shortcut("Ctrl+Shift+Alt+F12");
+            if status == 0 && !reference.is_null() { UnregisterEventHotKey(reference); }
+            assert!(probe.is_err(), "occupied shortcut must not be accepted");
+        }
+    }
+
+    #[test]
+    fn keycodes_match_apple_virtual_keys() {
+        assert_eq!(super::macos_keycode("t"), Some(17));
+        assert_eq!(super::macos_keycode("space"), Some(49));
+        assert_eq!(super::macos_keycode("enter"), Some(36));
+        assert_eq!(super::macos_keycode("f12"), Some(111));
+        assert_eq!(super::macos_keycode("unknown"), None);
     }
 }

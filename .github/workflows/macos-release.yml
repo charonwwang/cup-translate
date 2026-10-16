@@ -1,0 +1,160 @@
+name: Release macOS
+on:
+    workflow_dispatch:
+        inputs:
+            tag:
+                description: 'Existing source tag to release, e.g. v3.0.8'
+                required: true
+                type: string
+            developer_id:
+                description: 'Use Developer ID signing and Apple notarization (requires Apple secrets)'
+                type: boolean
+                default: false
+permissions:
+    contents: read
+concurrency:
+    group: macos-public-release
+    cancel-in-progress: false
+jobs:
+    preflight:
+        environment: macos-release
+        runs-on: ubuntu-latest
+        env:
+            RELEASE_REPOSITORY: ${{ github.repository }}
+            GITHUB_TOKEN: ${{ github.token }}
+            TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+            RELEASE_TAG: ${{ inputs.tag }}
+        steps:
+            - name: Validate release configuration before building
+              shell: bash
+              run: |
+                  test -n "$GITHUB_TOKEN"
+                  test -n "$TAURI_PRIVATE_KEY"
+                  node --input-type=module <<'JS'
+                  const {RELEASE_REPOSITORY: repo, RELEASE_TAG: tag, GITHUB_TOKEN: token} = process.env;
+                  if(!/^v\d+\.\d+\.\d+$/.test(tag || '')) throw Error('Use a stable tag, for example v3.0.8');
+                  if(!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo || '')) throw Error('Invalid download repository');
+                  const response=await fetch(`https://api.github.com/repos/${repo}`, {signal:AbortSignal.timeout(30000),headers:{Authorization:`Bearer ${token}`,Accept:'application/vnd.github+json'}});
+                  if(!response.ok) throw Error(`Download repository unavailable: HTTP ${response.status}`);
+                  const info=await response.json();
+                  if(info.private) throw Error('The download repository must be public');
+                  const branch=await fetch(`https://api.github.com/repos/${repo}/branches/${encodeURIComponent(info.default_branch)}`, {signal:AbortSignal.timeout(30000),headers:{Authorization:`Bearer ${token}`,Accept:'application/vnd.github+json'}});
+                  if(!branch.ok) throw Error('Initialize the public download repository with a README first');
+                  JS
+    build:
+        needs: preflight
+        environment: macos-release
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - os: macos-15
+                      target: aarch64-apple-darwin
+                      arch: aarch64
+                    - os: macos-15-intel
+                      target: x86_64-apple-darwin
+                      arch: x64
+        runs-on: ${{ matrix.os }}
+        env:
+            RELEASE_TAG: ${{ inputs.tag }}
+            RELEASE_REPOSITORY: ${{ github.repository }}
+            RELEASE_TARGET: ${{ matrix.target }}
+            RELEASE_OUTPUT: release-assets
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  ref: ${{ inputs.tag }}
+                  persist-credentials: false
+                  fetch-depth: 0
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+            - uses: pnpm/action-setup@v4
+              with:
+                  version: 9
+            - uses: dtolnay/rust-toolchain@stable
+              with:
+                  targets: ${{ matrix.target }}
+            - name: Install build dependencies
+              run: brew install cmake
+            - run: pnpm install --frozen-lockfile
+            - name: Check updater signing secret
+              env:
+                  TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+              run: test -n "$TAURI_PRIVATE_KEY"
+            - name: Prepare exact version and public update endpoint
+              run: node packaging/prepare-macos-release.mjs
+            - run: pnpm check
+            - name: Import Developer ID certificate
+              if: inputs.developer_id
+              uses: apple-actions/import-codesign-certs@v3
+              with:
+                  p12-file-base64: ${{ secrets.APPLE_CERTIFICATE }}
+                  p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+            - name: Build signed app, DMG and updater artifacts
+              if: inputs.developer_id
+              env:
+                  CI: 'true'
+                  TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+                  TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+                  APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+                  APPLE_ID: ${{ secrets.APPLE_ID }}
+                  APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+                  APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+              run: |
+                  test -n "$APPLE_SIGNING_IDENTITY"
+                  test -n "$APPLE_ID"
+                  test -n "$APPLE_PASSWORD"
+                  test -n "$APPLE_TEAM_ID"
+                  pnpm tauri build --bundles dmg,updater --target "$RELEASE_TARGET"
+                  mkdir -p release-assets
+                  version="${RELEASE_TAG#v}"
+                  cp src-tauri/target/$RELEASE_TARGET/release/bundle/dmg/*.dmg "release-assets/cup-translate_${version}_${{ matrix.arch }}.dmg"
+                  cp src-tauri/target/$RELEASE_TARGET/release/bundle/macos/cup-translate.app.tar.gz "release-assets/cup-translate_${version}_${{ matrix.arch }}.app.tar.gz"
+                  cp src-tauri/target/$RELEASE_TARGET/release/bundle/macos/cup-translate.app.tar.gz.sig "release-assets/cup-translate_${version}_${{ matrix.arch }}.app.tar.gz.sig"
+                  codesign --verify --deep --strict src-tauri/target/$RELEASE_TARGET/release/bundle/macos/cup-translate.app
+                  xcrun stapler validate src-tauri/target/$RELEASE_TARGET/release/bundle/macos/cup-translate.app
+            - name: Build ad-hoc signed DMG and cryptographically signed updates
+              if: ${{ !inputs.developer_id }}
+              env:
+                  TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+                  TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+              run: |
+                  pnpm tauri build --bundles app --target "$RELEASE_TARGET"
+                  node packaging/package-macos.mjs "src-tauri/target/$RELEASE_TARGET/release/bundle/macos/cup-translate.app" --updater
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: macos-release-${{ matrix.arch }}
+                  path: release-assets/*
+                  if-no-files-found: error
+    publish:
+        permissions:
+            contents: write
+        needs: build
+        environment: macos-release
+        runs-on: ubuntu-latest
+        env:
+            RELEASE_TAG: ${{ inputs.tag }}
+            RELEASE_REPOSITORY: ${{ github.repository }}
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  ref: ${{ inputs.tag }}
+                  persist-credentials: false
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+            - run: node packaging/prepare-macos-release.mjs
+            - uses: actions/download-artifact@v4
+              with:
+                  pattern: macos-release-*
+                  path: release-assets
+                  merge-multiple: true
+            - name: Include exact corresponding source and GPL license
+              run: |
+                  version="${RELEASE_TAG#v}"
+                  git ls-files -z | tar --null -T - -czf "release-assets/cup-translate_${version}_source.tar.gz"
+            - name: Verify signatures and publish complete release
+              env:
+                  GITHUB_TOKEN: ${{ github.token }}
+              run: node updater/publish-macos.mjs

@@ -221,9 +221,12 @@ export default function Backup() {
     }, [backupType]);
 
     return (
-        <Card className='mb-[10px]'>
+        <Card
+            data-cup-card
+            className='mb-[10px]'
+        >
             <Toaster />
-            <CardBody>
+            <CardBody data-cup-body>
                 <div className='config-item'>
                     <h3 className='my-auto'>{t('config.backup.type')}</h3>
                     {backupType !== null && (

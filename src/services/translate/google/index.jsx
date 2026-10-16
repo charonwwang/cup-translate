@@ -1,6 +1,7 @@
+import { createRequestCache } from '../../../utils/requestCache';
 import { fetchWithTimeout as fetch } from '../../../utils/fetchWithTimeout';
 
-// Google 翻译端点：gtx 客户端会被限流（429），多端点 + User-Agent 伪装 + 长退避
+// Google 翻译端点：多镜像、限时请求与有上限的短退避。
 // clients5.google.com + client=dict-chrome-ex 是 Google 翻译 Chrome 扩展使用的端点，
 // 比 translate.google.com + client=gtx 更不容易被限流（429）
 const ENDPOINTS = [
@@ -16,6 +17,7 @@ const BROWSER_UA =
 async function tryTranslate(customUrl, text, from, to) {
     return await fetch(`${customUrl}/translate_a/single?dt=at&dt=bd&dt=ex&dt=ld&dt=md&dt=qca&dt=rw&dt=rm&dt=ss&dt=t`, {
         method: 'GET',
+        timeout: 6,
         headers: {
             'content-type': 'application/json',
             'User-Agent': BROWSER_UA,
@@ -42,12 +44,9 @@ function sleep(ms) {
     return new Promise((r) => setTimeout(r, ms));
 }
 
-// 429/异常后的指数退避：2s / 4s / 8s / 16s。
-// 注意：这只应在**后面还有重试**时等待。旧实现放在循环体末尾无条件等待，
-// 最后一次尝试也会先睡 32 秒再抛错——那 32 秒占全部等待（约 62s）的一半以上，
-// 且明知不会再有重试，纯粹让用户多等。
-const MAX_ATTEMPTS = 5;
-const backoffMs = (attempt) => 2000 * Math.pow(2, Math.min(attempt, 4));
+// Total retry budget is bounded: at most 3 × 6 seconds plus 750ms backoff.
+const MAX_ATTEMPTS = 3;
+const backoffMs = (attempt) => 250 * Math.pow(2, Math.min(attempt, 2));
 
 /**
  * 是否值得**换一个镜像**再试。
@@ -68,8 +67,8 @@ const backoffMs = (attempt) => 2000 * Math.pow(2, Math.min(attempt, 4));
  */
 const isRetryableStatus = (status) => status === 429 || (status >= 500 && status <= 599);
 
-export async function translate(text, from, to, options = {}) {
-    const { config } = options;
+async function requestTranslation(text, from, to, options = {}) {
+    const { config = {} } = options;
 
     let { custom_url } = config;
 
@@ -80,7 +79,7 @@ export async function translate(text, from, to, options = {}) {
         custom_url = 'https://' + custom_url;
     }
 
-    // 多端点轮换 + 429 限流重试（最多 5 次，退避 2s/4s/8s/16s）
+    // 多端点轮换 + 短退避（最多 3 次，每次请求 6 秒，退避 250 / 500ms）
     const urls = custom_url !== ENDPOINTS[0] ? [custom_url, ...ENDPOINTS] : ENDPOINTS;
     let res = null;
     let lastErr = '';
@@ -153,6 +152,13 @@ export async function translate(text, from, to, options = {}) {
             return target.trim();
         }
     }
+}
+
+const cachedRequest = createRequestCache();
+
+export async function translate(text, from, to, options = {}) {
+    const key = JSON.stringify([text, from, to, options.config?.custom_url ?? '']);
+    return cachedRequest(key, () => requestTranslation(text, from, to, options));
 }
 
 export * from './Config';

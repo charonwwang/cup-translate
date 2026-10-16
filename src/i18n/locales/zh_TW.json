@@ -7,7 +7,8 @@
             "write_clipboard": "寫入剪貼簿",
             "plugin": "外掛程式",
             "coming": "即將推出…",
-            "clear": "清除"
+            "clear": "清除",
+            "close": "關閉"
         },
         "languages": {
             "auto": "自動偵測",
@@ -154,7 +155,13 @@
                 "ocr_translate": "截圖翻譯",
                 "is_register": "該快速鍵已被註冊",
                 "success": "快速鍵註冊成功",
-                "set_hotkey": "按下設定快速鍵"
+                "set_hotkey": "按下設定快速鍵",
+                "disabled": "未啟用",
+                "disable": "停用快捷鍵",
+                "cancel": "放棄修改",
+                "record_hint": "按下組合鍵後點確定；Esc 取消修改。",
+                "selection_translate_description": "翻譯目前選取的文字，不讀取剪貼簿裡的舊內容。預設 Alt+T。",
+                "clipboard_translate_description": "獨立翻譯已複製到剪貼簿的文字，無需選取文字。預設 Alt+Shift+T。"
             },
             "service": {
                 "label": "服務設定",
@@ -213,6 +220,17 @@
                 "qq_group": "QQ 群組",
                 "telegram": "Telegram",
                 "discussion": "Github 討論區"
+            },
+            "ui": {
+                "navigation": "設定導覽",
+                "general_description": "讓 Cup 適合你的桌面與閱讀習慣。",
+                "translate_description": "讓翻譯融入閱讀，不打斷思路。",
+                "recognize_description": "在需要時，從圖片中擷取文字。",
+                "hotkey_description": "讓常用操作觸手可及。",
+                "service_description": "管理翻譯引擎及按需啟用的擴充功能。",
+                "history_description": "回顧翻譯過的詞句，繼續上次的閱讀。",
+                "backup_description": "備份你的偏好，在其他裝置上繼續使用。",
+                "about_description": "一個幫助你跨越語言閱讀的輕巧工具。"
             }
         },
         "updater": {
@@ -223,7 +241,11 @@
             "downloading": "下載中…",
             "installing": "安裝中…",
             "cancel": "取消",
-            "installed": "安裝完成，請重新啟動應用程式以使變更生效"
+            "installed": "安裝完成，請重新啟動應用程式以使變更生效",
+            "check_failed": "無法檢查更新。請檢查網路，或確認公開下載倉庫已發佈 update.json。",
+            "install_failed": "更新未完成。請重新檢查後重試；目前版本仍可繼續使用。",
+            "retry": "重新檢查",
+            "checking": "正在檢查"
         },
         "services": {
             "help": "設定指南",
@@ -355,6 +377,15 @@
                     "prompt_description": "透過自定義 Prompt，您可以自定義 Gemini Pro 的行為。$text $from $to $detect 將被替換為待翻譯的文字、來源語言、目標語言和偵測到的語言。",
                     "stream": "串流輸出",
                     "add": "新增 Prompt"
+                },
+                "local_mt": {
+                    "search_mode": "解碼搜尋模式",
+                    "mode_fast": "快速 · beam 1",
+                    "mode_balanced": "均衡 · beam 2",
+                    "mode_thorough": "更多搜尋 · beam 5",
+                    "memory_hint": "模型按需載入，閒置約 2 分鐘後自動釋放（每 30 秒檢查）。更多搜尋會增加 CPU 開銷，不保證每句譯文更好。",
+                    "loaded": "模型已駐留記憶體",
+                    "unload": "釋放模型記憶體"
                 }
             },
             "recognize": {
@@ -456,7 +487,19 @@
             "copy": "複製",
             "retry": "重試",
             "delete_newline": "刪除換行",
-            "translate_back": "翻譯回原文"
+            "translate_back": "翻譯回原文",
+            "reorder": "拖曳調整引擎順序",
+            "expand": "展開譯文",
+            "collapse": "收起譯文",
+            "result": "翻譯結果",
+            "source": "原文",
+            "input_hint": "輸入要翻譯的文字…",
+            "examples": "例句",
+            "fewer_examples": "收起更多例句",
+            "more_examples": "展開更多例句",
+            "copy_result": "複製譯文",
+            "pin": "視窗置頂",
+            "swap_languages": "交換語言"
         },
         "recognize": {
             "recognize": "辨識",

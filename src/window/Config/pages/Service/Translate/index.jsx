@@ -7,7 +7,6 @@ import { DEFAULT_TRANSLATE_SERVICE_INSTANCE_LIST } from '../../../../../services
 
 import { useToastStyle } from '../../../../../hooks';
 import SelectPluginModal from '../SelectPluginModal';
-import { osType } from '../../../../../utils/env';
 import { useConfig, deleteKey } from '../../../../../hooks';
 import ServiceItem from './ServiceItem';
 import SelectModal from './SelectModal';
@@ -70,9 +69,8 @@ export default function Translate(props) {
         <>
             <Toaster />
             <Card
-                className={`${
-                    osType === 'Linux' ? 'h-[calc(100vh-140px)]' : 'h-[calc(100vh-120px)]'
-                } overflow-y-auto p-5 flex justify-between`}
+                data-cup-card
+                className='config-service-list p-5'
             >
                 <DragDropContext onDragEnd={onDragEnd}>
                     <Droppable
@@ -81,7 +79,7 @@ export default function Translate(props) {
                     >
                         {(provided) => (
                             <div
-                                className='overflow-y-auto h-full'
+                                className='min-h-[64px]'
                                 ref={provided.innerRef}
                                 {...provided.droppableProps}
                             >
@@ -123,6 +121,8 @@ export default function Translate(props) {
                 <div className='flex'>
                     <Button
                         fullWidth
+                        variant='flat'
+                        color='primary'
                         onPress={onSelectOpen}
                     >
                         {t('config.service.add_builtin_service')}
@@ -130,6 +130,7 @@ export default function Translate(props) {
                     <Spacer x={2} />
                     <Button
                         fullWidth
+                        variant='bordered'
                         onPress={onSelectPluginOpen}
                     >
                         {t('config.service.add_external_service')}

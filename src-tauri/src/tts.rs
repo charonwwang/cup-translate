@@ -94,6 +94,48 @@ fn temp_wav_path() -> std::path::PathBuf {
 
 #[tauri::command]
 pub async fn tts_speak(text: String, lang: String) -> Result<Vec<u8>, String> {
+    #[cfg(target_os = "macos")]
+    {
+        return tauri::async_runtime::spawn_blocking(move || macos_synthesize(&text, &lang))
+            .await.map_err(|e| format!("Speech task failed: {e}"))?;
+    }
+    #[cfg(not(target_os = "macos"))]
+    synthesize_portable(text, lang)
+}
+
+#[cfg(target_os = "macos")]
+fn macos_synthesize(text: &str, lang: &str) -> Result<Vec<u8>, String> {
+    if text.trim().is_empty() { return Ok(Vec::new()); }
+    let voices = Command::new("/usr/bin/say").args(["-v", "?"]).output()
+        .map_err(|e| format!("System speech unavailable: {e}"))?;
+    let primary = lang.split(['_', '-']).next().unwrap_or("en");
+    let inventory = String::from_utf8_lossy(&voices.stdout);
+    let voice = inventory.lines().find_map(|line| {
+        let (name, rest) = line.split_once("  ")?;
+        let locale = rest.split_whitespace().next()?;
+        (locale.split('_').next() == Some(primary)).then_some(name.trim())
+    }).ok_or_else(|| format!("No installed system voice for {lang}. Add a voice in macOS Accessibility > Spoken Content, or select Google TTS in Settings."))?;
+    let path = temp_wav_path();
+    // stdin prevents leading dashes in user text being interpreted as options.
+    use std::io::Write;
+    let result = (|| {
+        let mut child = Command::new("/usr/bin/say")
+            .args(["-v", voice, "-o"]).arg(&path)
+            .args(["--file-format=WAVE", "--data-format=LEI16@22050"])
+            .stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped()).spawn()
+            .map_err(|e| format!("System speech unavailable: {e}"))?;
+        child.stdin.take().unwrap().write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+        let output = child.wait_with_output().map_err(|e| e.to_string())?;
+        if !output.status.success() { return Err("System speech synthesis failed. Check installed voices in macOS Settings.".into()); }
+        std::fs::read(&path).map_err(|e| e.to_string())
+    })();
+    let _ = std::fs::remove_file(path);
+    result
+}
+
+#[allow(dead_code)]
+fn synthesize_portable(text: String, lang: String) -> Result<Vec<u8>, String> {
     let voice = voice_for(&lang);
     match detect_engine() {
         // 用模式绑定把刚探测出的引擎**直接取出来用**，不要再调一次 detect_engine()
@@ -150,6 +192,16 @@ mod tests {
     use super::voice_for;
     use super::TtsEngine;
     use std::collections::HashSet;
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn system_speech_produces_decodable_wave() {
+        let bytes = super::macos_synthesize("Speech playback test.", "en").unwrap();
+        assert!(bytes.len() > 44);
+        assert_eq!(&bytes[..4], b"RIFF");
+        assert_eq!(&bytes[8..12], b"WAVE");
+        assert!(super::macos_synthesize("test", "unsupported-language").is_err());
+    }
 
     #[test]
     fn concurrent_tts_calls_get_distinct_temp_files() {

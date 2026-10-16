@@ -15,22 +15,35 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use ct2rs::tokenizers::auto::Tokenizer as AutoTokenizer;
-use ct2rs::{ComputeType, Config as Ct2Config, Translator};
+use ct2rs::{ComputeType, Config as Ct2Config, Tokenizer, TranslationOptions};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use tauri::AppHandle;
 
-type MtTranslator = Translator<AutoTokenizer>;
+struct MtTranslator {
+    engine: ct2rs::sys::Translator,
+    tokenizer: AutoTokenizer,
+}
+
+impl MtTranslator {
+    fn new(path: &std::path::Path, config: &Ct2Config) -> Result<Self, String> {
+        Ok(Self {
+            engine: ct2rs::sys::Translator::new(path, config).map_err(|e| e.to_string())?,
+            tokenizer: AutoTokenizer::new(path).map_err(|e| e.to_string())?,
+        })
+    }
+}
 
 /// 每个语向一个 CT2 模型目录
 struct ModelSpec {
     dir_name: &'static str,
     repo: &'static str,
-    /// 翻译目标需要的前缀 token：opus-mt-en-zh 必须给 `>>cmn_Hans<<`，zh-en 无前缀
-    target_prefix: Option<&'static str>,
+    revision: &'static str,
+    /// 源句首部需要的目标语言 token：opus-mt-en-zh 必须给 `>>cmn_Hans<<`，zh-en 无前缀
+    source_prefix: Option<&'static str>,
     license: &'static str,
     /// 文件名 -> 期望 SHA256（十六进制）。下载后逐个校验，防止传输损坏或镜像被篡改。
     expected_sha256: &'static [(&'static str, &'static str)],
@@ -60,23 +73,34 @@ const MODEL_FILES: &[&str] = &[
 //   返回的 `lfs.oid` 字段（即真实内容 SHA256）。
 // - 小文件（config.json / shared_vocabulary.json）：非 LFS，`oid` 是 git blob 哈希不是
 //   内容 SHA256，故改为实际下载后用 `shasum -a 256` 计算并硬编码。
-const EN_ZH_MODEL_BIN_SHA256: &str = "327584c20bb83c7e89d595bcfa30b6ef3771c10816f707e892c4bbb1f808a8fb";
-const EN_ZH_SOURCE_SPM_SHA256: &str = "5775ddc9e3ff2fae91554da56468ad35ff56edaba870fea74447bc7234bfdaa8";
-const EN_ZH_TARGET_SPM_SHA256: &str = "81dc94efa84e4025ef38d25d5d07429fe41e3eb29d44003f1db6fe98487b0052";
-const ZH_EN_MODEL_BIN_SHA256: &str = "e4955858cae9542bef37424a9b79720e3db2f32501fe62264c0cd3eac6319777";
-const ZH_EN_SOURCE_SPM_SHA256: &str = "e27a3a1b539f4959ec72ea60e453f49156289f95d4e6000b29332efc45616203";
-const ZH_EN_TARGET_SPM_SHA256: &str = "6a881f4717cd7265f53fea54fd3dc689c767c05338fac7a4590f3088cb2d7855";
-const EN_ZH_CONFIG_JSON_SHA256: &str = "364944c86bd38851bff4639366e23bd789cbf98e74a02ddfaa023e657ad5bc9e";
-const EN_ZH_SHARED_VOCAB_SHA256: &str = "2edd95e2e03576cada8ab464404922192aca27d854b753bf1c4807753633198b";
-const ZH_EN_CONFIG_JSON_SHA256: &str = "58d7a8a357fcc6e904a91de22692a021f3a9de42cd6710e21f9eea2c02d524fb";
-const ZH_EN_SHARED_VOCAB_SHA256: &str = "10f9aa68bb7983daeb276a48f484e19edf44aea6cbaefcf7508cbc219ea6af8a";
+const EN_ZH_MODEL_BIN_SHA256: &str =
+    "327584c20bb83c7e89d595bcfa30b6ef3771c10816f707e892c4bbb1f808a8fb";
+const EN_ZH_SOURCE_SPM_SHA256: &str =
+    "5775ddc9e3ff2fae91554da56468ad35ff56edaba870fea74447bc7234bfdaa8";
+const EN_ZH_TARGET_SPM_SHA256: &str =
+    "81dc94efa84e4025ef38d25d5d07429fe41e3eb29d44003f1db6fe98487b0052";
+const ZH_EN_MODEL_BIN_SHA256: &str =
+    "e4955858cae9542bef37424a9b79720e3db2f32501fe62264c0cd3eac6319777";
+const ZH_EN_SOURCE_SPM_SHA256: &str =
+    "e27a3a1b539f4959ec72ea60e453f49156289f95d4e6000b29332efc45616203";
+const ZH_EN_TARGET_SPM_SHA256: &str =
+    "6a881f4717cd7265f53fea54fd3dc689c767c05338fac7a4590f3088cb2d7855";
+const EN_ZH_CONFIG_JSON_SHA256: &str =
+    "8f6496adfc930cbfecbe8281112197705c488fab47d34b4829b06d7f478909af";
+const EN_ZH_SHARED_VOCAB_SHA256: &str =
+    "37314a6abb25ed8f8497498aeeb31fcea98de892bf00ff7c2e8c966b26fe0b82";
+const ZH_EN_CONFIG_JSON_SHA256: &str =
+    "8f6496adfc930cbfecbe8281112197705c488fab47d34b4829b06d7f478909af";
+const ZH_EN_SHARED_VOCAB_SHA256: &str =
+    "acbf13516c56af2bb78ebdb770c2e4648fd8232ddd17af75298119cbfa7ee33d";
 
 fn model_spec(pair: &str) -> Result<ModelSpec, String> {
     match pair {
         "en-zh" => Ok(ModelSpec {
             dir_name: "opus-mt-en-zh-ct2",
             repo: "jiangzhuo9357/opus-mt-en-zh-ct2",
-            target_prefix: Some(">>cmn_Hans<<"),
+            revision: "06fb49e2f6cb0485043ae703a4c2afddd4e700d7",
+            source_prefix: Some(">>cmn_Hans<<"),
             license: "Apache-2.0 (Helsinki-NLP/opus-mt-en-zh)",
             expected_sha256: &[
                 ("config.json", EN_ZH_CONFIG_JSON_SHA256),
@@ -89,7 +113,8 @@ fn model_spec(pair: &str) -> Result<ModelSpec, String> {
         "zh-en" => Ok(ModelSpec {
             dir_name: "opus-mt-zh-en-ct2",
             repo: "jiangzhuo9357/opus-mt-zh-en-ct2",
-            target_prefix: None,
+            revision: "b9f5527123795289acc264489cbd4927801601d7",
+            source_prefix: None,
             license: "CC-BY-4.0 (Helsinki-NLP/opus-mt-zh-en，译文需署名 Helsinki-NLP / OPUS-MT)",
             expected_sha256: &[
                 ("config.json", ZH_EN_CONFIG_JSON_SHA256),
@@ -181,7 +206,33 @@ fn clamp_threads(threads: Option<u32>) -> usize {
 /// 若按 (pair, threads) 组合缓存，用户每改一次线程数就会多留一份模型在内存里
 /// 且永不释放。线程数变化时直接替换旧项，旧的 Arc 在没有在途请求后即被释放。
 /// 缓存项：已加载的 translator 及其线程数（线程数变化时需要重建）
-type CachedTranslator = (usize, Arc<MtTranslator>);
+struct CachedTranslator {
+    threads: usize,
+    translator: Arc<MtTranslator>,
+    last_used: Instant,
+}
+const MODEL_IDLE_TIMEOUT: Duration = Duration::from_secs(120);
+
+fn should_evict(idle: Duration, references: usize) -> bool {
+    idle >= MODEL_IDLE_TIMEOUT && references == 1
+}
+
+fn start_cache_reaper() {
+    static STARTED: OnceLock<()> = OnceLock::new();
+    STARTED.get_or_init(|| {
+        std::thread::spawn(|| loop {
+            std::thread::sleep(Duration::from_secs(30));
+            if let Ok(mut cache) = translator_cache().lock() {
+                cache.retain(|_, entry| {
+                    !should_evict(
+                        entry.last_used.elapsed(),
+                        Arc::strong_count(&entry.translator),
+                    )
+                });
+            }
+        });
+    });
+}
 
 fn translator_cache() -> &'static Mutex<HashMap<String, CachedTranslator>> {
     static CACHE: OnceLock<Mutex<HashMap<String, CachedTranslator>>> = OnceLock::new();
@@ -205,11 +256,13 @@ impl DownloadGuard {
         let mut locks = download_lock().lock().map_err(|e| e.to_string())?;
         if locks.contains_key(pair) {
             return Err(format!(
-            "{pair} model is being downloaded/removed, please retry shortly"
-        ));
+                "{pair} model is being downloaded/removed, please retry shortly"
+            ));
         }
         locks.insert(pair.to_string(), ());
-        Ok(Self { pair: pair.to_string() })
+        Ok(Self {
+            pair: pair.to_string(),
+        })
     }
 }
 
@@ -233,6 +286,7 @@ pub async fn local_mt_model_status(app_handle: AppHandle, pair: String) -> Resul
     Ok(json!({
         "pair": pair,
         "installed": missing.is_empty(),
+        "loaded": translator_cache().try_lock().map(|cache| cache.contains_key(&pair)).unwrap_or(false),
         "missing": missing,
         "license": spec.license,
         "dir": dir.display().to_string(),
@@ -244,7 +298,8 @@ pub async fn local_mt_download_model(app_handle: AppHandle, pair: String) -> Res
     let _guard = DownloadGuard::acquire(&pair)?;
     let spec = model_spec(&pair)?;
     let dir = model_dir(&app_handle, &pair)?;
-    std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create the model directory: {e}"))?;
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| format!("Failed to create the model directory: {e}"))?;
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(900))
         .build()
@@ -259,7 +314,9 @@ pub async fn local_mt_download_model(app_handle: AppHandle, pair: String) -> Res
                 match file_sha256(&dest) {
                     Ok(actual) if actual.eq_ignore_ascii_case(sha) => continue,
                     Ok(_) | Err(_) => {
-                        log::warn!("[local_mt] {file} exists but failed verification, re-downloading");
+                        log::warn!(
+                            "[local_mt] {file} exists but failed verification, re-downloading"
+                        );
                         let _ = std::fs::remove_file(&dest);
                     }
                 }
@@ -271,13 +328,14 @@ pub async fn local_mt_download_model(app_handle: AppHandle, pair: String) -> Res
         let mut last_err = String::new();
         let mut done = false;
         'download_loop: for base in ["https://huggingface.co", "https://hf-mirror.com"] {
-            let url = format!("{}/{}/resolve/main/{}", base, spec.repo, file);
+            let url = format!("{}/{}/resolve/{}/{}", base, spec.repo, spec.revision, file);
             log::info!("[local_mt] downloading {url}");
             match client.get(&url).send().await {
                 Ok(mut resp) if resp.status().is_success() => {
                     // 流式写入磁盘：resp.bytes() 会把整个文件（model.bin 80MB）
                     // 加载进内存，用 chunk() 分块写入避免内存峰值
-                    let mut dest_file = std::fs::File::create(&dest)
+                    let partial = dest.with_extension("part");
+                    let mut dest_file = std::fs::File::create(&partial)
                         .map_err(|e| format!("Failed to create {file}: {e}"))?;
                     let mut total: u64 = 0;
                     loop {
@@ -291,7 +349,7 @@ pub async fn local_mt_download_model(app_handle: AppHandle, pair: String) -> Res
                             Ok(None) => break,
                             Err(e) => {
                                 last_err = format!("{url}: {e}");
-                                let _ = std::fs::remove_file(&dest);
+                                let _ = std::fs::remove_file(&partial);
                                 continue 'download_loop;
                             }
                         }
@@ -299,22 +357,25 @@ pub async fn local_mt_download_model(app_handle: AppHandle, pair: String) -> Res
                     log::info!("[local_mt] downloaded {} ({} bytes)", file, total);
                     // 下载后立即校验 SHA256；不匹配则视为本次下载失败，尝试下一个镜像
                     if let Some(sha) = expected.get(file) {
-                        match file_sha256(&dest) {
+                        match file_sha256(&partial) {
                             Ok(actual) if actual.eq_ignore_ascii_case(sha) => {}
                             Ok(actual) => {
                                 last_err = format!(
                                     "{url}: SHA256 mismatch (expected {sha}, got {actual}); the mirror may be tampered with or the transfer corrupted"
                                 );
-                                let _ = std::fs::remove_file(&dest);
+                                let _ = std::fs::remove_file(&partial);
                                 continue;
                             }
                             Err(e) => {
                                 last_err = format!("{url}: verification failed: {e}");
-                                let _ = std::fs::remove_file(&dest);
+                                let _ = std::fs::remove_file(&partial);
                                 continue;
                             }
                         }
                     }
+                    drop(dest_file);
+                    std::fs::rename(&partial, &dest)
+                        .map_err(|e| format!("Failed to install {file}: {e}"))?;
                     done = true;
                     break;
                 }
@@ -331,10 +392,7 @@ pub async fn local_mt_download_model(app_handle: AppHandle, pair: String) -> Res
     // 全部文件就绪后做一次整目录终检，兜底「单文件校验通过但目录整体损坏」的边界情况
     let bad = verify_model_checksums(&dir, &spec);
     if !bad.is_empty() {
-        return Err(format!(
-            "Model integrity check failed: {}",
-            bad.join("; ")
-        ));
+        return Err(format!("Model integrity check failed: {}", bad.join("; ")));
     }
     Ok(())
 }
@@ -348,9 +406,24 @@ pub async fn local_mt_delete_model(app_handle: AppHandle, pair: String) -> Resul
         .map_err(|e| e.to_string())?
         .remove(&pair);
     if dir.is_dir() {
-        std::fs::remove_dir_all(&dir).map_err(|e| format!("Failed to remove the model directory: {e}"))?;
+        std::fs::remove_dir_all(&dir)
+            .map_err(|e| format!("Failed to remove the model directory: {e}"))?;
     }
     Ok(())
+}
+
+#[tauri::command]
+pub async fn local_mt_unload_model(pair: String) -> Result<(), String> {
+    model_spec(&pair)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        translator_cache()
+            .lock()
+            .map_err(|error| error.to_string())?
+            .remove(&pair);
+        Ok(())
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 fn load_translator(
@@ -358,14 +431,18 @@ fn load_translator(
     pair: &str,
     threads: usize,
 ) -> Result<Arc<MtTranslator>, String> {
-    {
-        let cache = translator_cache().lock().map_err(|e| e.to_string())?;
-        if let Some((cached_threads, translator)) = cache.get(pair) {
-            if *cached_threads == threads {
-                return Ok(Arc::clone(translator));
-            }
+    start_cache_reaper();
+    // Keep a single load in progress. The caller runs on the blocking pool, so
+    // loading here cannot stall the async runtime or duplicate the same model.
+    let mut cache = translator_cache().lock().map_err(|e| e.to_string())?;
+    if let Some(entry) = cache.get_mut(pair) {
+        if entry.threads == threads {
+            entry.last_used = Instant::now();
+            return Ok(Arc::clone(&entry.translator));
         }
     }
+    // Drop the old configuration before allocating replacement model weights.
+    cache.remove(pair);
     let dir = model_dir(app_handle, pair)?;
     let missing: Vec<&str> = MODEL_FILES
         .iter()
@@ -382,16 +459,126 @@ fn load_translator(
         // 模型已按 int8 量化，DEFAULT 保持量化精度推理（等价 Python 基准的 compute_type='int8'）
         compute_type: ComputeType::DEFAULT,
         num_threads_per_replica: threads.max(1),
+        max_queued_batches: 1,
         ..Ct2Config::default()
     };
-    let translator =
-        Translator::new(&dir, &config).map_err(|e| format!("Failed to load the translation model: {e}"))?;
+    let translator = MtTranslator::new(&dir, &config)
+        .map_err(|e| format!("Failed to load the translation model: {e}"))?;
     let translator = Arc::new(translator);
-    translator_cache()
-        .lock()
-        .map_err(|e| e.to_string())?
-        .insert(pair.to_string(), (threads, Arc::clone(&translator)));
+    cache.insert(
+        pair.to_string(),
+        CachedTranslator {
+            threads,
+            translator: Arc::clone(&translator),
+            last_used: Instant::now(),
+        },
+    );
     Ok(translator)
+}
+
+// Bounded chunks avoid silently dropping the end of a long paragraph at CT2's
+// default input/output token limits. Break on sentence/word boundaries when possible.
+fn split_for_translation(text: &str, max_chars: usize) -> Vec<&str> {
+    let mut chunks = Vec::new();
+    let mut remaining = text;
+    let limit = max_chars.max(1);
+    while remaining.chars().count() > limit {
+        let hard_end = remaining.char_indices().nth(limit).map(|(i, _)| i).unwrap();
+        let preferred = remaining[..hard_end]
+            .char_indices()
+            .filter(|(_, c)| {
+                c.is_whitespace() || matches!(c, '.' | '!' | '?' | '。' | '！' | '？' | ';' | '；')
+            })
+            .map(|(i, c)| i + c.len_utf8())
+            .last()
+            .filter(|i| remaining[..*i].chars().count() >= limit / 2);
+        let end = preferred.unwrap_or(hard_end);
+        chunks.push(&remaining[..end]);
+        remaining = &remaining[end..];
+    }
+    if !remaining.is_empty() {
+        chunks.push(remaining);
+    }
+    chunks
+}
+
+fn beam_size(quality: Option<&str>) -> usize {
+    match quality {
+        Some("fast") => 1,
+        Some("thorough") => 5,
+        _ => 2,
+    }
+}
+
+fn prepend_language_marker(mut tokens: Vec<String>, marker: Option<&str>) -> Vec<String> {
+    if let Some(marker) = marker {
+        tokens.insert(0, marker.to_string());
+    }
+    tokens
+}
+
+fn has_private_use(text: &str) -> bool {
+    text.chars()
+        .any(|c| matches!(c as u32, 0xE000..=0xF8FF | 0xF0000..=0xFFFFD | 0x100000..=0x10FFFD))
+}
+
+fn translate_with_model(
+    translator: &MtTranslator,
+    pair: &str,
+    text: &str,
+    quality: Option<&str>,
+) -> Result<String, String> {
+    let spec = model_spec(pair)?;
+    let options = TranslationOptions::<String, String> {
+        beam_size: beam_size(quality),
+        max_input_length: 0,
+        max_decoding_length: 512,
+        max_batch_size: 1,
+        ..Default::default()
+    };
+    let mut paragraphs = Vec::new();
+    for line in text.lines() {
+        let mut translated_chunks = Vec::new();
+        for chunk in split_for_translation(line, 200) {
+            if chunk.trim().is_empty() {
+                continue;
+            }
+            let tokens = prepend_language_marker(
+                translator
+                    .tokenizer
+                    .encode(chunk.trim())
+                    .map_err(|e| format!("Tokenization failed: {e}"))?,
+                spec.source_prefix,
+            );
+            // OPUS needs the marker in source tokens, never forced decoder output.
+            let decode = |options: &TranslationOptions<String, String>| -> Result<String, String> {
+                let results = translator
+                    .engine
+                    .translate_batch(&[tokens.clone()], options, None)
+                    .map_err(|e| format!("Local translation failed: {e}"))?;
+                let hypothesis = results
+                    .into_iter()
+                    .next()
+                    .and_then(|result| result.hypotheses.into_iter().next())
+                    .ok_or_else(|| "Local translation returned no result".to_string())?;
+                translator
+                    .tokenizer
+                    .decode(hypothesis)
+                    .map_err(|e| format!("Detokenization failed: {e}"))
+            };
+            let mut first = decode(&options)?;
+            if has_private_use(&first) && !has_private_use(chunk) && options.beam_size < 5 {
+                let fallback = TranslationOptions {
+                    beam_size: if options.beam_size == 1 { 2 } else { 5 },
+                    ..options.clone()
+                };
+                first = decode(&fallback)?;
+            }
+            translated_chunks.push(first);
+        }
+        paragraphs.push(translated_chunks.join(if pair == "zh-en" { " " } else { "" }));
+    }
+    Ok(paragraphs.join("\n"))
 }
 
 #[tauri::command]
@@ -400,34 +587,127 @@ pub async fn local_mt_translate(
     pair: String,
     text: String,
     threads: Option<u32>,
+    quality: Option<String>,
 ) -> Result<String, String> {
-    let spec = model_spec(&pair)?;
-    // 默认 2 线程：资源占用最小化（实测 2 线程 152ms vs 4 线程 106ms，CPU 占用减半）
-    // 前端输入框无范围校验，这里夹紧到 [1, 64]（见 clamp_threads）
-    let threads = clamp_threads(threads);
-    let translator = load_translator(&app_handle, &pair, threads)?;
-    let results = match spec.target_prefix {
-        Some(prefix) => translator.translate_batch_with_target_prefix(
-            &[text.as_str()],
-            &vec![vec![prefix]],
-            &Default::default(),
-            None,
-        ),
-        None => translator.translate_batch(&[text.as_str()], &Default::default(), None),
-    };
-    let results = results.map_err(|e| format!("Local translation failed: {e}"))?;
-    let first = results
-        .into_iter()
-        .next()
-        .map(|(translated, _score)| translated)
-        .ok_or_else(|| "Local translation returned no result".to_string())?;
-    Ok(first)
+    model_spec(&pair)?;
+    if text.trim().is_empty() {
+        return Ok(String::new());
+    }
+    if text.chars().count() > 20_000 {
+        return Err("Local translation accepts at most 20000 characters per request".into());
+    }
+    // Queue asynchronously, instead of filling the blocking pool with waiting
+    // inference calls. Only one local inference runs at a time across directions.
+    static GATE: OnceLock<tauri::async_runtime::Mutex<()>> = OnceLock::new();
+    let _permit = GATE
+        .get_or_init(|| tauri::async_runtime::Mutex::new(()))
+        .lock()
+        .await;
+    tauri::async_runtime::spawn_blocking(move || {
+        let translator = load_translator(&app_handle, &pair, clamp_threads(threads))?;
+        let output = translate_with_model(&translator, &pair, &text, quality.as_deref())?;
+        if let Ok(mut cache) = translator_cache().lock() {
+            if let Some(entry) = cache.get_mut(&pair) {
+                entry.last_used = Instant::now();
+            }
+        }
+        Ok(output)
+    })
+    .await
+    .map_err(|e| format!("Local translation worker failed: {e}"))?
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{clamp_threads, file_sha256, model_spec, verify_model_checksums, ModelSpec, MAX_MT_THREADS};
+    use super::{
+        clamp_threads, file_sha256, model_spec, verify_model_checksums, ModelSpec, MAX_MT_THREADS,
+    };
     use std::path::PathBuf;
+
+    #[test]
+    fn opus_language_marker_is_a_source_token_and_keeps_the_eos() {
+        let tokens = vec!["Hello".to_string(), "</s>".to_string()];
+        assert_eq!(
+            super::prepend_language_marker(tokens.clone(), Some(">>cmn_Hans<<")),
+            vec![">>cmn_Hans<<", "Hello", "</s>"]
+        );
+        assert_eq!(super::prepend_language_marker(tokens.clone(), None), tokens);
+        assert!(super::has_private_use("\u{e05f}"));
+        assert!(!super::has_private_use("你好，世界"));
+    }
+
+    #[test]
+    #[ignore = "requires a verified model directory in CUP_MT_MODEL_DIR"]
+    fn benchmark_local_model() {
+        let dir = std::env::var("CUP_MT_MODEL_DIR").expect("set CUP_MT_MODEL_DIR");
+        let spec = model_spec("en-zh").unwrap();
+        assert!(verify_model_checksums(std::path::Path::new(&dir), &spec).is_empty());
+        let start = std::time::Instant::now();
+        let translator = super::MtTranslator::new(
+            std::path::Path::new(&dir),
+            &super::Ct2Config {
+                num_threads_per_replica: 2,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        println!(
+            "BENCH {}",
+            serde_json::json!({"load_ms":start.elapsed().as_secs_f64()*1000.0})
+        );
+        let samples = [
+            "Hello, world.",
+            "Please do not close this window.",
+            "The request timed out. Please try again later.",
+            "She carefully documented the intermittent memory leak before filing the bug report.",
+            "The meeting has been postponed until next Friday.",
+            "I used to live here, but I don't anymore.",
+            "The model is loaded only when needed and released after two minutes of inactivity.",
+            "Translate the selected text, not the previous clipboard contents.",
+            "Version 3.0.7 fixes 12 issues and uses 2 worker threads.",
+            "Your data stays on this device.",
+        ];
+        for mode in ["fast", "balanced", "thorough"] {
+            for source in samples {
+                let start = std::time::Instant::now();
+                let output =
+                    super::translate_with_model(&translator, "en-zh", source, Some(mode)).unwrap();
+                println!(
+                    "BENCH {}",
+                    serde_json::json!({"mode":mode,"source":source,"output":output,"ms":start.elapsed().as_secs_f64()*1000.0})
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn chunking_preserves_all_unicode_input_and_bounds_each_chunk() {
+        for text in [
+            "你好。English words and emoji 🦀🦀，这是一个长句。".repeat(20),
+            "a".repeat(999),
+            "短句".into(),
+        ] {
+            let chunks = super::split_for_translation(&text, 40);
+            assert_eq!(chunks.concat(), text);
+            assert!(chunks.iter().all(|chunk| chunk.chars().count() <= 40));
+        }
+        assert!(super::split_for_translation("", 200).is_empty());
+    }
+
+    #[test]
+    fn active_model_references_are_never_evicted() {
+        assert!(!super::should_evict(std::time::Duration::from_secs(119), 1));
+        assert!(!super::should_evict(std::time::Duration::from_secs(121), 2));
+        assert!(super::should_evict(std::time::Duration::from_secs(121), 1));
+    }
+
+    #[test]
+    fn decoding_modes_keep_the_previous_default() {
+        assert_eq!(super::beam_size(None), 2);
+        assert_eq!(super::beam_size(Some("balanced")), 2);
+        assert_eq!(super::beam_size(Some("fast")), 1);
+        assert_eq!(super::beam_size(Some("thorough")), 5);
+    }
 
     #[test]
     fn requested_threads_are_clamped_to_a_sane_range() {
@@ -526,14 +806,19 @@ mod tests {
 
     #[test]
     fn checksum_verification_rejects_tampered_or_missing_files() {
-        let dir = std::env::temp_dir().join(format!("cup-translate-mt-test-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("cup-translate-mt-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let spec = ModelSpec {
             dir_name: "test",
             repo: "test",
-            target_prefix: None,
+            revision: "test",
+            source_prefix: None,
             license: "",
-            expected_sha256: &[("model.bin", "0000000000000000000000000000000000000000000000000000000000000000")],
+            expected_sha256: &[(
+                "model.bin",
+                "0000000000000000000000000000000000000000000000000000000000000000",
+            )],
         };
         // 缺文件 -> 报缺失（错误串是英文，见文件顶部约定）
         let bad = verify_model_checksums(&dir, &spec);
@@ -545,14 +830,18 @@ mod tests {
         assert_eq!(bad.len(), 1);
         assert!(bad[0].contains("mismatch"));
         // 修正为真实哈希 -> 通过
-        let real: &'static str = Box::leak(file_sha256(&dir.join("model.bin")).unwrap().into_boxed_str());
-        let pinned: &'static [(&'static str, &'static str)] = Box::leak(
-            vec![("model.bin", real)].into_boxed_slice(),
+        let real: &'static str = Box::leak(
+            file_sha256(&dir.join("model.bin"))
+                .unwrap()
+                .into_boxed_str(),
         );
+        let pinned: &'static [(&'static str, &'static str)] =
+            Box::leak(vec![("model.bin", real)].into_boxed_slice());
         let spec = ModelSpec {
             dir_name: "test",
             repo: "test",
-            target_prefix: None,
+            revision: "test",
+            source_prefix: None,
             license: "",
             expected_sha256: pinned,
         };
@@ -562,7 +851,8 @@ mod tests {
 
     #[test]
     fn file_sha256_matches_known_digest() {
-        let path: PathBuf = std::env::temp_dir().join(format!("cup-translate-sha256-{}", std::process::id()));
+        let path: PathBuf =
+            std::env::temp_dir().join(format!("cup-translate-sha256-{}", std::process::id()));
         std::fs::write(&path, b"hello").unwrap();
         // SHA256("hello") 的已知值
         assert_eq!(

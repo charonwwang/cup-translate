@@ -1,123 +1,50 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { BsInfoSquareFill } from 'react-icons/bs';
-import { PiTranslateFill } from 'react-icons/pi';
-import { AiFillAppstore } from 'react-icons/ai';
+import { LuSlidersHorizontal, LuLanguages, LuScanLine, LuKeyboard, LuPuzzle, LuHistory, LuInfo } from 'react-icons/lu';
 import { useTranslation } from 'react-i18next';
-import { PiTextboxFill } from 'react-icons/pi';
-import { MdKeyboardAlt } from 'react-icons/md';
-import { MdExtension } from 'react-icons/md';
-import { AiFillCloud } from 'react-icons/ai';
-import { FaHistory } from 'react-icons/fa';
 import { Button } from '@nextui-org/react';
 import React from 'react';
+
+const sections = [
+    ['general', LuSlidersHorizontal],
+    ['translate', LuLanguages],
+    ['recognize', LuScanLine],
+    ['hotkey', LuKeyboard],
+    ['service', LuPuzzle],
+    ['history', LuHistory],
+    ['about', LuInfo],
+];
 
 export default function SideBar() {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const location = useLocation();
 
-    function setStyle(pathname) {
-        return location.pathname.includes(pathname) ? 'flat' : 'light';
-    }
-
     return (
-        <div className='config-nav mx-[10px] overflow-y-auto'>
-            <Button
-                fullWidth
-                size='lg'
-                variant={setStyle('/general')}
-                className='config-nav-item mb-[3px]'
-                onPress={() => {
-                    navigate('/general');
-                }}
-                startContent={<AiFillAppstore className='text-[18px]' />}
-            >
-                <div className='w-full'>{t('config.general.label')}</div>
-            </Button>
-            <Button
-                fullWidth
-                size='lg'
-                variant={setStyle('/translate')}
-                className='config-nav-item mb-[3px]'
-                onPress={() => {
-                    navigate('/translate');
-                }}
-                startContent={<PiTranslateFill className='text-[18px]' />}
-            >
-                <div className='w-full'>{t('config.translate.label')}</div>
-            </Button>
-            <Button
-                fullWidth
-                size='lg'
-                variant={setStyle('/recognize')}
-                className='config-nav-item mb-[3px]'
-                onPress={() => {
-                    navigate('/recognize');
-                }}
-                startContent={<PiTextboxFill className='text-[18px]' />}
-            >
-                <div className='w-full'>{t('config.recognize.label')}</div>
-            </Button>
-            <Button
-                fullWidth
-                size='lg'
-                variant={setStyle('/hotkey')}
-                className='config-nav-item mb-[3px]'
-                onPress={() => {
-                    navigate('/hotkey');
-                }}
-                startContent={<MdKeyboardAlt className='text-[18px]' />}
-            >
-                <div className='w-full'>{t('config.hotkey.label')}</div>
-            </Button>
-            <Button
-                fullWidth
-                size='lg'
-                variant={setStyle('/service')}
-                className='config-nav-item mb-[3px]'
-                onPress={() => {
-                    navigate('/service');
-                }}
-                startContent={<MdExtension className='text-[18px]' />}
-            >
-                <div className='w-full'>{t('config.service.label')}</div>
-            </Button>
-            <Button
-                fullWidth
-                size='lg'
-                variant={setStyle('/history')}
-                className='config-nav-item mb-[3px]'
-                onPress={() => {
-                    navigate('/history');
-                }}
-                startContent={<FaHistory className='text-[18px]' />}
-            >
-                <div className='w-full'>{t('config.history.label')}</div>
-            </Button>
-            <Button
-                fullWidth
-                size='lg'
-                variant={setStyle('/backup')}
-                className='config-nav-item mb-[3px]'
-                onPress={() => {
-                    navigate('/backup');
-                }}
-                startContent={<AiFillCloud className='text-[18px]' />}
-            >
-                <div className='w-full'>{t('config.backup.label')}</div>
-            </Button>
-            <Button
-                fullWidth
-                size='lg'
-                variant={setStyle('/about')}
-                className='config-nav-item mb-[3px]'
-                onPress={() => {
-                    navigate('/about');
-                }}
-                startContent={<BsInfoSquareFill className='text-[18px]' />}
-            >
-                <div className='w-full'>{t('config.about.label')}</div>
-            </Button>
-        </div>
+        <nav
+            className='config-nav'
+            aria-label={t('config.ui.navigation')}
+        >
+            {sections.map(([key, Icon]) => {
+                const selected = location.pathname === `/${key}`;
+                return (
+                    <Button
+                        key={key}
+                        fullWidth
+                        variant='light'
+                        className={`config-nav-item ${selected ? 'is-active' : ''}`}
+                        aria-current={selected ? 'page' : undefined}
+                        onPress={() => navigate(`/${key}`)}
+                        startContent={
+                            <Icon
+                                size={17}
+                                aria-hidden='true'
+                            />
+                        }
+                    >
+                        <span>{t(`config.${key}.label`)}</span>
+                    </Button>
+                );
+            })}
+        </nav>
     );
 }

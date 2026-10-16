@@ -4,25 +4,12 @@ import { invoke } from '@tauri-apps/api/tauri';
 // 模型在 设置 → 翻译服务 → 本地离线翻译 中按需下载（每方向约 82MB，不随包分发）。
 // 基准（docs/research/translation-engine-benchmark-2026.md）：158MB 内存 / 106ms@4 线程 / BLEU 53.8
 
-// 应用语言键 → 简单语向代码（本地模型只区分中/英）
-function normLang(lang) {
-    const l = String(lang ?? '').toLowerCase();
-    if (l.startsWith('en')) {
-        return 'en';
-    }
-    if (l.startsWith('zh') || l === 'cmn') {
-        return 'zh';
-    }
-    return null;
-}
+import { resolveLocalPair, localThreadCount } from './options';
 
 export async function translate(text, from, to, options = {}) {
     const { config, detect } = options;
-    const threads = config && config['threads'] ? parseInt(config['threads'], 10) : 4;
-
-    const fromCode = from === 'auto' ? normLang(detect) : from;
-    const toCode = to;
-    const pair = `${fromCode}-${toCode}`;
+    const threads = localThreadCount(config?.threads);
+    const pair = resolveLocalPair(from === 'auto' ? detect : from, to);
     if (pair !== 'en-zh' && pair !== 'zh-en') {
         // 与其余 85 处服务层错误保持一致，用英文（服务层拿不到 t，回退语言即英文）
         throw `Local offline translation only supports English <-> Chinese (en-zh / zh-en), got ${pair}`;
@@ -30,7 +17,8 @@ export async function translate(text, from, to, options = {}) {
     return await invoke('local_mt_translate', {
         pair,
         text,
-        threads: isNaN(threads) ? 4 : threads,
+        threads,
+        quality: ['fast', 'thorough'].includes(config?.quality) ? config.quality : 'balanced',
     });
 }
 

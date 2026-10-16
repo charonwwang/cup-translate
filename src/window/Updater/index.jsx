@@ -1,6 +1,6 @@
 import { Code, Card, CardBody, Button, Progress, Skeleton } from '@nextui-org/react';
-import { checkUpdate, installUpdate } from '@tauri-apps/api/updater';
-import React, { useEffect, useState } from 'react';
+import { installUpdate } from '@tauri-apps/api/updater';
+import React, { useEffect, useRef, useState } from 'react';
 import { appWindow } from '@tauri-apps/api/window';
 import { relaunch } from '@tauri-apps/api/process';
 import toast, { Toaster } from 'react-hot-toast';
@@ -9,16 +9,17 @@ import { listen } from '@tauri-apps/api/event';
 import ReactMarkdown from 'react-markdown';
 
 import { useConfig, useToastStyle } from '../../hooks';
+import { checkForUpdate } from '../../utils/updateCheck';
 import { osType } from '../../utils/env';
-
-let unlisten = 0;
-let eventId = 0;
 
 export default function Updater() {
     const [transparent] = useConfig('transparent', true);
     const [downloaded, setDownloaded] = useState(0);
     const [total, setTotal] = useState(0);
     const [body, setBody] = useState('');
+    const [status, setStatus] = useState('checking');
+    const busy = useRef(false);
+    const [attempt, setAttempt] = useState(0);
     const { t } = useTranslation();
     const toastStyle = useToastStyle();
 
@@ -26,21 +27,30 @@ export default function Updater() {
         if (appWindow.label === 'updater') {
             appWindow.show();
         }
-        checkUpdate().then(
+        let disposed = false;
+        let eventId = 0;
+        let removeListener;
+        setStatus('checking');
+        setBody('');
+        checkForUpdate().then(
             (update) => {
+                if (disposed) return;
+                setStatus(update.shouldUpdate ? 'available' : 'latest');
                 if (update.shouldUpdate) {
-                    setBody(update.manifest.body);
+                    setBody(update.manifest?.body || `v${update.manifest?.version || ''}`);
                 } else {
                     setBody(t('updater.latest'));
                 }
             },
             (e) => {
-                setBody(e.toString());
-                toast.error(e.toString(), { style: toastStyle });
+                if (disposed) return;
+                setStatus('error');
+                setBody(t('updater.check_failed'));
+                console.error('Update check failed', e);
             }
         );
-        if (unlisten === 0) {
-            unlisten = listen('tauri://update-download-progress', (e) => {
+        {
+            listen('tauri://update-download-progress', (e) => {
                 if (eventId === 0) {
                     eventId = e.id;
                 }
@@ -58,9 +68,16 @@ export default function Updater() {
                         return a + e.payload.chunkLength;
                     });
                 }
+            }).then((remove) => {
+                if (disposed) remove();
+                else removeListener = remove;
             });
         }
-    }, []);
+        return () => {
+            disposed = true;
+            removeListener?.();
+        };
+    }, [attempt]);
 
     return (
         <div
@@ -82,7 +99,7 @@ export default function Updater() {
                     <h2>{t('updater.title')}</h2>
                 </div>
             </div>
-            <Card className='mx-[80px] mt-[10px] overscroll-auto h-[calc(100vh-150px)]'>
+            <Card className='mx-[24px] mt-[10px] overscroll-auto h-[calc(100vh-150px)]'>
                 <CardBody>
                     {body === '' ? (
                         <div className='space-y-3'>
@@ -140,7 +157,7 @@ export default function Updater() {
                     )}
                 </CardBody>
             </Card>
-            {downloaded !== 0 && (
+            {status === 'installing' && (
                 <Progress
                     aria-label='Downloading...'
                     label={t('updater.progress')}
@@ -148,44 +165,63 @@ export default function Updater() {
                     // 我们不知道总量，此时显示不确定进度（0）而不是 Infinity。
                     value={total > 0 ? (downloaded / total) * 100 : 0}
                     classNames={{
-                        base: 'w-full px-[80px]',
+                        base: 'w-full px-[24px]',
                         track: 'drop-shadow-md border border-default',
-                        indicator: 'bg-gradient-to-r from-pink-500 to-yellow-500',
+                        indicator: 'bg-gradient-to-r from-emerald-600 to-teal-500',
                         label: 'tracking-wider font-medium text-default-600',
                         value: 'text-foreground/60',
                     }}
-                    showValueLabel
+                    isIndeterminate={total <= 0}
+                    showValueLabel={total > 0}
                     size='sm'
                 />
             )}
 
-            <div className='grid gap-4 grid-cols-2 h-[50px] my-[10px] mx-[80px]'>
+            <div className='grid gap-4 grid-cols-2 h-[50px] my-[10px] mx-[24px]'>
                 <Button
                     variant='flat'
-                    isLoading={downloaded !== 0}
-                    isDisabled={downloaded !== 0}
+                    isLoading={status === 'checking' || status === 'installing'}
+                    isDisabled={status === 'checking' || status === 'installing' || status === 'latest'}
                     color='primary'
-                    onPress={() => {
-                        installUpdate().then(
-                            () => {
-                                toast.success(t('updater.installed'), { style: toastStyle, duration: 10000 });
-                                relaunch();
-                            },
-                            (e) => {
-                                toast.error(e.toString(), { style: toastStyle });
-                            }
-                        );
+                    onPress={async () => {
+                        if (status === 'error') {
+                            setAttempt((value) => value + 1);
+                            return;
+                        }
+                        if (status !== 'available' || busy.current) return;
+                        busy.current = true;
+                        setDownloaded(0);
+                        setTotal(0);
+                        setStatus('installing');
+                        try {
+                            await installUpdate();
+                            toast.success(t('updater.installed'), { style: toastStyle });
+                            await relaunch();
+                        } catch (error) {
+                            setStatus('error');
+                            setBody(t('updater.install_failed'));
+                            console.error('Update installation failed', error);
+                        } finally {
+                            busy.current = false;
+                        }
                     }}
                 >
-                    {downloaded !== 0
+                    {status === 'installing'
                         ? total > 0 && downloaded > total
                             ? t('updater.installing')
                             : t('updater.downloading')
-                        : t('updater.update')}
+                        : t(
+                              status === 'error'
+                                  ? 'updater.retry'
+                                  : status === 'checking'
+                                    ? 'updater.checking'
+                                    : 'updater.update'
+                          )}
                 </Button>
                 <Button
                     variant='flat'
-                    color='danger'
+                    isDisabled={status === 'installing'}
+                    color='default'
                     onPress={() => {
                         appWindow.close();
                     }}

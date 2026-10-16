@@ -1,13 +1,13 @@
+import { lazy } from 'react';
 import { Navigate } from 'react-router-dom';
 
-import Translate from '../pages/Translate';
-import Recognize from '../pages/Recognize';
-import General from '../pages/General';
-import Service from '../pages/Service';
-import History from '../pages/History';
-import Hotkey from '../pages/Hotkey';
-import Backup from '../pages/Backup';
-import About from '../pages/About';
+const Translate = lazy(() => import('../pages/Translate'));
+const Recognize = lazy(() => import('../pages/Recognize'));
+const General = lazy(() => import('../pages/General'));
+const Service = lazy(() => import('../pages/Service'));
+const History = lazy(() => import('../pages/History'));
+const Hotkey = lazy(() => import('../pages/Hotkey'));
+const About = lazy(() => import('../pages/About'));
 
 const routes = [
     {
@@ -36,7 +36,12 @@ const routes = [
     },
     {
         path: '/backup',
-        element: <Backup />,
+        element: (
+            <Navigate
+                to='/general'
+                replace
+            />
+        ),
     },
     {
         path: '/about',

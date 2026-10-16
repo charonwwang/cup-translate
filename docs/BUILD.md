@@ -437,3 +437,14 @@ retry = 3
 ---
 
 > 本文档随构建链路变化同步更新。遇到新坑请直接补进 §6。☕
+
+### macOS 本地开发包
+
+使用 `pnpm package:macos:local` 构建 `.app` 并执行本地 ad-hoc 签名校验。
+脚本仅清理生成包中的 FinderInfo/ResourceFork 元数据，不清除隔离等安全属性。
+单独运行 `pnpm tauri build --bundles app` 后，也可运行 `bash packaging/sign-macos-local.sh`。
+本地签名不等同于 Developer ID 签名/公证，系统授权在重编译后的持续性仍需验证。
+
+### macOS DMG 与公开更新发布
+
+运行 `pnpm package:macos:dmg` 可生成本机架构的 DMG。双架构 GitHub Release、更新签名校验、公开下载仓库及 Apple 证书配置见 [MACOS_RELEASE.md](MACOS_RELEASE.md)。无 Apple Developer 账号时使用 ad-hoc 签名；这不等同于 Developer ID 或 Apple 公证。

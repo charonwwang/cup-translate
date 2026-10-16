@@ -1,3 +1,4 @@
+import ConfigTransfer from '../../components/ConfigTransfer';
 import { enable, isEnabled, disable } from 'tauri-plugin-autostart-api';
 import { DropdownTrigger } from '@nextui-org/react';
 import React, { useState, useEffect } from 'react';
@@ -14,7 +15,6 @@ import 'flag-icons/css/flag-icons.min.css';
 import { Input } from '@nextui-org/react';
 import { Card } from '@nextui-org/react';
 import { invoke } from '@tauri-apps/api';
-import { useTheme } from 'next-themes';
 
 import { useConfig } from '../../../../hooks/useConfig';
 import { LanguageFlag } from '../../../../utils/language';
@@ -45,7 +45,6 @@ export default function General() {
     const [proxyPassword, setProxyPassword] = useConfig('proxy_password', '');
     const [noProxy, setNoProxy] = useConfig('no_proxy', 'localhost,127.0.0.1');
     const { t, i18n } = useTranslation();
-    const { setTheme } = useTheme();
     const toastStyle = useToastStyle();
 
     const languageName = {
@@ -133,8 +132,11 @@ export default function General() {
     return (
         <>
             <Toaster />
-            <Card className='mb-[10px]'>
-                <CardBody>
+            <Card
+                data-cup-card
+                className='mb-[10px]'
+            >
+                <CardBody data-cup-body>
                     <div className='config-item'>
                         <h3>{t('config.general.auto_start')}</h3>
                         <Switch
@@ -182,14 +184,15 @@ export default function General() {
                             />
                         )}
                     </div>
-                    <div className='config-item'>
+                    <div className='config-item config-port-row'>
                         <h3 className='my-auto'>{t('config.general.server_port')}</h3>
                         {serverPort !== null && (
                             <Input
                                 type='number'
                                 variant='bordered'
                                 value={serverPort}
-                                labelPlacement='outside-left'
+                                aria-label={t('config.general.server_port')}
+                                className='config-port-control'
                                 onValueChange={(v) => {
                                     if (parseInt(v) !== serverPort) {
                                         if (timer) {
@@ -212,14 +215,16 @@ export default function General() {
                                         setServerPort(next);
                                     }
                                 }}
-                                className='max-w-[100px]'
                             />
                         )}
                     </div>
                 </CardBody>
             </Card>
-            <Card className='mb-[10px]'>
-                <CardBody>
+            <Card
+                data-cup-card
+                className='mb-[10px]'
+            >
+                <CardBody data-cup-body>
                     <div className='config-item'>
                         <h3 className='my-auto'>{t('config.general.app_language')}</h3>
                         {appLanguage !== null && (
@@ -387,27 +392,7 @@ export default function General() {
                                 </DropdownTrigger>
                                 <DropdownMenu
                                     aria-label='app theme'
-                                    onAction={(key) => {
-                                        setAppTheme(key);
-                                        if (key !== 'system') {
-                                            setTheme(key);
-                                        } else {
-                                            if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-                                                setTheme('dark');
-                                            } else {
-                                                setTheme('light');
-                                            }
-                                            window
-                                                .matchMedia('(prefers-color-scheme: dark)')
-                                                .addEventListener('change', (e) => {
-                                                    if (e.matches) {
-                                                        setTheme('dark');
-                                                    } else {
-                                                        setTheme('light');
-                                                    }
-                                                });
-                                        }
-                                    }}
+                                    onAction={(key) => setAppTheme(key)}
                                 >
                                     <DropdownItem key='system'>{t('config.general.theme.system')}</DropdownItem>
                                     <DropdownItem key='light'>{t('config.general.theme.light')}</DropdownItem>
@@ -582,8 +567,8 @@ export default function General() {
                     </div>
                 </CardBody>
             </Card>
-            <Card>
-                <CardBody>
+            <Card data-cup-card>
+                <CardBody data-cup-body>
                     <div className='config-item'>
                         <h3>{t('config.general.proxy.title')}</h3>
                         {proxyEnable !== null && (
@@ -618,7 +603,7 @@ export default function General() {
                             />
                         )}
                     </div>
-                    <div className='config-item'>
+                    <div className='config-item proxy-input-row'>
                         {proxyHost !== null && (
                             <Input
                                 type='url'
@@ -653,7 +638,7 @@ export default function General() {
                             />
                         )}
                     </div>
-                    <div className='config-item'>
+                    <div className='config-item proxy-input-row'>
                         {proxyUsername !== null && (
                             <Input
                                 type='text'
@@ -695,6 +680,7 @@ export default function General() {
                     </div>
                 </CardBody>
             </Card>
+            <ConfigTransfer />
         </>
     );
 }

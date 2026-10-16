@@ -1,3 +1,10 @@
+import { LuCopy, LuVolume2, LuSquare, LuLoader2 } from 'react-icons/lu';
+import { historyResult } from '../../../../utils/historyText';
+import { writeClipboardSafely } from '../../../../utils/clipboard';
+import { useSpeech } from '../../../../hooks/useSpeech';
+import { resolveSpeechService } from '../../../../utils/speechService';
+import * as ttsServices from '../../../../services/tts';
+import detect from '../../../../utils/lang_detect';
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, useDisclosure } from '@nextui-org/react';
 import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell } from '@nextui-org/react';
 import { readDir, BaseDirectory, readTextFile, exists } from '@tauri-apps/api/fs';
@@ -31,6 +38,76 @@ export default function History() {
     const { isOpen, onOpen, onOpenChange } = useDisclosure();
     const [pluginList, setPluginList] = useState(null);
     const [selectedItem, setSelectItem] = useState(null);
+    const [editing, setEditing] = useState(false);
+    const [reading, setReading] = useState('');
+    const [speechPolicy] = useConfig('speech_policy', 'engine');
+    const [ttsList] = useConfig('tts_service_list', ['google_tts']);
+    const speech = useSpeech(isOpen ? `${selectedItem?.id}:${selectedItem?.text}:${selectedItem?.result}` : null);
+    const copy = async (text) => {
+        if (await writeClipboardSafely(text)) toast.success(t('common.copied'), { style: toastStyle });
+        else toast.error(t('config.history.copy_failed'), { style: toastStyle });
+    };
+    const read = async (part) => {
+        if (reading !== part) speech.stop();
+        setReading(part);
+        try {
+            await speech.toggle(async () => {
+                const text = part === 'source' ? selectedItem.text : historyResult(selectedItem.result);
+                let language = part === 'source' ? selectedItem.source : selectedItem.target;
+                if (!language || language === 'auto') language = await detect(text);
+                const key = resolveSpeechService(getServiceName(selectedItem.service), speechPolicy, ttsList);
+                if (!key) throw new Error('Select a speech service in settings');
+                if (getServiceSouceType(key) === ServiceSourceType.PLUGIN) {
+                    const config = (await store.get(key)) || {};
+                    const metadata = JSON.parse(
+                        await readTextFile(`plugins/tts/${getServiceName(key)}/info.json`, {
+                            dir: BaseDirectory.AppConfig,
+                        })
+                    );
+                    const [func, utils] = await invoke_plugin('tts', getServiceName(key));
+                    if (!(language in metadata.language)) throw new Error('Unsupported speech language');
+                    return func(text, metadata.language[language], { config, utils });
+                }
+                const provider = ttsServices[getServiceName(key)];
+                if (!(language in provider.Language)) throw new Error('Unsupported speech language');
+                return provider.tts(text, provider.Language[language], { config: (await store.get(key)) || {} });
+            });
+        } catch {
+            toast.error(t('translate.speech_failed'), { style: toastStyle });
+        }
+    };
+    const actions = (part, text) => (
+        <div className='history-text-actions'>
+            <Button
+                size='sm'
+                variant='light'
+                startContent={<LuCopy size={14} />}
+                onPress={() => copy(text)}
+            >
+                {t('translate.copy')}
+            </Button>
+            <Button
+                size='sm'
+                variant='light'
+                startContent={
+                    reading === part && speech.status === 'loading' ? (
+                        <LuLoader2
+                            className='animate-spin'
+                            size={14}
+                        />
+                    ) : reading === part && speech.status === 'playing' ? (
+                        <LuSquare size={14} />
+                    ) : (
+                        <LuVolume2 size={14} />
+                    )
+                }
+                onPress={() => read(part)}
+            >
+                {t(reading === part && speech.status !== 'idle' ? 'translate.stop_speaking' : 'translate.speak')}
+            </Button>
+        </div>
+    );
+
     const [page, setPage] = useState(1);
     const [total, setTotal] = useState(0);
     const [items, setItems] = useState([]);
@@ -80,6 +157,7 @@ export default function History() {
             const db = await Database.load('sqlite:history.db');
             let result = await db.select('SELECT * FROM history WHERE id=$1', [id]);
             setSelectItem(result[0]);
+            setEditing(false);
         } catch (e) {
             logError('[history] load record failed: ' + e);
         }
@@ -175,9 +253,8 @@ export default function History() {
                     selectionBehavior='toggle'
                     aria-label='History Table'
                     classNames={{
-                        base: `${
-                            osType === 'Linux' ? 'h-[calc(100vh-130px)]' : 'h-[calc(100vh-100px)]'
-                        } overflow-y-auto`,
+                        base: 'history-table',
+                        table: 'table-fixed',
                         td: 'px-0',
                     }}
                     onRowAction={(id) => {
@@ -219,15 +296,7 @@ export default function History() {
                                         )}
                                     </TableCell>
                                     <TableCell>
-                                        <p
-                                            className={`whitespace-nowrap ${
-                                                osType === 'Linux'
-                                                    ? 'w-[calc((100vw-287px-26px-60px-140px-30px)*0.5)]'
-                                                    : 'w-[calc((100vw-287px-26px-60px-140px)*0.5)]'
-                                            } text-ellipsis overflow-hidden`}
-                                        >
-                                            {item.text}
-                                        </p>
+                                        <p className='history-preview'>{item.text}</p>
                                     </TableCell>
                                     <TableCell>
                                         <span className={`w-[30px] fi fi-${LanguageFlag[item.source]}`} />
@@ -236,20 +305,10 @@ export default function History() {
                                         <span className={`w-[30px] fi fi-${LanguageFlag[item.target]}`} />
                                     </TableCell>
                                     <TableCell>
-                                        <p
-                                            className={`whitespace-nowrap ${
-                                                osType === 'Linux'
-                                                    ? 'w-[calc((100vw-287px-26px-60px-140px-30px)*0.5)]'
-                                                    : 'w-[calc((100vw-287px-26px-60px-140px)*0.5)]'
-                                            } text-ellipsis overflow-hidden`}
-                                        >
-                                            {item.result}
-                                        </p>
+                                        <p className='history-preview'>{historyResult(item.result)}</p>
                                     </TableCell>
                                     <TableCell>
-                                        <p className='text-center whitespace-nowrap w-[140px]'>
-                                            {formatDate(new Date(item.timestamp))}
-                                        </p>
+                                        <p className='history-time'>{formatDate(new Date(item.timestamp))}</p>
                                     </TableCell>
                                 </TableRow>
                             )
@@ -260,7 +319,7 @@ export default function History() {
                     <Pagination
                         showControls
                         isCompact
-                        total={Math.ceil(total / 20)}
+                        total={Math.max(1, Math.ceil(total / 20))}
                         page={page}
                         onChange={setPage}
                     />
@@ -274,16 +333,18 @@ export default function History() {
                 </div>
 
                 <Modal
+                    aria-label={t('config.history.detail')}
+                    placement='center'
                     isOpen={isOpen}
                     onOpenChange={onOpenChange}
                     scrollBehavior='inside'
                 >
-                    <ModalContent className='max-h-[80vh]'>
+                    <ModalContent className='history-detail max-h-[85vh]'>
                         {(onClose) =>
                             selectedItem && (
                                 <>
                                     <ModalHeader>
-                                        <div className='flex justify-start'>
+                                        <div className='history-detail-heading'>
                                             {getServiceSouceType(selectedItem.service) === ServiceSourceType.PLUGIN ? (
                                                 <img
                                                     src={
@@ -300,32 +361,66 @@ export default function History() {
                                                     draggable={false}
                                                 />
                                             )}
+                                            <span>{t('config.history.detail')}</span>
                                         </div>
                                     </ModalHeader>
                                     <ModalBody>
-                                        <Textarea
-                                            value={selectedItem.text}
-                                            onChange={(e) => {
-                                                setSelectItem({ ...selectedItem, text: e.target.value });
-                                            }}
-                                        />
-                                        <Textarea
-                                            value={selectedItem.result}
-                                            onChange={(e) => {
-                                                setSelectItem({ ...selectedItem, result: e.target.value });
-                                            }}
-                                        />
+                                        <section className='history-text-section'>
+                                            <div className='history-section-heading'>
+                                                <h3>{t('config.history.source_text')}</h3>
+                                                {actions('source', selectedItem.text)}
+                                            </div>
+                                            <Textarea
+                                                aria-label={t('config.history.source_text')}
+                                                variant='bordered'
+                                                isReadOnly={!editing}
+                                                value={selectedItem.text}
+                                                minRows={2}
+                                                maxRows={8}
+                                                onValueChange={(text) => setSelectItem({ ...selectedItem, text })}
+                                            />
+                                        </section>
+                                        <section className='history-text-section'>
+                                            <div className='history-section-heading'>
+                                                <h3>{t('config.history.translated_text')}</h3>
+                                                {actions('target', historyResult(selectedItem.result))}
+                                            </div>
+                                            <Textarea
+                                                aria-label={t('config.history.translated_text')}
+                                                variant='bordered'
+                                                isReadOnly={!editing}
+                                                value={
+                                                    editing ? selectedItem.result : historyResult(selectedItem.result)
+                                                }
+                                                minRows={2}
+                                                maxRows={10}
+                                                onValueChange={(result) => setSelectItem({ ...selectedItem, result })}
+                                            />
+                                        </section>
                                     </ModalBody>
                                     <ModalFooter className='flex justify-between'>
-                                        <Button
-                                            color='primary'
-                                            onPress={async () => {
-                                                await updateData();
-                                                onClose();
-                                            }}
-                                        >
-                                            {t('common.save')}
-                                        </Button>
+                                        <div className='settings-actions'>
+                                            <Button
+                                                variant='light'
+                                                onPress={onClose}
+                                            >
+                                                {t('common.close', { defaultValue: 'Close' })}
+                                            </Button>
+                                            {historyResult(selectedItem.result) === selectedItem.result && (
+                                                <Button
+                                                    color={editing ? 'primary' : 'default'}
+                                                    variant={editing ? 'solid' : 'light'}
+                                                    onPress={async () => {
+                                                        if (editing) {
+                                                            await updateData();
+                                                            setEditing(false);
+                                                        } else setEditing(true);
+                                                    }}
+                                                >
+                                                    {t(editing ? 'common.save' : 'config.history.edit')}
+                                                </Button>
+                                            )}
+                                        </div>
                                         <ButtonGroup>
                                             {collectionServiceList &&
                                                 collectionServiceList.map((instanceKey) => {

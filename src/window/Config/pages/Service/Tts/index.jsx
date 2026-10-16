@@ -1,12 +1,11 @@
 import { DragDropContext, Draggable, Droppable } from 'react-beautiful-dnd';
-import { Card, Spacer, Button, useDisclosure } from '@nextui-org/react';
+import { Card, Spacer, Button, useDisclosure, Select, SelectItem } from '@nextui-org/react';
 import toast, { Toaster } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import React, { useState } from 'react';
 
 import { useToastStyle } from '../../../../../hooks';
 import SelectPluginModal from '../SelectPluginModal';
-import { osType } from '../../../../../utils/env';
 import { useConfig, deleteKey } from '../../../../../hooks';
 import ServiceItem from './ServiceItem';
 import SelectModal from './SelectModal';
@@ -26,6 +25,7 @@ export default function Tts(props) {
     const [ttsServiceInstanceList, setTtsServiceInstanceList] = useConfig('tts_service_list', ['google_tts']);
 
     const { t } = useTranslation();
+    const [speechPolicy, setSpeechPolicy] = useConfig('speech_policy', 'engine');
     const toastStyle = useToastStyle();
 
     const reorder = (list, startIndex, endIndex) => {
@@ -65,9 +65,33 @@ export default function Tts(props) {
         <>
             <Toaster />
             <Card
-                className={`${
-                    osType === 'Linux' ? 'h-[calc(100vh-140px)]' : 'h-[calc(100vh-120px)]'
-                } overflow-y-auto p-5 flex justify-between`}
+                data-cup-card
+                className='speech-policy-card'
+            >
+                <div className='speech-policy-heading'>
+                    <h3>{t('translate.speech_service')}</h3>
+                    <p>{t('translate.speech_policy_hint')}</p>
+                </div>
+                <Select
+                    aria-label={t('translate.speech_service')}
+                    selectedKeys={[speechPolicy || 'engine']}
+                    variant='bordered'
+                    size='sm'
+                    className='speech-policy-control'
+                    onSelectionChange={(keys) => {
+                        const key = [...keys][0];
+                        if (key) setSpeechPolicy(key);
+                    }}
+                >
+                    <SelectItem key='engine'>{t('translate.follow_engine')}</SelectItem>
+                    <SelectItem key='google'>Google</SelectItem>
+                    <SelectItem key='local'>{t('translate.local_speech')}</SelectItem>
+                    <SelectItem key='configured'>{t('translate.configured_speech')}</SelectItem>
+                </Select>
+            </Card>
+            <Card
+                data-cup-card
+                className='config-service-list p-5'
             >
                 <DragDropContext onDragEnd={onDragEnd}>
                     <Droppable
@@ -76,7 +100,7 @@ export default function Tts(props) {
                     >
                         {(provided) => (
                             <div
-                                className='overflow-y-auto h-full'
+                                className='min-h-[64px]'
                                 ref={provided.innerRef}
                                 {...provided.droppableProps}
                             >
@@ -118,6 +142,8 @@ export default function Tts(props) {
                 <div className='flex'>
                     <Button
                         fullWidth
+                        variant='flat'
+                        color='primary'
                         onPress={onSelectOpen}
                     >
                         {t('config.service.add_builtin_service')}
@@ -125,6 +151,7 @@ export default function Tts(props) {
                     <Spacer x={2} />
                     <Button
                         fullWidth
+                        variant='bordered'
                         onPress={onSelectPluginOpen}
                     >
                         {t('config.service.add_external_service')}

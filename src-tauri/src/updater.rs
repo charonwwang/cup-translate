@@ -16,7 +16,10 @@ pub fn check_update(app_handle: tauri::AppHandle) {
     };
     if enable {
         tauri::async_runtime::spawn(async move {
-            match tauri::updater::builder(app_handle).check().await {
+            match tauri::updater::builder(app_handle)
+                .timeout(std::time::Duration::from_secs(30))
+                .check()
+                .await {
                 Ok(update) => {
                     if update.is_update_available() {
                         info!("New version available");

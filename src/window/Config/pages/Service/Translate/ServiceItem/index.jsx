@@ -1,8 +1,7 @@
 import { RxDragHandleHorizontal } from 'react-icons/rx';
 import { Spacer, Button, Switch } from '@nextui-org/react';
-import { MdDeleteOutline } from 'react-icons/md';
+import { LuTrash2, LuPencil } from 'react-icons/lu';
 import { useTranslation } from 'react-i18next';
-import { BiSolidEdit } from 'react-icons/bi';
 import React from 'react';
 
 import * as builtinServices from '../../../../../../services/translate';
@@ -27,7 +26,7 @@ export default function ServiceItem(props) {
         <></>
     ) : (
         serviceInstanceConfig !== null && (
-            <div className='bg-content2 rounded-md px-[10px] py-[20px] flex justify-between'>
+            <div className='config-service-row'>
                 <div className='flex'>
                     <div
                         {...drag}
@@ -86,7 +85,7 @@ export default function ServiceItem(props) {
                             onConfigOpen();
                         }}
                     >
-                        <BiSolidEdit className='text-2xl' />
+                        <LuPencil className='text-2xl' />
                     </Button>
                     <Spacer x={2} />
                     <Button
@@ -98,7 +97,7 @@ export default function ServiceItem(props) {
                             deleteServiceInstance(serviceInstanceKey);
                         }}
                     >
-                        <MdDeleteOutline className='text-2xl' />
+                        <LuTrash2 className='text-2xl' />
                     </Button>
                 </div>
             </div>
