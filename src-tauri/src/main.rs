@@ -46,6 +46,31 @@ pub static APP: OnceCell<tauri::AppHandle> = OnceCell::new();
 // Text to be translated
 pub struct StringWrapper(pub Mutex<String>);
 
+/// 决定本次启动使用的语言检测引擎，并把 `bing` 迁移掉。
+///
+/// 抽成纯函数是为了可单测：这段逻辑**决定要不要调用 `init_lang_detect()`**，
+/// 判错会让本地检测在首次使用时才加载模型（用户可感知的卡顿），
+/// 而且它会**真的改写用户配置**（`set`），与 `config.rs::should_keep_instance`
+/// 属于同一类「改错就等于静默改用户数据」的逻辑，值得有测试守着。
+///
+/// 规则：
+/// - `Some("bing")` -> `"local"`（该引擎已删除，见 `main` 中的说明）
+/// - `Some(其它字符串)` -> 原样返回（尊重用户选择）
+/// - `Some(非字符串)` -> `"local"`（类型异常，退回默认）
+/// - `None`（键不存在）-> `"local"`
+fn resolve_detect_engine(stored: Option<serde_json::Value>) -> String {
+    match stored {
+        Some(engine) => match engine.as_str() {
+            // 已删除的检测引擎：迁移到 local
+            Some("bing") => "local".to_string(),
+            Some(other) => other.to_string(),
+            // 非字符串（null / 数字 / 对象）：退回默认，不 panic
+            None => "local".to_string(),
+        },
+        None => "local".to_string(),
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, cwd| {
@@ -125,13 +150,19 @@ fn main() {
             check_update(app.handle());
             // 语言检测默认走本地（lingua），与前端默认值保持一致：
             // 键缺失时写入默认值并初始化，切换到 local 时同样需要初始化
-            let detect_engine = match get("translate_detect_engine") {
-                Some(engine) => engine.as_str().unwrap_or("local").to_string(),
-                None => {
-                    set("translate_detect_engine", "local");
-                    "local".to_string()
-                }
-            };
+            //
+            // 老配置里可能残留 `bing`：该检测引擎已删除（取 token 的端点实测 404，
+            // 与被删除的 translate/bing 同一端点，且失败时静默返回 'en'）。
+            // 迁移到 `local` 而不是放任它落到前端的 default 分支 —— 两者结果相同，
+            // 但在这里改掉能让配置本身自洽，用户下次打开设置页看到的就是实际生效值。
+            let detect_engine = resolve_detect_engine(get("translate_detect_engine"));
+            // 把迁移后的值落盘，让配置自洽（用户下次打开设置页看到的就是实际生效值）。
+            // 只在「读取到的值与生效值不同」时写，避免每次启动都无谓改写配置文件。
+            if get("translate_detect_engine").as_ref().and_then(|v| v.as_str())
+                != Some(detect_engine.as_str())
+            {
+                set("translate_detect_engine", &detect_engine);
+            }
             if detect_engine == "local" {
                 init_lang_detect();
             }
@@ -184,4 +215,61 @@ fn main() {
                 api.prevent_exit();
             }
         });
+}
+
+#[cfg(test)]
+mod resolve_detect_engine_tests {
+    use super::resolve_detect_engine;
+    use serde_json::json;
+
+    /// 已删除的引擎必须被迁移到 local —— 否则它会落到前端的 default 分支，
+    /// 虽然结果相同，但配置里留着一个不存在的引擎名会让设置页显示错值。
+    #[test]
+    fn removed_bing_engine_migrates_to_local() {
+        assert_eq!(resolve_detect_engine(Some(json!("bing"))), "local");
+    }
+
+    /// 仍需尊重用户对**其它**引擎的选择，不能借迁移之名一律改成 local。
+    #[test]
+    fn other_engines_are_preserved_verbatim() {
+        for engine in ["baidu", "google", "tencent", "niutrans", "yandex", "local"] {
+            assert_eq!(
+                resolve_detect_engine(Some(json!(engine))),
+                engine,
+                "`{engine}` must be preserved"
+            );
+        }
+    }
+
+    /// `yandex` 虽在部分地区返回 403，但那是地区封锁、端点仍存在，
+    /// **不能**与 bing 同处置（这是本轮特意区分的一点）。
+    #[test]
+    fn yandex_is_not_treated_as_removed() {
+        assert_eq!(resolve_detect_engine(Some(json!("yandex"))), "yandex");
+    }
+
+    /// 键缺失 -> 默认 local（与前端 `?? 'local'` 一致）。
+    #[test]
+    fn missing_key_defaults_to_local() {
+        assert_eq!(resolve_detect_engine(None), "local");
+    }
+
+    /// 类型异常（null / 数字 / 对象 / 数组）不能让启动 panic，退回默认。
+    #[test]
+    fn non_string_values_fall_back_to_local() {
+        for value in [json!(null), json!(42), json!({}), json!(["local"])] {
+            assert_eq!(
+                resolve_detect_engine(Some(value.clone())),
+                "local",
+                "non-string value {value} must fall back to local"
+            );
+        }
+    }
+
+    /// 空字符串是**有效**的 serde 字符串，会原样返回；
+    /// 这里记录该行为，避免将来误以为它会被当作缺失处理。
+    #[test]
+    fn empty_string_is_returned_as_is_and_is_not_a_valid_engine() {
+        assert_eq!(resolve_detect_engine(Some(json!(""))), "");
+    }
 }

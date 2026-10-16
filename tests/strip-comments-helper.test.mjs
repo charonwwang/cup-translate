@@ -82,18 +82,40 @@ test('backticks keep their contents and do not leak into code', () => {
     assert.match(code, /const after = 2;/, 'code after the template must remain');
 });
 
-test('the real lang_detect.js source keeps its invoke command', async () => {
-    // 回归：这正是坑 1 的真实触发点（该文件里有通配 MIME 类型）。
-    const src = await readFile('src/utils/lang_detect.js', 'utf8');
-    assert.ok(src.includes("'*/*'"), 'precondition: the wildcard MIME type is still there');
+test('a committed fixture reproduces the wildcard-MIME trap on real-looking source', async () => {
+    // 回归：坑 1 的**真实结构**样本。
+    //
+    // 原先是直接拿 `src/utils/lang_detect.js` 当样本，因为 `bing_detect` 的请求头
+    // 里有通配 MIME 类型。后来 `bing_detect` 因端点实测 404 被删除
+    // （见 `src/utils/lang_detect.js` 中的说明），该文件里不再有那三个字符，
+    // 全仓库也再无第二处 —— 真实样本消失，本用例的前提断言失效。
+    //
+    // 处置：改用受版本控制的 fixture，它的触发几何与原文件一致
+    // （字符串里的通配 MIME 类型 -> 夹在中间的 `local_detect()` -> 后方的注释定界符）。
+    // fixture 自身带有「改动注意事项」，见该文件末尾说明。
+    const src = await readFile('tests/fixtures/comment-stripper-trap.js', 'utf8');
 
+    // 前提 1：触发点确实存在（否则本用例又变成无效的）
+    assert.ok(src.includes("'*/*'"), 'precondition: the wildcard MIME type must be present');
+
+    // 前提 2：朴素实现**确实会**在这份样本上出错 —— 否则测不出任何东西。
+    // 这一条是关键：没有它，样本有一天退化成「朴素实现也能处理」时，
+    // 本用例会一直绿着而毫无价值（我写这个 fixture 时正是这样错了两次）。
+    const naive = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    const naiveNames = new Set([...naive(src).matchAll(/invoke\(\s*['"]([a-z0-9_]+)['"]/g)].map((m) => m[1]));
+    assert.ok(
+        !naiveNames.has('lang_detect'),
+        'precondition: the naive stripper must lose lang_detect on this fixture, otherwise the case is vacuous'
+    );
+
+    // 正题：共享 helper 必须保住它
     const names = invokedCommandNames(src);
     assert.ok(names.has('lang_detect'), 'the naive stripper lost this command; the shared helper must not');
 });
 
 test('the helper finds every command a naive stripper would miss', async () => {
-    // 交叉验证：对整个 src/ 扫描，正确实现找到的命令集合必须**包含**
-    // 朴素实现找到的，且本例中严格更大（多出 lang_detect）。
+    // 交叉验证：扫描整个 src/ **加上** fixture 目录，正确实现找到的命令集合必须
+    // **包含**朴素实现找到的，且严格更大（多出 fixture 里的 lang_detect）。
     const { readdir } = await import('node:fs/promises');
     const files = [];
     const walk = async (dir) => {
@@ -104,6 +126,9 @@ test('the helper finds every command a naive stripper would miss', async () => {
         }
     };
     await walk('src');
+    // fixture 也要扫：它是当前**唯一**能区分两种实现的地方。
+    // （`src/` 下已无真实触发样本，见上一条用例的说明。）
+    await walk('tests/fixtures');
 
     const naiveStrip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
@@ -115,12 +140,19 @@ test('the helper finds every command a naive stripper would miss', async () => {
         for (const m of naiveStrip(src).matchAll(/invoke\(\s*['"]([a-z0-9_]+)['"]/g)) naive.add(m[1]);
     }
 
-    assert.ok(correct.size > naive.size, 'the correct helper must find strictly more commands here');
+    assert.ok(correct.size >= naive.size, 'the helper must find at least as many commands as the naive stripper');
     for (const n of naive) {
         assert.ok(correct.has(n), `'${n}' found by the naive stripper must also be found by the helper`);
     }
-    assert.ok(
-        [...correct].filter((n) => !naive.has(n)).includes('lang_detect'),
-        'lang_detect is exactly the command the naive stripper loses'
-    );
+    assert.ok(correct.has('lang_detect'), 'the helper must still see lang_detect somewhere in the tree');
+
+    // ⚠️ 这里**不再**断言「正确实现严格更多」。
+    //
+    // 原先可以：`src/utils/lang_detect.js` 的 `local_detect()` 会被朴素实现吞掉，
+    // 于是全仓聚合时丢了 `lang_detect`。但删除 `bing_detect` 后该文件不再被吞，
+    // 聚合层面的差异随之消失 —— 实测确认，现在**只有 fixture 那个文件**能区分
+    // 两种实现（「严格更多」已在上一条用例里针对该文件断言）。
+    //
+    // 保留包含关系而非删除用例：包含关系是**永不退化**的性质
+    //（helper 永远不该比朴素实现找到得更少），它正是这个共享底座的意义。
 });

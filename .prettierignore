@@ -4,3 +4,7 @@ node_modules
 public
 target
 *-lock*
+
+# 刻意保持原样的测试样本：它的注释定界符布局本身就是被测试的对象，
+# 格式化会改变触发几何、让用例静默失效。见该文件末尾说明。
+tests/fixtures/comment-stripper-trap.js

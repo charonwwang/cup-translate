@@ -121,7 +121,11 @@ export default function Translate() {
                                     <DropdownItem key='tencent'>{t(`config.translate.tencent`)}</DropdownItem>
                                     <DropdownItem key='niutrans'>{t(`config.translate.niutrans`)}</DropdownItem>
                                     <DropdownItem key='google'>{t(`config.translate.google`)}</DropdownItem>
-                                    <DropdownItem key='bing'>{t(`config.translate.bing`)}</DropdownItem>
+                                    {/* `bing` 检测已移除：它第一步要取的 token 端点
+                                        `edge.microsoft.com/translate/auth` 实测 404，
+                                        与被删除的 `translate/bing` 是**同一个**端点；
+                                        且失败时静默返回 'en'（中文被当成英文）。
+                                        详见 `src/utils/lang_detect.js` 中的说明。 */}
                                     <DropdownItem key='yandex'>{t(`config.translate.yandex`)}</DropdownItem>
                                     <DropdownItem key='local'>{t(`config.translate.local`)}</DropdownItem>
                                 </DropdownMenu>

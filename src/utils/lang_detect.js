@@ -228,83 +228,23 @@ async function yandex_detect(text) {
     }
     return 'en';
 }
-// https://learn.microsoft.com/en-us/azure/ai-services/translator/language-support
-async function bing_detect(text) {
-    const lang_map = {
-        'zh-Hans': 'zh_cn',
-        'zh-Hant': 'zh_tw',
-        en: 'en',
-        ja: 'ja',
-        ko: 'ko',
-        fr: 'fr',
-        es: 'es',
-        ru: 'ru',
-        de: 'de',
-        it: 'it',
-        tr: 'tr',
-        'pt-pt': 'pt_pt',
-        pt: 'pt_br',
-        vi: 'vi',
-        id: 'id',
-        th: 'th',
-        ms: 'ms',
-        ar: 'ar',
-        hi: 'hi',
-        'mn-Cyrl': 'mn_cy',
-        'mn-Mong': 'mn_mo',
-        km: 'km',
-        nb: 'nb_no',
-        fa: 'fa',
-        uk: 'uk',
-    };
-    const token_url = 'https://edge.microsoft.com/translate/auth';
-
-    let token = await fetch(token_url, {
-        method: 'GET',
-        headers: {
-            'User-Agent':
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36 Edg/113.0.1774.42',
-        },
-        responseType: 2,
-    });
-    if (token.ok) {
-        const url = 'https://api-edge.cognitive.microsofttranslator.com/detect';
-
-        let res = await fetch(url, {
-            method: 'POST',
-            headers: {
-                accept: '*/*',
-                'accept-language': 'zh-TW,zh;q=0.9,ja;q=0.8,zh-CN;q=0.7,en-US;q=0.6,en;q=0.5',
-                authorization: 'Bearer ' + token.data,
-                'cache-control': 'no-cache',
-                'content-type': 'application/json',
-                pragma: 'no-cache',
-                'sec-ch-ua': '"Microsoft Edge";v="113", "Chromium";v="113", "Not-A.Brand";v="24"',
-                'sec-ch-ua-mobile': '?0',
-                'sec-ch-ua-platform': '"Windows"',
-                'sec-fetch-dest': 'empty',
-                'sec-fetch-mode': 'cors',
-                'sec-fetch-site': 'cross-site',
-                Referer: 'https://appsumo.com/',
-                'Referrer-Policy': 'strict-origin-when-cross-origin',
-                'User-Agent':
-                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36 Edg/113.0.1774.42',
-            },
-            query: {
-                'api-version': '3.0',
-            },
-            body: { type: 'Json', payload: [{ Text: text }] },
-        });
-
-        if (res.ok) {
-            let result = res.data;
-            if (result[0].language && result[0].language in lang_map) {
-                return lang_map[result[0].language];
-            }
-        }
-    }
-    return 'en';
-}
+// 原先此处有 `bing_detect`，已于本轮**删除**。
+//
+// 依据（与 `translate/bing` 的处置完全同源）：
+//   · `bing_detect` 的第一步是取 token：`https://edge.microsoft.com/translate/auth`
+//   · 该端点**实测返回 HTTP 404**（2026-10，带完整 Edge UA 复测仍 404）
+//   · 已删除的 `src/services/translate/bing/index.jsx`（见提交 a4d58de）
+//     用的**正是同一个端点**，当时判定为「上游全死且无自建入口」而移除
+//   · 即检测侧留下的是同一条死链路，属漏网
+//
+// 危害不只是「多一次失败请求」：`token.ok` 为 false 时该函数**静默落到末尾
+// 的 `return 'en'`**，于是中文被判定为英文 —— 界面上会显示「英语」语言标签
+// （SourceArea 的 detectLanguage chip），并把错误的源语言传给翻译引擎。
+// 已用受控执行复现：喂 "你好世界" 得到 'en'。
+//
+// 因此删除比保留更诚实：用户不会再选到一个必然误判的引擎，
+// 老配置里残留的 'bing' 会落到 `detect()` 的 default 分支改走本地检测
+// （离线、零配置），行为优于原先的静默退化。
 
 async function local_detect(text) {
     return await invoke('lang_detect', { text: text });
@@ -316,7 +256,9 @@ async function local_detect(text) {
  * 各引擎末尾的 `return 'en'` 只兜住「响应格式异常」，兜不住「抛出的异常」：
  *   · `store.get('translate_detect_engine')` 读取失败会 reject
  *   · local 引擎走 invoke('lang_detect')，Rust 侧出错即 reject
- *   · baidu/google/tencent/niutrans/yandex/bing 是网络请求，离线必 reject
+ *   · baidu/google/tencent/niutrans/yandex 是网络请求，离线必 reject
+ *     （`bing` 检测已删除，见文件上方说明 —— 它的死端点甚至走不到「reject」，
+ *      而是静默返回 'en'，比 reject 更隐蔽）
  *
  * 调用方（SourceArea 的动态翻译）只在 .then 里做后续同步，
  * 一旦这里 reject，后续同步就被静默跳过 —— 表现为翻译结果停留在上一段文本。
@@ -340,8 +282,9 @@ export default async function detect(text) {
                 return await niutrans_detect(text);
             case 'yandex':
                 return await yandex_detect(text);
-            case 'bing':
-                return await bing_detect(text);
+            // `bing` 检测已移除（见下方 bing_detect 处的说明）。
+            // 老配置里若仍存着 'bing'，会落到 default -> local_detect，
+            // 行为**优于**原先的「静默退化为 en」，因此这里不需要特判迁移。
             default:
                 return await local_detect(text);
         }
