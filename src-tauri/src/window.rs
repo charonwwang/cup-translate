@@ -413,6 +413,7 @@ pub fn selection_translate() {
     }
 
     // 兜底：用 CGEvent 模拟 Cmd+C 获取选中文本（不需要 Automation 权限）
+    #[cfg(target_os = "macos")]
     if text.trim().is_empty() {
         info!("selection_translate: trying CGEvent Cmd+C fallback");
         if let Some(clip_text) = copy_selection_via_cgevent() {
@@ -599,6 +600,7 @@ fn screenshot_window() -> Window {
 /// 这一步恰好是修复的核心，且完全可以在测试里用临时文件验证。
 ///
 /// 文件本来就不存在（首次截图）不算错误，静默通过。
+#[cfg(target_os = "macos")]
 fn remove_stale_screenshot(path: &str) -> std::io::Result<()> {
     match fs::remove_file(path) {
         Ok(()) => Ok(()),
@@ -607,6 +609,7 @@ fn remove_stale_screenshot(path: &str) -> std::io::Result<()> {
     }
 }
 
+#[cfg(target_os = "macos")]
 fn macos_capture_screenshot(path: &str) -> bool {
     if let Err(e) = remove_stale_screenshot(path) {
         warn!("capture: cannot remove the stale screenshot: {e:?}");
