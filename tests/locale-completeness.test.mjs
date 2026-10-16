@@ -163,8 +163,8 @@ test('the i18n fallback chain still terminates at English', async () => {
     ]) {
         const [a, b] = pair;
         if (new RegExp(`${a}:\\s*\\['${b}'\\]`).test(block)) {
-            const ca = Object.keys(await loadLocale(a.toUpperCase())).length;
-            const cb = Object.keys(await loadLocale(b.toUpperCase())).length;
+            const ca = Object.keys(await loadLocale(a.slice(0, 2) + a.slice(2).toUpperCase())).length;
+            const cb = Object.keys(await loadLocale(b.slice(0, 2) + b.slice(2).toUpperCase())).length;
             assert.ok(
                 ca > 10 || cb > 10,
                 `${a} <-> ${b} point at each other but both are near-empty, so the pair provides no fallback`

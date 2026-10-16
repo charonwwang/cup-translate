@@ -1,0 +1,5 @@
+# Keep source-based tests and shell scripts identical on all checkout platforms.
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.icns binary

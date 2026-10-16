@@ -5,6 +5,8 @@ on:
         paths:
             - 'src-tauri/**'
             - 'src/**'
+            - 'tests/**'
+            - '.gitattributes'
             - 'public/**'
             - 'package.json'
             - 'pnpm-lock.yaml'

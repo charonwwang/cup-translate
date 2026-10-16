@@ -1,5 +1,7 @@
 #!/bin/bash
 set -euo pipefail
+# Checkout belongs to the host runner; only trust this mounted workspace.
+git config --global --add safe.directory "$(pwd)"
 
 node_version=v22.11.0
 wget "https://nodejs.org/dist/$node_version/node-$node_version-linux-x64.tar.xz"
