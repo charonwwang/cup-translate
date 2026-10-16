@@ -11,7 +11,10 @@ export async function recognize(base64, language, options = {}) {
     const url = 'https://fanyi-api.baidu.com/api/trans/sdk/picture';
 
     const salt = nanoid();
-    if (appid === '' || secret === '') {
+    // 判据与 required_config.js 的 isFilledString 同义：**纯空白视同未填**。
+    // 原先只比较 `=== ''`，于是 `'   '` 会被当成有效凭据发出去；
+    // 项目已确立「'   ' 与 '' 同等对待，因为两者都没有引擎能用」。
+    if (typeof appid !== 'string' || appid.trim() === '' || typeof secret !== 'string' || secret.trim() === '') {
         throw 'Please configure appid and secret';
     }
 

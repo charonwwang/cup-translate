@@ -6,6 +6,15 @@ export async function recognize(base64, language, options = {}) {
 
     const { appid, secret } = config;
 
+    // 与其他需要凭据的 recognize 服务保持一致：凭据没填就**不要发请求**。
+    // 本服务原先只在**响应解析阶段**兜底（缺 data 时抛 JSON），
+    // 但那已经发过请求了 —— 空凭据会得到 4xx，用户看到的是
+    // `Http Request Error / Http Status: 4xx`，白费一次网络往返。
+    // 判据与 required_config.js 的 isFilledString 同义（纯空白视同未填）。
+    if (typeof appid !== 'string' || appid.trim() === '' || typeof secret !== 'string' || secret.trim() === '') {
+        throw 'Please configure appid and secret';
+    }
+
     let text = await multi_lang_ocr(base64, appid, secret);
 
     return text.trim();

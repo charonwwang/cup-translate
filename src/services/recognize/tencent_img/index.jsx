@@ -9,6 +9,21 @@ export async function recognize(base64, language, options = {}) {
 
     const { secret_key, secret_id } = config;
 
+    // 与其他需要凭据的 recognize 服务保持一致：凭据没填就**不要发请求**。
+    // 原先本服务没有前置校验，空凭据照样发出去（对照 `baidu_img` 有 guard）。
+    // 实测（2026-10）：空凭据请求真实端点返回 4xx（baidu token 端点实测 HTTP 400
+    // `invalid_request`），用户只会看到 `Http Request Error / Http Status: 4xx`，
+    // 既没说清缺哪个字段，也白费一次网络往返。
+    // 判据与 required_config.js 的 isFilledString 同义（纯空白视同未填）。
+    if (
+        typeof secret_id !== 'string' ||
+        secret_id.trim() === '' ||
+        typeof secret_key !== 'string' ||
+        secret_key.trim() === ''
+    ) {
+        throw 'Please configure secret_id and secret_key';
+    }
+
     function sha256(message, secret = '') {
         return hmacSHA256(message, secret);
     }

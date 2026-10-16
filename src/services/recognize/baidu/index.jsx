@@ -5,6 +5,21 @@ export async function recognize(base64, language, options = {}) {
 
     const { client_id, client_secret } = config;
 
+    // 与其他需要凭据的 recognize 服务保持一致：凭据没填就**不要发请求**。
+    // 原先本服务没有前置校验，空凭据照样发出去（对照 `baidu_img` 有 guard）。
+    // 实测（2026-10）：空凭据请求真实端点返回 4xx（baidu token 端点实测 HTTP 400
+    // `invalid_request`），用户只会看到 `Http Request Error / Http Status: 4xx`，
+    // 既没说清缺哪个字段，也白费一次网络往返。
+    // 判据与 required_config.js 的 isFilledString 同义（纯空白视同未填）。
+    if (
+        typeof client_id !== 'string' ||
+        client_id.trim() === '' ||
+        typeof client_secret !== 'string' ||
+        client_secret.trim() === ''
+    ) {
+        throw 'Please configure client_id and client_secret';
+    }
+
     const url = 'https://aip.baidubce.com/rest/2.0/ocr/v1/general_basic';
     const token_url = 'https://aip.baidubce.com/oauth/2.0/token';
 
