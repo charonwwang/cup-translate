@@ -8,9 +8,9 @@ mod config;
 mod error;
 mod hotkey;
 mod lang_detect;
-#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+#[cfg(any(target_arch = "x86_64", all(target_arch = "aarch64", not(windows))))]
 mod local_mt;
-#[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+#[cfg(not(any(target_arch = "x86_64", all(target_arch = "aarch64", not(windows)))))]
 #[path = "local_mt_unsupported.rs"]
 mod local_mt;
 mod notification;

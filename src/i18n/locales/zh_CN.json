@@ -372,7 +372,7 @@
                     "memory_hint": "模型按需加载，空闲约 2 分钟后自动释放（每 30 秒检查）。更多搜索会增加 CPU 开销，不保证每句译文更好。",
                     "loaded": "模型已驻留内存",
                     "unload": "释放模型内存",
-                    "unsupported_arch": "内置本地翻译需要 64 位 x86 或 ARM 版本，在线翻译仍可使用。"
+                    "unsupported_arch": "内置本地翻译支持 Windows x64 和 macOS/Linux x64、ARM64；此平台仍可使用在线翻译。"
                 },
                 "ecdict": {
                     "title": "ECDict(在线)"

@@ -1,10 +1,10 @@
-// Keep the desktop and online engines available on legacy 32-bit targets.
-// CTranslate2's CPU dispatch has no implementation for these architectures.
+// Keep the desktop and online engines available on unsupported native-model targets.
+// The bundled CTranslate2 backend has no CPU dispatch for these platform/compiler combinations.
 #![allow(unused_variables)]
 use serde_json::{json, Value};
 use tauri::AppHandle;
 
-const UNSUPPORTED: &str = "Embedded local translation requires a 64-bit x86 or ARM build; online translation remains available";
+const UNSUPPORTED: &str = "Embedded local translation requires x64 Windows or x64/ARM64 macOS/Linux; online translation remains available";
 
 #[tauri::command]
 pub async fn local_mt_model_status(app_handle: AppHandle, pair: String) -> Result<Value, String> {
