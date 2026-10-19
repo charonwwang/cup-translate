@@ -1,6 +1,6 @@
 [package]
 name = "cup-translate"
-version = "3.0.7"
+version = "3.0.10"
 description = "cup-translate - lightweight selection translation (community fork of pot-desktop)"
 authors = ["charonwwang", "pot-app (upstream)"]
 license = "GPL-3.0-only"

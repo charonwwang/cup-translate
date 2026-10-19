@@ -1,7 +1,5 @@
-name: Release macOS
+name: Release macOS (fallback)
 on:
-    push:
-        tags: ["v*"]
     workflow_dispatch:
         inputs:
             tag:

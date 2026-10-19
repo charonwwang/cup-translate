@@ -48,13 +48,24 @@
 
 ## 安装
 
-### macOS：下载 DMG
+### 下载正式安装包
 
-在 [Releases](https://github.com/charonwwang/cup-translate/releases/latest) 下载安装包：Apple Silicon 选择 `aarch64.dmg`，Intel 选择 `x64.dmg`。打开后将 App 拖入 Applications。
+在 [Releases](https://github.com/charonwwang/cup-translate/releases/latest) 按平台选择：
 
-当前版本使用 ad-hoc 签名，尚无 Developer ID 和 Apple 公证，首次打开可能出现系统安全提示。发布说明、对应源码包及校验和均随版本提供；旧更新地址的客户端请手动安装一次新版本。详见 [macOS 发布说明](docs/MACOS_RELEASE.md)。
+| 平台 | 下载文件 |
+| --- | --- |
+| macOS Apple Silicon（M 系列） | `cup-translate_<版本>_mac_arm64.dmg` |
+| macOS Intel | `cup-translate_<版本>_mac_x64.dmg` |
+| Windows x64 | `cup-translate_<版本>_windows_x64_setup.exe` |
+| Windows x86 | `cup-translate_<版本>_windows_x86_setup.exe` |
+| Windows ARM64 | `cup-translate_<版本>_windows_arm64_setup.exe` |
+| Windows x64/x86（MSI） | `cup-translate_<版本>_windows_<架构>.msi` |
+| Linux x64 | `cup-translate_<版本>_linux_x64.tar.gz`（内含 AppImage） |
+| Linux ARM64 | `cup-translate_<版本>_linux_arm64.tar.gz`（内含 deb/rpm） |
 
-Windows/Linux 的测试安装包见 [Actions 构建验证](https://github.com/charonwwang/cup-translate/actions/workflows/build-desktop.yml)。构建验证产物与正式 Release 分开提供。
+macOS 打开 DMG 后将 App 拖入 Applications。当前 macOS 包使用 ad-hoc 签名，尚无 Developer ID 和 Apple 公证，首次打开可能出现系统安全提示。发布说明、对应源码包及校验和均随版本提供；旧更新地址的客户端请手动安装一次新版本。详见 [发布说明](docs/MACOS_RELEASE.md)。
+
+Windows 安装包未做代码签名，SmartScreen 可能提示“未知发布者”；请先核对 Release 中的 `SHA256SUMS`。
 
 ### Linux：构建并安装
 

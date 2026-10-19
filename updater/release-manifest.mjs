@@ -64,3 +64,36 @@ export async function macosManifest({
     }
     return { version, notes, pub_date: date, platforms };
 }
+
+const desktopPlatforms = [
+    ['darwin-aarch64', 'mac_arm64.app.tar.gz'],
+    ['darwin-x86_64', 'mac_x64.app.tar.gz'],
+    ['windows-x86_64', 'windows_x64_setup.nsis.zip'],
+    ['windows-i686', 'windows_x86_setup.nsis.zip'],
+    ['windows-aarch64', 'windows_arm64_setup.nsis.zip'],
+    ['linux-x86_64', 'linux_x64.tar.gz'],
+];
+
+export async function desktopManifest({
+    directory,
+    repository,
+    tag,
+    notes = '',
+    publicKey,
+    date = new Date().toISOString(),
+}) {
+    releaseRepository(repository);
+    const version = releaseVersion(tag);
+    const platforms = {};
+    for (const [target, suffix] of desktopPlatforms) {
+        const name = `cup-translate_${version}_${suffix}`;
+        const bytes = await readFile(`${directory}/${name}`);
+        const signature = (await readFile(`${directory}/${name}.sig`, 'utf8')).trim();
+        verifyUpdateSignature(bytes, signature, publicKey);
+        platforms[target] = {
+            url: `https://github.com/${repository}/releases/download/v${version}/${name}`,
+            signature,
+        };
+    }
+    return { version, notes, pub_date: date, platforms };
+}

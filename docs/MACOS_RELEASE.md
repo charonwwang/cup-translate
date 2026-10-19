@@ -1,4 +1,4 @@
-# macOS 安装包与自动更新
+# 桌面安装包与自动更新
 
 源码和安装包统一在公开仓库 `charonwwang/cup-translate` 发布。每个版本附安装包和对应 GPL-3.0 源码包，保留 pot-desktop fork 署名与许可证；无需独立下载仓库。
 
@@ -14,7 +14,7 @@
 
 ## 当前无付费 Apple 账号
 
-运行 Actions → **Release macOS**，填写已有源码标签，如 `v3.0.8`，`developer_id` 保持 **false**。
+运行 Actions → **Release desktop**，填写已有源码标签，如 `v3.0.10`，`developer_id` 保持 **false**。
 
 此路径为 `.app` 做 ad-hoc 签名、生成带 Applications 拖放入口的压缩 DMG，并为更新包做独立的 Tauri 密码学签名。它不具备 Developer ID 签名和 Apple 公证，首次下载运行可能被 Gatekeeper 拦截。用户需按系统提供的“隐私与安全性 → 仍要打开”等流程处理。此流程不会删除 quarantine 或关闭系统安全策略；如需默认受信任的公开分发体验，需要加入 Apple Developer Program。
 
@@ -38,18 +38,18 @@ CI 导入证书，通过 Tauri 签名与公证，并校验 app 的签名与公�
 ## 发布步骤与校验
 
 1. 审查并提交这次改动，确保新 workflow、打包脚本、客户端和测试都包含在版本中。推送到当前公开源码仓库。本文不代表已自动提交、推送或发布。
-2. 建立并推送高于已安装版本的稳定标签，如 `v3.0.9`；推送标签会自动启动 **Release macOS**（默认无 Apple 证书模式）。旧 `Package` workflow 已改为手动入口，不再随标签自动发布，避免抢占同版本 Release。macOS 版本使用 **Release macOS**，不要对同一标签同时运行两套发布流程。旧流程的 Release 不会设为 latest。
-3. 也可手动运行 **Release macOS**，输入该标签（不要与同标签的自动运行重复发布）。标签必须包含新脚本，且发布期间不要移动标签。
-4. CI 在 Apple Silicon 和 Intel runner 分别构建，统一 package/Cargo/Tauri 版本、配置公开更新端点，执行前端测试。发布阶段使用同一标签生成对应源码包，验证两份更新包签名，再创建草稿、上传所有附件，最后公开并标记 latest。
-5. 公开附件：两份 DMG、两份 `.app.tar.gz` 及 `.sig`、对应源码包、`update.json`、`SHA256SUMS`。失败草稿可以重跑补齐；已发布版本不可覆盖，应发布新版本。
-6. 未登录访问 `https://github.com/charonwwang/cup-translate/releases/latest/download/update.json` 应返回 JSON；两个 darwin 平台的更新包均应能匿名下载。
+2. 建立并推送高于已安装版本的稳定标签，如 `v3.0.10`；推送标签会自动启动 **Release desktop**（默认无 Apple 证书模式）。旧 `Package` 与 `Release macOS (fallback)` 仅保留为手动入口，不再随标签自动发布，避免抢占同版本 Release。
+3. 也可手动运行 **Release desktop**，输入该标签（不要与同标签的自动运行重复发布）。标签必须包含新脚本，且发布期间不要移动标签。
+4. CI 在 macOS Apple Silicon/Intel、Windows x64/x86/ARM64 和 Linux x64/ARM64 runner 分别构建，统一 package/Cargo/Tauri 版本、配置公开更新端点，执行前端测试。发布阶段使用同一标签生成对应源码包，验证 macOS/Windows/Linux 更新包签名，再创建草稿、上传所有附件，最后公开并标记 latest。
+5. 公开附件：`mac_arm64`/`mac_x64` 两份 DMG；Windows 三个架构的 `setup.exe`，以及 x64/x86 MSI；Linux x64/ARM64 的 `tar.gz`；对应的签名更新包、源码包、`update.json`、`SHA256SUMS`。失败草稿可以重跑补齐；已发布版本不可覆盖，应发布新版本。
+6. 未登录访问 `https://github.com/charonwwang/cup-translate/releases/latest/download/update.json` 应返回 JSON；darwin、windows 和 linux-x86_64 的更新包均应能匿名下载。
 7. 用较低版本分别在 Apple Silicon/Intel 上验证“检查更新 → 安装 → 重启 → 版本变化”。网络失败必须显示检查失败，无更新时不能安装。只有完成此步骤，才能称在线更新端到端验证通过。
 
 旧客户端仍可能使用 `/releases/download/updater/update.json` 固定地址；仅把仓库改为公开并不会将这个地址自动迁移到 `/releases/latest/download/update.json`。上一轮本地包则指向独立下载仓库。以上客户端均建议先手动安装一次带当前仓库新端点的 DMG。后台启动检查遵循“启动时检查更新”开关，超时 30 秒；“关于 → 检查更新”和托盘入口可以手动检查。手动窗口区分检查中、最新、可更新及错误，支持失败后重新检查，安装期间阻止重复操作。
 
 公开更新清单采用版本 Release 的 `releases/latest/download/update.json`，不删除旧版本附件。Tauri 安装前验证签名；CI 也会提前验证，防止现有 Secret 与内置公钥不匹配。务必离线备份更新签名私钥，丢失后不能直接换公钥让旧客户端自动信任新密钥。
 
-当前流程新增的是 macOS 双架构公开分发。Windows/Linux 和 fixed-runtime 的旧清单机制未统一迁移，不应宣称这些平台已完成新流程的端到端更新验证。
+当前流程已把 macOS、Windows 和 Linux 安装包纳入同一 Release。Windows/Linux 的安装包已经过构建验证，但新清单在这些平台上的端到端“检查更新 → 安装 → 重启”仍需逐平台实测；fixed-runtime 清单仍是独立机制。
 
 ## Windows/Linux 构建验证
 
