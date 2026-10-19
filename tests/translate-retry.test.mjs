@@ -4,6 +4,12 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const GOOGLE = 'src/services/translate/google/index.jsx';
+const normalizedWord = (translation) => ({
+    pronunciations: [],
+    explanations: [{ trait: '', explains: [translation] }],
+    associations: [],
+    sentence: [],
+});
 
 // google 是默认翻译引擎，其重试退避直接决定「网络异常时用户要等多久才看到报错」。
 // 旧实现在循环体末尾无条件 sleep：最后一次尝试失败后仍先睡 32 秒再抛错，
@@ -84,7 +90,7 @@ test('real translate: 429 retries with exponential backoff then succeeds', async
         ],
     });
 
-    assert.equal(await translate('hello', 'en', 'zh', { config: {} }), '你好');
+    assert.deepEqual(await translate('hello', 'en', 'zh', { config: {} }), normalizedWord('你好'));
     assert.equal(attempted.length, 3, 'should succeed on the third attempt');
     assert.deepEqual(slept, [250, 500], 'backoff applies between retries only');
 });
@@ -94,8 +100,33 @@ test('real translate: a first-try success never sleeps', async () => {
         responses: [{ ok: true, status: 200, data: [[['hi', 'x', null, null]], null] }],
     });
 
-    assert.equal(await translate('你好', 'zh', 'en', { config: {} }), 'hi');
+    assert.deepEqual(await translate('你好', 'zh', 'en', { config: {} }), normalizedWord('hi'));
     assert.deepEqual(slept, []);
+});
+
+test('real translate: a single word without a dictionary branch still becomes a word entry', async () => {
+    const wordData = [];
+    wordData[0] = [['情态', 'modality', null, null, 3]];
+    wordData[1] = null;
+    wordData[2] = 'en';
+    wordData[13] = [
+        [
+            ['The <b>modality</b> of the treatment depends on the diagnosis.'],
+            ['Language <b>modality</b> can be spoken, written, or signed.'],
+        ],
+    ];
+    const { translate } = await loadRealTranslate({
+        responses: [
+            { ok: true, status: 200, data: wordData },
+            { ok: true, status: 200, data: [[['治疗方式取决于诊断结果。']]] },
+            { ok: true, status: 200, data: [[['语言模态可以是口头的、书面的或手语的。']]] },
+        ],
+    });
+
+    const result = await translate('modality', 'en', 'zh-CN', { config: {} });
+    assert.deepEqual(result.explanations, [{ trait: '', explains: ['情态'] }]);
+    assert.equal(result.sentence.length, 2);
+    assert.equal(result.sentence[0].target, '治疗方式取决于诊断结果。');
 });
 
 test('real translate: 429 on the last attempt does not sleep either', async () => {
@@ -179,7 +210,7 @@ test('real translate: a 5xx mirror failure falls through to the next mirror', as
         ],
     });
 
-    assert.equal(await translate('hello', 'en', 'zh', { config: {} }), '你好');
+    assert.deepEqual(await translate('hello', 'en', 'zh', { config: {} }), normalizedWord('你好'));
     assert.equal(
         attempted.length,
         2,

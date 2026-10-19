@@ -62,6 +62,35 @@ function sleep(ms) {
 const MAX_ATTEMPTS = 3;
 const backoffMs = (attempt) => 250 * Math.pow(2, Math.min(attempt, 2));
 
+async function translateExamples(rawExamples, detected, to, options) {
+    const examples = Array.isArray(rawExamples) ? rawExamples.slice(0, 4) : [];
+    const translated = [];
+    for (let i = 0; i < examples.length; i += 2) {
+        const chunk = examples.slice(i, i + 2);
+        translated.push(
+            ...(await Promise.all(
+                chunk.map(async (example) => {
+                    const source = String(example[0] || '')
+                        .replace(/<[^>]+>/g, '')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+                    if (!source) return '';
+                    try {
+                        const value = await requestTranslation(source, detected, to, options);
+                        return typeof value === 'string' ? value.trim() : '';
+                    } catch {
+                        return '';
+                    }
+                })
+            ))
+        );
+    }
+    return examples.map((example, index) => ({
+        source: example[0],
+        target: translated[index] || '',
+    }));
+}
+
 /**
  * 是否值得**换一个镜像**再试。
  *
@@ -150,35 +179,10 @@ async function requestTranslation(text, from, to, options = {}) {
             }
             // 例句
             if (result[13]) {
-                const examples = Array.isArray(result[13]?.[0]) ? result[13][0].slice(0, 4) : [];
                 const detected = result[2] || from;
                 // Google 词典的 ex 通道只返回例句原文。用户查词时需要能对照目标语言，
                 // 因此这里只为少量例句补一次翻译；失败时保留原文，不阻断整个词条。
-                const translated = [];
-                for (let i = 0; i < examples.length; i += 2) {
-                    const chunk = examples.slice(i, i + 2);
-                    translated.push(
-                        ...(await Promise.all(
-                            chunk.map(async (example) => {
-                                const source = String(example[0] || '')
-                                    .replace(/<[^>]+>/g, '')
-                                    .replace(/\s+/g, ' ')
-                                    .trim();
-                                if (!source) return '';
-                                try {
-                                    const value = await requestTranslation(source, detected, to, options);
-                                    return typeof value === 'string' ? value.trim() : '';
-                                } catch {
-                                    return '';
-                                }
-                            })
-                        ))
-                    );
-                }
-                target.sentence = examples.map((example, index) => ({
-                    source: example[0],
-                    target: translated[index] || '',
-                }));
+                target.sentence = await translateExamples(result[13][0], detected, to, options);
             }
             return target;
         } else {
@@ -189,6 +193,25 @@ async function requestTranslation(text, from, to, options = {}) {
                 if (r[0]) {
                     target = target + r[0];
                 }
+            }
+            target = target.trim();
+
+            // 部分单词（例如 modality）不会返回 result[1] 词典分支，但可能仍带
+            // 音标和 result[13] 例句。单字请求仍归一成词条对象，避免 UI 把同一个
+            // 单词错误地渲染成短语结果，也避免丢掉已有例句。
+            if (!/\s/.test(text.trim())) {
+                const wordResult = { pronunciations: [], explanations: [], associations: [], sentence: [] };
+                if (result[0]?.[1]?.[3]) {
+                    wordResult.pronunciations.push({ symbol: result[0][1][3], voice: '' });
+                }
+                if (target) {
+                    wordResult.explanations.push({ trait: '', explains: [target] });
+                }
+                if (result[13]) {
+                    const detected = result[2] || from;
+                    wordResult.sentence = await translateExamples(result[13][0], detected, to, options);
+                }
+                return wordResult;
             }
             return target.trim();
         }

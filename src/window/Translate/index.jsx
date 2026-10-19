@@ -10,6 +10,7 @@ import React, { useState, useEffect } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { LuPin, LuX } from 'react-icons/lu';
 
+import './translate.css';
 import LanguageArea from './components/LanguageArea';
 import SourceArea from './components/SourceArea';
 import TargetArea from './components/TargetArea';
@@ -271,7 +272,7 @@ export default function Translate() {
     return (
         pluginList && (
             <div
-                className={`translate-shell bg-background h-screen w-screen ${
+                className={`cup-v4 translate-shell bg-background h-screen w-screen ${
                     osType === 'Linux' && 'rounded-[10px] border-1 border-default-100'
                 }`}
             >
@@ -316,9 +317,6 @@ export default function Translate() {
                 </div>
                 <div className={`${osType === 'Linux' ? 'h-[calc(100vh-46px)]' : 'h-[calc(100vh-44px)]'} `}>
                     <div className='translate-scroll h-full overflow-y-auto'>
-                        <div className={`${hideLanguage && 'hidden'}`}>
-                            <LanguageArea />
-                        </div>
                         <div>
                             {serviceInstanceConfigMap !== null && (
                                 <SourceArea
@@ -326,6 +324,9 @@ export default function Translate() {
                                     serviceInstanceConfigMap={serviceInstanceConfigMap}
                                 />
                             )}
+                        </div>
+                        <div className={`${hideLanguage && 'hidden'}`}>
+                            <LanguageArea />
                         </div>
                         <DragDropContext onDragEnd={onDragEnd}>
                             <Droppable

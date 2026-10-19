@@ -1,0 +1,2161 @@
+<!doctype html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>cup-translate · 三种翻译结果设计评审</title>
+        <style>
+            :root {
+                --canvas: #edf0ec;
+                --canvas-deep: #e7ebe6;
+                --paper: #ffffff;
+                --paper-2: #f7f9f7;
+                --paper-3: #f0f4f1;
+                --ink: #21332c;
+                --ink-2: #4f6259;
+                --muted: #7a8981;
+                --faint: #a3afa8;
+                --line: #e2e9e4;
+                --line-strong: #cfdad3;
+                --accent: #256d57;
+                --accent-2: #174e3e;
+                --accent-soft: #e8f3ed;
+                --accent-wash: #f1f8f4;
+                --warn-soft: #fff5e4;
+                --warn: #9b6622;
+                --shadow: 0 24px 70px -32px rgba(26, 58, 45, 0.34), 0 3px 12px rgba(26, 58, 45, 0.05);
+                --font:
+                    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
+                    "Microsoft YaHei", sans-serif;
+                --mono: "SFMono-Regular", "SF Mono", Consolas, "Liberation Mono", monospace;
+            }
+
+            body.dark {
+                --canvas: #131c18;
+                --canvas-deep: #0f1714;
+                --paper: #202b26;
+                --paper-2: #25312b;
+                --paper-3: #2a3831;
+                --ink: #e5eee9;
+                --ink-2: #bfcec5;
+                --muted: #91a299;
+                --faint: #697b71;
+                --line: #35463d;
+                --line-strong: #45594f;
+                --accent: #91d5b7;
+                --accent-2: #bfe9d5;
+                --accent-soft: #29473a;
+                --accent-wash: #23382f;
+                --warn-soft: #3b3020;
+                --warn: #e4b972;
+                --shadow: 0 28px 75px -30px rgba(0, 0, 0, 0.68), 0 4px 14px rgba(0, 0, 0, 0.2);
+            }
+
+            * {
+                box-sizing: border-box;
+            }
+
+            [hidden] {
+                display: none !important;
+            }
+
+            html {
+                color-scheme: light;
+            }
+
+            body.dark {
+                color-scheme: dark;
+            }
+
+            body {
+                margin: 0;
+                background:
+                    radial-gradient(circle at 8% -5%, rgba(95, 154, 124, 0.14), transparent 34%),
+                    linear-gradient(180deg, var(--canvas) 0%, var(--canvas-deep) 100%);
+                color: var(--ink);
+                font: 14px/1.6 var(--font);
+                -webkit-font-smoothing: antialiased;
+                min-height: 100vh;
+            }
+
+            button {
+                border: 0;
+                background: transparent;
+                color: inherit;
+                font: inherit;
+                cursor: pointer;
+            }
+
+            button:focus-visible {
+                outline: 2px solid var(--accent);
+                outline-offset: 3px;
+            }
+
+            .page {
+                width: min(1500px, 100%);
+                margin: 0 auto;
+                padding: 38px 34px 70px;
+            }
+
+            .page-head {
+                display: flex;
+                align-items: flex-start;
+                justify-content: space-between;
+                gap: 26px;
+                padding-bottom: 24px;
+            }
+
+            .brandline {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                margin-bottom: 15px;
+            }
+
+            .brandmark {
+                width: 34px;
+                height: 34px;
+                border-radius: 10px;
+                display: grid;
+                place-items: center;
+                background: var(--accent);
+                box-shadow: 0 8px 22px -10px rgba(36, 115, 92, 0.8);
+                flex: none;
+            }
+
+            .brandmark svg {
+                width: 23px;
+                height: 23px;
+            }
+
+            .brandname {
+                color: var(--ink-2);
+                font-weight: 650;
+                letter-spacing: -0.01em;
+            }
+
+            .brandname span {
+                color: var(--muted);
+                font-weight: 450;
+                margin-left: 5px;
+            }
+
+            .eyebrow {
+                display: block;
+                color: var(--accent);
+                font-size: 10.5px;
+                font-weight: 750;
+                letter-spacing: 0.16em;
+                text-transform: uppercase;
+            }
+
+            h1 {
+                margin: 5px 0 7px;
+                font-size: clamp(30px, 3vw, 43px);
+                line-height: 1.14;
+                letter-spacing: -0.045em;
+                font-weight: 720;
+            }
+
+            .head-copy {
+                margin: 0;
+                color: var(--ink-2);
+                font-size: 14.5px;
+                max-width: 750px;
+            }
+
+            .head-actions {
+                display: flex;
+                gap: 8px;
+                flex-wrap: wrap;
+                padding-top: 5px;
+            }
+
+            .action {
+                min-height: 36px;
+                padding: 0 13px;
+                border: 1px solid var(--line-strong);
+                border-radius: 10px;
+                background: color-mix(in srgb, var(--paper) 76%, transparent);
+                color: var(--ink-2);
+                font-size: 12.5px;
+                font-weight: 600;
+                display: inline-flex;
+                align-items: center;
+                gap: 7px;
+                transition: 160ms ease;
+            }
+
+            .action:hover {
+                color: var(--ink);
+                background: var(--paper);
+                border-color: var(--faint);
+            }
+
+            .action svg {
+                width: 15px;
+                height: 15px;
+            }
+
+            .diagnosis {
+                display: grid;
+                grid-template-columns: minmax(0, 1.15fr) minmax(480px, 0.85fr);
+                gap: 28px;
+                padding: 24px 26px;
+                border: 1px solid var(--line);
+                border-radius: 18px;
+                background: color-mix(in srgb, var(--paper) 79%, transparent);
+                box-shadow: 0 18px 60px -46px rgba(26, 58, 45, 0.36);
+                margin-bottom: 32px;
+            }
+
+            .diagnosis h2 {
+                margin: 5px 0 7px;
+                font-size: 20px;
+                line-height: 1.35;
+                letter-spacing: -0.026em;
+            }
+
+            .diagnosis p {
+                margin: 0;
+                max-width: 720px;
+                color: var(--ink-2);
+                font-size: 13px;
+            }
+
+            .diagnosis code {
+                font: 11.5px/1.4 var(--mono);
+                color: var(--accent-2);
+                background: var(--accent-soft);
+                border-radius: 4px;
+                padding: 1px 4px;
+            }
+
+            .probe-list {
+                display: grid;
+                gap: 8px;
+                align-content: center;
+            }
+
+            .probe {
+                display: grid;
+                grid-template-columns: 76px 1fr 1fr;
+                align-items: center;
+                gap: 10px;
+                padding: 9px 11px;
+                border-radius: 10px;
+                background: var(--paper-2);
+                border: 1px solid var(--line);
+                font-size: 11.5px;
+            }
+
+            .probe strong {
+                font: 600 12px/1.4 var(--mono);
+                color: var(--ink);
+            }
+
+            .probe span {
+                color: var(--muted);
+                white-space: nowrap;
+            }
+
+            .probe b {
+                font-weight: 650;
+                color: var(--ink-2);
+            }
+
+            .yes {
+                color: var(--accent) !important;
+            }
+
+            .no {
+                color: var(--warn) !important;
+            }
+
+            .gallery-head {
+                display: flex;
+                align-items: end;
+                justify-content: space-between;
+                gap: 20px;
+                margin: 4px 0 18px;
+            }
+
+            .gallery-head h2 {
+                margin: 4px 0 0;
+                font-size: 24px;
+                line-height: 1.2;
+                letter-spacing: -0.03em;
+            }
+
+            .gallery-head p {
+                margin: 0;
+                color: var(--muted);
+                font-size: 12.5px;
+            }
+
+            .word-switch {
+                display: flex;
+                align-items: center;
+                gap: 3px;
+                padding: 3px;
+                border-radius: 10px;
+                background: var(--paper-3);
+                border: 1px solid var(--line);
+            }
+
+            .word-switch button {
+                min-height: 30px;
+                padding: 0 12px;
+                border-radius: 7px;
+                color: var(--muted);
+                font: 600 11.5px/1 var(--mono);
+                transition: 140ms ease;
+            }
+
+            .word-switch button:hover {
+                color: var(--ink);
+            }
+
+            .word-switch button.on {
+                color: var(--ink);
+                background: var(--paper);
+                box-shadow: 0 1px 4px rgba(24, 53, 40, 0.1);
+            }
+
+            .gallery {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(360px, 1fr));
+                gap: 26px;
+                align-items: start;
+            }
+
+            .specimen {
+                min-width: 0;
+            }
+
+            .specimen-head {
+                display: flex;
+                align-items: flex-start;
+                justify-content: space-between;
+                gap: 12px;
+                min-height: 54px;
+                margin-bottom: 11px;
+            }
+
+            .specimen-index {
+                color: var(--accent);
+                font: 700 10.5px/1.4 var(--mono);
+                letter-spacing: 0.08em;
+            }
+
+            .specimen h3 {
+                margin: 2px 0 0;
+                font-size: 16px;
+                letter-spacing: -0.02em;
+            }
+
+            .specimen-head p {
+                margin: 1px 0 0;
+                color: var(--muted);
+                font-size: 11.5px;
+                line-height: 1.5;
+            }
+
+            .design-note {
+                max-width: 138px;
+                padding: 4px 8px;
+                border-radius: 7px;
+                color: var(--ink-2);
+                background: var(--accent-soft);
+                font-size: 10.5px;
+                line-height: 1.45;
+                text-align: right;
+            }
+
+            .window {
+                width: 100%;
+                max-width: 460px;
+                margin: 0 auto;
+                overflow: hidden;
+                border: 1px solid var(--line);
+                border-radius: 18px;
+                background: var(--paper);
+                box-shadow: var(--shadow);
+                display: flex;
+                flex-direction: column;
+            }
+
+            .chrome {
+                height: 45px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 0 12px;
+                border-bottom: 1px solid var(--line);
+                background: color-mix(in srgb, var(--paper) 92%, var(--paper-2));
+                flex: none;
+            }
+
+            .traffic {
+                display: flex;
+                gap: 6px;
+                margin-right: 5px;
+            }
+
+            .traffic i {
+                width: 9px;
+                height: 9px;
+                border-radius: 50%;
+                background: #d7dfda;
+            }
+
+            .traffic i:first-child {
+                background: #e69a91;
+            }
+
+            .traffic i:nth-child(2) {
+                background: #e5c16f;
+            }
+
+            .traffic i:nth-child(3) {
+                background: #8fc9a0;
+            }
+
+            .chrome-name {
+                color: var(--muted);
+                font-size: 11.5px;
+                font-weight: 550;
+            }
+
+            .chrome-tools {
+                margin-left: auto;
+                display: flex;
+                align-items: center;
+                gap: 1px;
+                color: var(--muted);
+            }
+
+            .chrome-tools button {
+                width: 29px;
+                height: 29px;
+                display: grid;
+                place-items: center;
+                border-radius: 7px;
+            }
+
+            .chrome-tools button:hover {
+                color: var(--ink);
+                background: var(--paper-3);
+            }
+
+            svg.icon {
+                width: 16px;
+                height: 16px;
+                fill: none;
+                stroke: currentColor;
+                stroke-width: 1.75;
+                stroke-linecap: round;
+                stroke-linejoin: round;
+                display: block;
+            }
+
+            .window-main {
+                display: flex;
+                flex-direction: column;
+                min-height: 0;
+            }
+
+            .window-body {
+                padding: 17px 20px 14px;
+            }
+
+            .source-area {
+                position: relative;
+                padding-bottom: 10px;
+            }
+
+            .source-text {
+                width: 100%;
+                color: var(--ink);
+                font-weight: 560;
+                letter-spacing: -0.025em;
+                line-height: 1.34;
+                overflow-wrap: anywhere;
+            }
+
+            .source-text.word {
+                font-size: 28px;
+            }
+
+            .source-text.phrase {
+                font-size: 21px;
+            }
+
+            .source-text.paragraph {
+                font-size: 15px;
+                line-height: 1.58;
+                font-weight: 500;
+                letter-spacing: -0.005em;
+                color: var(--ink-2);
+            }
+
+            .source-tools {
+                display: flex;
+                align-items: center;
+                gap: 2px;
+                color: var(--muted);
+                margin-top: 8px;
+            }
+
+            .source-tools .tool {
+                width: 27px;
+                height: 27px;
+                border-radius: 7px;
+                display: grid;
+                place-items: center;
+            }
+
+            .source-tools .tool:hover {
+                color: var(--ink);
+                background: var(--paper-3);
+            }
+
+            .source-tools .lang-chip {
+                margin-left: 6px;
+                height: 24px;
+                padding: 0 9px;
+                border-radius: 99px;
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                color: var(--accent-2);
+                border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line));
+                background: var(--accent-wash);
+                font-size: 10.5px;
+                font-weight: 600;
+            }
+
+            .source-tools .source-count {
+                margin-left: auto;
+                color: var(--faint);
+                font-size: 10.5px;
+                font-variant-numeric: tabular-nums;
+            }
+
+            .language-row {
+                display: grid;
+                grid-template-columns: 1fr auto 1fr;
+                align-items: center;
+                gap: 7px;
+                padding: 9px 0 12px;
+                border-top: 1px solid var(--line);
+                color: var(--muted);
+                font-size: 11.5px;
+            }
+
+            .language-row button {
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                min-width: 0;
+            }
+
+            .language-row button:last-child {
+                justify-content: flex-end;
+            }
+
+            .language-row .swap {
+                width: 26px;
+                height: 26px;
+                border-radius: 7px;
+                display: grid;
+                place-items: center;
+                color: var(--muted);
+            }
+
+            .language-row .swap:hover {
+                background: var(--paper-3);
+                color: var(--ink);
+            }
+
+            .result {
+                border-top: 1px solid var(--line);
+            }
+
+            .result-head {
+                min-height: 48px;
+                display: flex;
+                align-items: center;
+                gap: 7px;
+                padding: 10px 0 8px;
+                color: var(--ink-2);
+                font-size: 11.5px;
+            }
+
+            .provider-mark {
+                width: 17px;
+                height: 17px;
+                border-radius: 50%;
+                display: grid;
+                place-items: center;
+                background: var(--paper-3);
+                color: var(--accent);
+                font: 700 10px/1 var(--mono);
+            }
+
+            .result-mode {
+                color: var(--muted);
+            }
+
+            .complete-badge {
+                margin-left: auto;
+                color: var(--accent-2);
+                background: var(--accent-soft);
+                border-radius: 99px;
+                padding: 2px 7px;
+                font-size: 9.5px;
+                font-weight: 650;
+            }
+
+            .result-head .chevron {
+                width: 25px;
+                height: 25px;
+                display: grid;
+                place-items: center;
+                border-radius: 6px;
+                color: var(--muted);
+            }
+
+            .word-heading {
+                display: flex;
+                align-items: flex-start;
+                gap: 12px;
+                padding: 4px 0 14px;
+            }
+
+            .word-heading h4 {
+                margin: 0;
+                font-size: 30px;
+                line-height: 1.1;
+                letter-spacing: -0.035em;
+                font-weight: 680;
+            }
+
+            .phonetics {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 5px 13px;
+                margin-top: 7px;
+            }
+
+            .phonetic {
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                color: var(--muted);
+                font: 12px/1.4 var(--mono);
+            }
+
+            .phonetic-region {
+                color: var(--faint);
+                font: 550 9.5px/1.2 var(--font);
+                background: var(--paper-3);
+                border-radius: 4px;
+                padding: 2px 4px;
+            }
+
+            .speak {
+                width: 24px;
+                height: 24px;
+                display: inline-grid;
+                place-items: center;
+                border-radius: 99px;
+                color: var(--accent);
+                background: var(--accent-soft);
+                flex: none;
+                transition: 140ms ease;
+            }
+
+            .speak:hover {
+                background: color-mix(in srgb, var(--accent) 17%, var(--paper));
+            }
+
+            .speak svg {
+                width: 13px;
+                height: 13px;
+            }
+
+            .word-kind {
+                margin-left: auto;
+                margin-top: 4px;
+                color: var(--muted);
+                font-size: 10px;
+                border: 1px solid var(--line);
+                padding: 2px 7px;
+                border-radius: 99px;
+                white-space: nowrap;
+            }
+
+            .section-label {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                color: var(--faint);
+                font-size: 9.5px;
+                font-weight: 700;
+                letter-spacing: 0.12em;
+                text-transform: uppercase;
+                margin: 2px 0 9px;
+            }
+
+            .section-label::after {
+                content: "";
+                height: 1px;
+                flex: 1;
+                background: var(--line);
+            }
+
+            .senses {
+                padding: 1px 0 5px;
+            }
+
+            .sense-row {
+                display: grid;
+                grid-template-columns: 42px minmax(0, 1fr) 24px;
+                gap: 9px;
+                align-items: center;
+                padding: 9px 0;
+            }
+
+            .sense-row + .sense-row {
+                border-top: 1px dashed var(--line);
+            }
+
+            .pos {
+                color: var(--muted);
+                font: 550 11px/1.6 var(--mono);
+            }
+
+            .meanings {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: baseline;
+                gap: 3px 10px;
+            }
+
+            .meaning {
+                color: var(--ink);
+                font-size: 18px;
+                line-height: 1.55;
+                font-weight: 520;
+                letter-spacing: 0.005em;
+            }
+
+            .meaning + .meaning::before {
+                content: "·";
+                color: var(--faint);
+                font-weight: 400;
+                margin-right: 9px;
+            }
+
+            .sense-speak {
+                width: 23px;
+                height: 23px;
+                color: var(--muted);
+                background: transparent;
+                border: 1px solid var(--line);
+            }
+
+            .sense-speak:hover {
+                color: var(--accent);
+                background: var(--accent-soft);
+                border-color: transparent;
+            }
+
+            .examples {
+                padding-top: 3px;
+            }
+
+            .example-count {
+                margin-left: auto;
+                color: var(--faint);
+                font: 500 10px/1.4 var(--mono);
+                letter-spacing: 0;
+                text-transform: none;
+            }
+
+            .example-card {
+                padding: 11px 12px 10px;
+                border-radius: 11px;
+                background: var(--paper-2);
+                border: 1px solid var(--line);
+            }
+
+            .example-card + .example-card {
+                margin-top: 8px;
+            }
+
+            .example-line {
+                display: grid;
+                grid-template-columns: 25px minmax(0, 1fr) 24px;
+                align-items: start;
+                gap: 7px;
+            }
+
+            .example-line + .example-line {
+                margin-top: 5px;
+                padding-top: 5px;
+                border-top: 1px dashed var(--line);
+            }
+
+            .line-tag {
+                color: var(--faint);
+                font: 600 9px/1.75 var(--mono);
+                padding-top: 1px;
+            }
+
+            .example-source {
+                color: var(--ink);
+                font-size: 12.5px;
+                line-height: 1.55;
+            }
+
+            .example-target {
+                color: var(--ink-2);
+                font-size: 12px;
+                line-height: 1.55;
+            }
+
+            mark {
+                color: var(--accent-2);
+                background: color-mix(in srgb, var(--accent) 12%, transparent);
+                border-radius: 3px;
+                padding: 0 2px;
+                font-weight: 650;
+            }
+
+            .example-line .speak {
+                width: 23px;
+                height: 23px;
+                color: var(--muted);
+                background: transparent;
+                border: 1px solid var(--line);
+            }
+
+            .example-line .speak:hover {
+                color: var(--accent);
+                background: var(--accent-soft);
+                border-color: transparent;
+            }
+
+            .example-note {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                margin-top: 9px;
+                color: var(--faint);
+                font-size: 9.5px;
+            }
+
+            .example-note svg {
+                width: 12px;
+                height: 12px;
+            }
+
+            /* Phrase result */
+            .phrase-shell {
+                padding-top: 4px;
+            }
+
+            .phrase-pair {
+                border-radius: 12px;
+                border: 1px solid var(--line);
+                overflow: hidden;
+            }
+
+            .phrase-row {
+                display: grid;
+                grid-template-columns: 34px minmax(0, 1fr) auto;
+                align-items: center;
+                gap: 8px;
+                padding: 12px;
+            }
+
+            .phrase-row + .phrase-row {
+                border-top: 1px solid var(--line);
+            }
+
+            .phrase-row.target {
+                background: var(--accent-wash);
+            }
+
+            .phrase-label {
+                color: var(--faint);
+                font: 600 9px/1.4 var(--mono);
+            }
+
+            .phrase-text {
+                color: var(--ink);
+                font-size: 17px;
+                line-height: 1.55;
+                font-weight: 540;
+                letter-spacing: -0.01em;
+            }
+
+            .phrase-row.target .phrase-text {
+                font-size: 20px;
+                color: var(--accent-2);
+            }
+
+            .alternatives {
+                padding-top: 16px;
+            }
+
+            .alternative-row {
+                display: grid;
+                grid-template-columns: 44px minmax(0, 1fr) auto;
+                align-items: baseline;
+                gap: 8px;
+                padding: 9px 0;
+            }
+
+            .alternative-row + .alternative-row {
+                border-top: 1px dashed var(--line);
+            }
+
+            .alt-tag {
+                color: var(--muted);
+                background: var(--paper-3);
+                border-radius: 5px;
+                padding: 1px 6px;
+                font-size: 9.5px;
+                text-align: center;
+                white-space: nowrap;
+            }
+
+            .alt-text {
+                color: var(--ink);
+                font-size: 16px;
+                line-height: 1.55;
+                font-weight: 510;
+            }
+
+            .alt-note {
+                color: var(--faint);
+                font-size: 9.5px;
+                white-space: nowrap;
+            }
+
+            .usage {
+                margin-top: 15px;
+                padding: 11px 12px;
+                border-left: 2px solid var(--accent);
+                border-radius: 0 9px 9px 0;
+                background: var(--accent-wash);
+            }
+
+            .usage-title {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                color: var(--accent-2);
+                font-size: 10px;
+                font-weight: 650;
+                letter-spacing: 0.02em;
+            }
+
+            .usage p {
+                margin: 4px 0 0;
+                color: var(--ink-2);
+                font-size: 11.5px;
+                line-height: 1.65;
+            }
+
+            .usage code {
+                font: 10.5px/1.55 var(--mono);
+                color: var(--accent-2);
+            }
+
+            .phrase-example {
+                margin-top: 15px;
+                padding: 12px;
+                border-radius: 11px;
+                background: var(--paper-2);
+                border: 1px solid var(--line);
+            }
+
+            .phrase-example-head {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 8px;
+                color: var(--faint);
+                font-size: 9.5px;
+            }
+
+            .phrase-example .example-line {
+                grid-template-columns: 25px minmax(0, 1fr) 24px;
+            }
+
+            /* Paragraph result */
+            .paragraph-toolbar {
+                display: flex;
+                align-items: center;
+                gap: 7px;
+                margin-bottom: 12px;
+            }
+
+            .view-switch {
+                display: flex;
+                gap: 2px;
+                padding: 2px;
+                border-radius: 8px;
+                background: var(--paper-3);
+                border: 1px solid var(--line);
+            }
+
+            .view-switch button {
+                height: 26px;
+                padding: 0 9px;
+                border-radius: 6px;
+                color: var(--muted);
+                font-size: 10.5px;
+                font-weight: 550;
+            }
+
+            .view-switch button.on {
+                color: var(--ink);
+                background: var(--paper);
+                box-shadow: 0 1px 3px rgba(20, 48, 35, 0.11);
+            }
+
+            .read-all {
+                margin-left: auto;
+                height: 30px;
+                padding: 0 9px;
+                border-radius: 8px;
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                color: var(--accent-2);
+                background: var(--accent-soft);
+                font-size: 10.5px;
+                font-weight: 600;
+            }
+
+            .read-all svg {
+                width: 13px;
+                height: 13px;
+            }
+
+            .paragraph-meta {
+                display: flex;
+                align-items: center;
+                gap: 7px;
+                margin-bottom: 11px;
+                color: var(--faint);
+                font-size: 9.5px;
+            }
+
+            .paragraph-meta .dot {
+                width: 3px;
+                height: 3px;
+                border-radius: 50%;
+                background: var(--faint);
+            }
+
+            .paragraph-reading {
+                padding: 15px 14px;
+                border-radius: 12px;
+                border: 1px solid var(--line);
+                background: var(--paper-2);
+            }
+
+            .paragraph-reading p {
+                margin: 0;
+                color: var(--ink);
+                font-size: 17px;
+                line-height: 1.9;
+                font-weight: 510;
+                letter-spacing: -0.008em;
+            }
+
+            .sentence-list {
+                border-radius: 12px;
+                border: 1px solid var(--line);
+                overflow: hidden;
+            }
+
+            .sentence {
+                display: grid;
+                grid-template-columns: 24px minmax(0, 1fr) 24px;
+                gap: 8px;
+                padding: 11px 12px;
+                background: var(--paper);
+            }
+
+            .sentence + .sentence {
+                border-top: 1px solid var(--line);
+            }
+
+            .sentence:nth-child(even) {
+                background: var(--paper-2);
+            }
+
+            .sentence-index {
+                color: var(--faint);
+                font: 500 9px/1.8 var(--mono);
+                padding-top: 1px;
+            }
+
+            .sentence-copy p {
+                margin: 0;
+            }
+
+            .sentence-source {
+                color: var(--muted);
+                font-size: 11.5px;
+                line-height: 1.55;
+            }
+
+            .sentence-target {
+                margin-top: 5px !important;
+                color: var(--ink);
+                font-size: 15px;
+                line-height: 1.58;
+                font-weight: 510;
+                letter-spacing: -0.006em;
+            }
+
+            .sentence .speak {
+                width: 23px;
+                height: 23px;
+                color: var(--muted);
+                border: 1px solid var(--line);
+                background: transparent;
+            }
+
+            .sentence .speak:hover {
+                border-color: transparent;
+                background: var(--accent-soft);
+                color: var(--accent);
+            }
+
+            .paragraph-footnote {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                margin-top: 11px;
+                color: var(--faint);
+                font-size: 9.5px;
+            }
+
+            .paragraph-footnote svg {
+                width: 12px;
+                height: 12px;
+            }
+
+            .window-foot {
+                min-height: 47px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 9px 20px;
+                border-top: 1px solid var(--line);
+                background: color-mix(in srgb, var(--paper) 85%, var(--paper-2));
+                color: var(--muted);
+                font-size: 10.5px;
+            }
+
+            .engine {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                min-width: 0;
+            }
+
+            .engine .provider-mark {
+                width: 16px;
+                height: 16px;
+                font-size: 9px;
+            }
+
+            .foot-tools {
+                display: flex;
+                align-items: center;
+                gap: 2px;
+            }
+
+            .foot-tools button {
+                width: 28px;
+                height: 28px;
+                display: grid;
+                place-items: center;
+                border-radius: 7px;
+            }
+
+            .foot-tools button:hover {
+                color: var(--ink);
+                background: var(--paper-3);
+            }
+
+            .copy {
+                margin-left: auto;
+                height: 30px;
+                padding: 0 10px;
+                border-radius: 8px;
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                color: var(--accent-2);
+                background: var(--accent-soft);
+                font-size: 10.5px;
+                font-weight: 600;
+            }
+
+            .copy svg {
+                width: 13px;
+                height: 13px;
+            }
+
+            .specimen-foot {
+                margin: 11px 2px 0;
+                color: var(--muted);
+                font-size: 11px;
+                line-height: 1.65;
+            }
+
+            .specimen-foot b {
+                color: var(--ink-2);
+                font-weight: 650;
+            }
+
+            .review-points {
+                margin-top: 34px;
+                padding-top: 25px;
+                border-top: 1px solid var(--line-strong);
+                display: grid;
+                grid-template-columns: 1.1fr 1fr 1fr;
+                gap: 28px;
+            }
+
+            .review-points h2 {
+                margin: 3px 0 7px;
+                font-size: 19px;
+                letter-spacing: -0.025em;
+            }
+
+            .review-points p {
+                margin: 0;
+                color: var(--ink-2);
+                font-size: 12px;
+            }
+
+            .review-list {
+                margin: 0;
+                padding: 0;
+                list-style: none;
+            }
+
+            .review-list li {
+                position: relative;
+                padding: 0 0 10px 16px;
+                color: var(--ink-2);
+                font-size: 12px;
+            }
+
+            .review-list li::before {
+                content: "";
+                position: absolute;
+                left: 0;
+                top: 8px;
+                width: 5px;
+                height: 5px;
+                border-radius: 50%;
+                background: var(--accent);
+            }
+
+            .implementation {
+                border-radius: 13px;
+                padding: 16px;
+                background: var(--paper);
+                border: 1px solid var(--line);
+            }
+
+            .implementation b {
+                display: block;
+                margin-bottom: 5px;
+                color: var(--accent-2);
+                font-size: 12px;
+            }
+
+            .implementation code {
+                font: 10.5px/1.7 var(--mono);
+                color: var(--ink-2);
+                word-break: break-word;
+            }
+
+            @media (max-width: 1260px) {
+                .gallery {
+                    grid-template-columns: repeat(2, minmax(360px, 1fr));
+                }
+
+                .specimen:last-child {
+                    grid-column: 1 / -1;
+                    max-width: 620px;
+                }
+            }
+
+            @media (max-width: 900px) {
+                .page {
+                    padding: 24px 18px 50px;
+                }
+
+                .page-head,
+                .gallery-head {
+                    flex-direction: column;
+                }
+
+                .diagnosis {
+                    grid-template-columns: 1fr;
+                }
+
+                .gallery {
+                    grid-template-columns: 1fr;
+                }
+
+                .specimen:last-child {
+                    grid-column: auto;
+                    max-width: none;
+                }
+
+                .window {
+                    max-width: 440px;
+                }
+
+                .review-points {
+                    grid-template-columns: 1fr;
+                }
+            }
+
+            @media (max-width: 480px) {
+                .page {
+                    padding-inline: 10px;
+                }
+
+                .window-body {
+                    padding-inline: 16px;
+                }
+
+                .window-foot {
+                    padding-inline: 16px;
+                }
+
+                .probe {
+                    grid-template-columns: 66px 1fr;
+                }
+
+                .probe span:last-child {
+                    grid-column: 2;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+            <defs>
+                <symbol id="i-mark" viewBox="0 0 100 100">
+                    <rect x="2" y="2" width="96" height="96" rx="25" fill="currentColor" />
+                    <rect
+                        x="60"
+                        y="35"
+                        width="23"
+                        height="29"
+                        rx="11"
+                        stroke="#f3f8f2"
+                        stroke-width="6"
+                        fill="none"
+                    />
+                    <path
+                        d="M25 29h42v29a19 19 0 0 1-19 19h-4a19 19 0 0 1-19-19V29Z"
+                        fill="#f3f8f2"
+                    />
+                    <path
+                        d="M35 47h20m-6-6 6 6-6 6M56 62H36m6-6-6 6 6 6"
+                        stroke="currentColor"
+                        stroke-width="3.4"
+                        fill="none"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    />
+                </symbol>
+                <symbol id="i-volume" viewBox="0 0 24 24">
+                    <path d="M11 5 6 9H3v6h3l5 4V5Z" />
+                    <path d="M15 9a4 4 0 0 1 0 6M18 6a8 8 0 0 1 0 12" />
+                </symbol>
+                <symbol id="i-copy" viewBox="0 0 24 24">
+                    <rect x="8" y="8" width="12" height="12" rx="2" />
+                    <path d="M16 4H4v12" />
+                </symbol>
+                <symbol id="i-swap" viewBox="0 0 24 24">
+                    <path d="M7 7h12m-3-3 3 3-3 3M17 17H5m3-3-3 3 3 3" />
+                </symbol>
+                <symbol id="i-chevron" viewBox="0 0 24 24">
+                    <path d="m7 10 5 5 5-5" />
+                </symbol>
+                <symbol id="i-pin" viewBox="0 0 24 24">
+                    <path d="m8 3 8 0-1 7 4 4H5l4-4ZM12 14v7" />
+                </symbol>
+                <symbol id="i-close" viewBox="0 0 24 24">
+                    <path d="m6 6 12 12M18 6 6 18" />
+                </symbol>
+                <symbol id="i-moon" viewBox="0 0 24 24">
+                    <path d="M20 15.5A8.5 8.5 0 0 1 8.5 4 8.5 8.5 0 1 0 20 15.5Z" />
+                </symbol>
+                <symbol id="i-sun" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="4" />
+                    <path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+                </symbol>
+                <symbol id="i-lang" viewBox="0 0 24 24">
+                    <path d="M4 5h10M9 3v2c0 4-2 7-5 9m2-5c1 2 3 4 6 5M14 19l4-10 4 10m-7-3h6" />
+                </symbol>
+                <symbol id="i-paste" viewBox="0 0 24 24">
+                    <path d="M9 5H5v15h11v-3M9 3h6v4H9zM12 10h8m-3-3 3 3-3 3" />
+                </symbol>
+                <symbol id="i-speak" viewBox="0 0 24 24">
+                    <path d="M5 9v6h3l5 4V5L8 9H5ZM17 9a4 4 0 0 1 0 6" />
+                </symbol>
+                <symbol id="i-info" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 11v5M12 8h.01" />
+                </symbol>
+                <symbol id="i-align" viewBox="0 0 24 24">
+                    <path d="M4 6h16M4 10h11M4 14h16M4 18h8" />
+                </symbol>
+            </defs>
+        </svg>
+
+        <main class="page">
+            <header class="page-head">
+                <div>
+                    <div class="brandline">
+                        <span class="brandmark">
+                            <svg style="color: var(--accent)">
+                                <use href="#i-mark" style="color: var(--accent)"></use>
+                            </svg>
+                        </span>
+                        <div class="brandname">cup-translate <span>翻译结果设计评审</span></div>
+                    </div>
+                    <span class="eyebrow">Translation result system / v4</span>
+                    <h1>按输入类型，重新组织翻译结果。</h1>
+                    <p class="head-copy">
+                        单词看“词条”，短语看“表达”，段落看“阅读”。三者共享同一套安静、清晰的窗口骨架，
+                        但信息层级和操作完全不同。下面先给可交互设计稿，不改业务代码。
+                    </p>
+                </div>
+                <div class="head-actions">
+                    <button class="action" id="themeToggle" type="button">
+                        <svg class="icon"><use href="#i-moon"></use></svg>
+                        <span>深色预览</span>
+                    </button>
+                    <button class="action" id="focusToggle" type="button">
+                        <svg class="icon"><use href="#i-align"></use></svg>
+                        <span>切换 380px 窄窗</span>
+                    </button>
+                </div>
+            </header>
+
+            <section class="diagnosis">
+                <div>
+                    <span class="eyebrow">先说结论</span>
+                    <h2>不是三个词走了三套 UI，而是 Google 返回的词条字段并不齐。</h2>
+                    <p>
+                        同一请求里，词典释义在 <code>result[1]</code>，例句在 <code>result[13]</code>。
+                        三个字段是否出现，完全由上游决定。现在的界面直接把返回结果画出来，所以
+                        <b>query</b> 没有例句、<b>modality</b> 没有词性、<b>importance</b> 只有一条例句。
+                        新方案要求数据层先归一成完整词条，再交给统一组件呈现。
+                    </p>
+                </div>
+                <div class="probe-list" aria-label="Google 原始返回探测结果">
+                    <div class="probe">
+                        <strong>query</strong>
+                        <span>词性/释义 <b class="yes">有</b></span>
+                        <span>例句 <b class="no">0 条</b></span>
+                    </div>
+                    <div class="probe">
+                        <strong>modality</strong>
+                        <span>词性/释义 <b class="no">缺失</b></span>
+                        <span>例句 <b class="yes">2 条</b></span>
+                    </div>
+                    <div class="probe">
+                        <strong>importance</strong>
+                        <span>词性/释义 <b class="yes">有</b></span>
+                        <span>例句 <b class="warn">1 条</b></span>
+                    </div>
+                </div>
+            </section>
+
+            <div class="gallery-head">
+                <div>
+                    <span class="eyebrow">Result specimens</span>
+                    <h2>三种结果视图</h2>
+                    <p>单词卡可切换 query / modality / importance，验证同一套结构能承载三个不一致的原始返回。</p>
+                </div>
+                <div class="word-switch" id="wordSwitch" aria-label="切换单词示例">
+                    <button class="on" type="button" data-word="query">query</button>
+                    <button type="button" data-word="modality">modality</button>
+                    <button type="button" data-word="importance">importance</button>
+                </div>
+            </div>
+
+            <section class="gallery">
+                <article class="specimen">
+                    <div class="specimen-head">
+                        <div>
+                            <span class="specimen-index">01 / WORD</span>
+                            <h3>单词 · 词条视图</h3>
+                            <p>原文与音标、词性、同级释义、两条双语音频例句</p>
+                        </div>
+                        <span class="design-note">含义不再有“主次字号”</span>
+                    </div>
+
+                    <div class="window word-window">
+                        <div class="chrome">
+                            <span class="traffic"><i></i><i></i><i></i></span>
+                            <span class="chrome-name">cup-translate</span>
+                            <span class="chrome-tools">
+                                <button type="button" aria-label="置顶">
+                                    <svg class="icon"><use href="#i-pin"></use></svg>
+                                </button>
+                                <button type="button" aria-label="关闭">
+                                    <svg class="icon"><use href="#i-close"></use></svg>
+                                </button>
+                            </span>
+                        </div>
+
+                        <div class="window-main">
+                            <div class="window-body">
+                                <div class="source-area">
+                                    <div class="source-text word" id="wordSource">query</div>
+                                    <div class="source-tools">
+                                        <button class="tool" type="button" aria-label="朗读原文">
+                                            <svg class="icon" style="width: 15px; height: 15px">
+                                                <use href="#i-volume"></use>
+                                            </svg>
+                                        </button>
+                                        <button class="tool" type="button" aria-label="复制">
+                                            <svg class="icon" style="width: 14px; height: 14px">
+                                                <use href="#i-copy"></use>
+                                            </svg>
+                                        </button>
+                                        <button class="tool" type="button" aria-label="粘贴">
+                                            <svg class="icon" style="width: 14px; height: 14px">
+                                                <use href="#i-paste"></use>
+                                            </svg>
+                                        </button>
+                                        <button class="tool" type="button" aria-label="翻译">
+                                            <svg class="icon" style="width: 14px; height: 14px">
+                                                <use href="#i-lang"></use>
+                                            </svg>
+                                        </button>
+                                        <span class="lang-chip">
+                                            <svg class="icon" style="width: 11px; height: 11px">
+                                                <use href="#i-lang"></use>
+                                            </svg>
+                                            英语
+                                        </span>
+                                        <span class="source-count" id="wordCount">5 字符</span>
+                                    </div>
+                                </div>
+
+                                <div class="language-row">
+                                    <button type="button">自动检测 <svg class="icon" style="width: 12px; height: 12px"><use href="#i-chevron"></use></svg></button>
+                                    <button class="swap" type="button" aria-label="交换语言">
+                                        <svg class="icon"><use href="#i-swap"></use></svg>
+                                    </button>
+                                    <button type="button">简体中文 <svg class="icon" style="width: 12px; height: 12px"><use href="#i-chevron"></use></svg></button>
+                                </div>
+
+                                <section class="result">
+                                    <div class="result-head">
+                                        <span class="provider-mark">G</span>
+                                        <span>Google</span>
+                                        <span class="result-mode">/ 词典</span>
+                                        <span class="complete-badge" id="wordCompleteness">词条完整</span>
+                                        <button class="chevron" type="button" aria-label="收起">
+                                            <svg class="icon" style="width: 14px; height: 14px"><use href="#i-chevron"></use></svg>
+                                        </button>
+                                    </div>
+
+                                    <div class="word-heading">
+                                        <div>
+                                            <h4 id="wordHeading">query</h4>
+                                            <div class="phonetics" id="phonetics"></div>
+                                        </div>
+                                        <span class="word-kind">单词 · 英语</span>
+                                    </div>
+
+                                    <div class="section-label">释义</div>
+                                    <div class="senses" id="senses"></div>
+
+                                    <div class="section-label examples">
+                                        例句
+                                        <span class="example-count" id="exampleCount">2 条</span>
+                                    </div>
+                                    <div id="examples"></div>
+                                    <div class="example-note">
+                                        <svg class="icon"><use href="#i-info"></use></svg>
+                                        原句与译文各自可朗读；目标词在同句中高亮
+                                    </div>
+                                </section>
+                            </div>
+                        </div>
+
+                        <div class="window-foot">
+                            <span class="engine"><span class="provider-mark">G</span> Google</span>
+                            <span class="foot-tools">
+                                <button type="button" aria-label="反向翻译">
+                                    <svg class="icon"><use href="#i-swap"></use></svg>
+                                </button>
+                            </span>
+                            <button class="copy" type="button">
+                                <svg class="icon"><use href="#i-copy"></use></svg>
+                                复制词条
+                            </button>
+                        </div>
+                    </div>
+                    <p class="specimen-foot">
+                        <b>视觉规则：</b>原文 30px、音标 12px、释义 18px。词性只做结构标签，所有释义同级；
+                        每个例句都保留原句、译文和两个独立朗读入口。
+                    </p>
+                </article>
+
+                <article class="specimen">
+                    <div class="specimen-head">
+                        <div>
+                            <span class="specimen-index">02 / PHRASE</span>
+                            <h3>短语 · 表达视图</h3>
+                            <p>不做逐词拆解，突出自然译法、替代说法和用法</p>
+                        </div>
+                        <span class="design-note">译文先于语法信息</span>
+                    </div>
+
+                    <div class="window phrase-window">
+                        <div class="chrome">
+                            <span class="traffic"><i></i><i></i><i></i></span>
+                            <span class="chrome-name">cup-translate</span>
+                            <span class="chrome-tools">
+                                <button type="button" aria-label="置顶">
+                                    <svg class="icon"><use href="#i-pin"></use></svg>
+                                </button>
+                                <button type="button" aria-label="关闭">
+                                    <svg class="icon"><use href="#i-close"></use></svg>
+                                </button>
+                            </span>
+                        </div>
+
+                        <div class="window-main">
+                            <div class="window-body">
+                                <div class="source-area">
+                                    <div class="source-text phrase">take something into account</div>
+                                    <div class="source-tools">
+                                        <button class="tool" type="button" aria-label="朗读原文">
+                                            <svg class="icon" style="width: 15px; height: 15px"><use href="#i-volume"></use></svg>
+                                        </button>
+                                        <button class="tool" type="button" aria-label="复制">
+                                            <svg class="icon" style="width: 14px; height: 14px"><use href="#i-copy"></use></svg>
+                                        </button>
+                                        <button class="tool" type="button" aria-label="粘贴">
+                                            <svg class="icon" style="width: 14px; height: 14px"><use href="#i-paste"></use></svg>
+                                        </button>
+                                        <span class="lang-chip">
+                                            <svg class="icon" style="width: 11px; height: 11px"><use href="#i-lang"></use></svg>
+                                            英语
+                                        </span>
+                                        <span class="source-count">25 字符</span>
+                                    </div>
+                                </div>
+
+                                <div class="language-row">
+                                    <button type="button">自动检测 <svg class="icon" style="width: 12px; height: 12px"><use href="#i-chevron"></use></svg></button>
+                                    <button class="swap" type="button" aria-label="交换语言">
+                                        <svg class="icon"><use href="#i-swap"></use></svg>
+                                    </button>
+                                    <button type="button">简体中文 <svg class="icon" style="width: 12px; height: 12px"><use href="#i-chevron"></use></svg></button>
+                                </div>
+
+                                <section class="result phrase-shell">
+                                    <div class="result-head">
+                                        <span class="provider-mark">G</span>
+                                        <span>Google</span>
+                                        <span class="result-mode">/ 短语</span>
+                                        <span class="complete-badge">动词短语</span>
+                                        <button class="chevron" type="button" aria-label="收起">
+                                            <svg class="icon" style="width: 14px; height: 14px"><use href="#i-chevron"></use></svg>
+                                        </button>
+                                    </div>
+
+                                    <div class="phrase-pair">
+                                        <div class="phrase-row target">
+                                            <span class="phrase-label">中</span>
+                                            <span class="phrase-text">考虑到；顾及</span>
+                                            <button class="speak" type="button" aria-label="朗读译文">
+                                                <svg class="icon"><use href="#i-volume"></use></svg>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div class="section-label alternatives">其他译法</div>
+                                    <div class="alternative-row">
+                                        <span class="alt-tag">完整</span>
+                                        <span class="alt-text">把……考虑在内</span>
+                                        <span class="alt-note">等义表达</span>
+                                    </div>
+                                    <div class="alternative-row">
+                                        <span class="alt-tag">口语</span>
+                                        <span class="alt-text">把……算进去</span>
+                                        <span class="alt-note">更随意</span>
+                                    </div>
+
+                                    <div class="usage">
+                                        <div class="usage-title">
+                                            <svg class="icon" style="width: 12px; height: 12px"><use href="#i-info"></use></svg>
+                                            用法
+                                        </div>
+                                        <p>
+                                            宾语通常放在 <code>take</code> 与 <code>into account</code> 之间，也可后置：
+                                            <code>take it into account</code> / <code>take into account that…</code>。
+                                        </p>
+                                    </div>
+
+                                    <div class="phrase-example">
+                                        <div class="phrase-example-head">
+                                            <span>语境示例</span>
+                                            <span>1 / 1</span>
+                                        </div>
+                                        <div class="example-line">
+                                            <span class="line-tag">EN</span>
+                                            <p class="example-source">
+                                                We must <mark>take the cost into account</mark> before deciding.
+                                            </p>
+                                            <button class="speak" type="button" aria-label="朗读示例原文">
+                                                <svg class="icon"><use href="#i-volume"></use></svg>
+                                            </button>
+                                        </div>
+                                        <div class="example-line">
+                                            <span class="line-tag">中</span>
+                                            <p class="example-target">做决定前，我们必须把成本考虑在内。</p>
+                                            <button class="speak" type="button" aria-label="朗读示例译文">
+                                                <svg class="icon"><use href="#i-volume"></use></svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </section>
+                            </div>
+                        </div>
+
+                        <div class="window-foot">
+                            <span class="engine"><span class="provider-mark">G</span> Google</span>
+                            <span class="foot-tools">
+                                <button type="button" aria-label="反向翻译">
+                                    <svg class="icon"><use href="#i-swap"></use></svg>
+                                </button>
+                            </span>
+                            <button class="copy" type="button">
+                                <svg class="icon"><use href="#i-copy"></use></svg>
+                                复制译文
+                            </button>
+                        </div>
+                    </div>
+                    <p class="specimen-foot">
+                        <b>视觉规则：</b>输入区已经承担原文，结果区只保留译文；其他译法同样大字号排列，
+                        只用品类标签和一句说明区分语域，不使用另一套“主/次”字号。
+                    </p>
+                </article>
+
+                <article class="specimen">
+                    <div class="specimen-head">
+                        <div>
+                            <span class="specimen-index">03 / PARAGRAPH</span>
+                            <h3>段落 · 阅读视图</h3>
+                            <p>默认整段译文；切换对照后按句排列原文与译文</p>
+                        </div>
+                        <span class="design-note">不再套用词典卡片</span>
+                    </div>
+
+                    <div class="window paragraph-window">
+                        <div class="chrome">
+                            <span class="traffic"><i></i><i></i><i></i></span>
+                            <span class="chrome-name">cup-translate</span>
+                            <span class="chrome-tools">
+                                <button type="button" aria-label="置顶">
+                                    <svg class="icon"><use href="#i-pin"></use></svg>
+                                </button>
+                                <button type="button" aria-label="关闭">
+                                    <svg class="icon"><use href="#i-close"></use></svg>
+                                </button>
+                            </span>
+                        </div>
+
+                        <div class="window-main">
+                            <div class="window-body">
+                                <div class="source-area">
+                                    <div class="source-text paragraph">
+                                        Good design makes the important things easy to see. It removes friction, so people
+                                        can focus on what matters. Clarity is not decoration; it is part of the product.
+                                    </div>
+                                    <div class="source-tools">
+                                        <button class="tool" type="button" aria-label="朗读原文">
+                                            <svg class="icon" style="width: 15px; height: 15px"><use href="#i-volume"></use></svg>
+                                        </button>
+                                        <button class="tool" type="button" aria-label="复制">
+                                            <svg class="icon" style="width: 14px; height: 14px"><use href="#i-copy"></use></svg>
+                                        </button>
+                                        <button class="tool" type="button" aria-label="粘贴">
+                                            <svg class="icon" style="width: 14px; height: 14px"><use href="#i-paste"></use></svg>
+                                        </button>
+                                        <span class="lang-chip">
+                                            <svg class="icon" style="width: 11px; height: 11px"><use href="#i-lang"></use></svg>
+                                            英语
+                                        </span>
+                                        <span class="source-count">172 字符</span>
+                                    </div>
+                                </div>
+
+                                <div class="language-row">
+                                    <button type="button">自动检测 <svg class="icon" style="width: 12px; height: 12px"><use href="#i-chevron"></use></svg></button>
+                                    <button class="swap" type="button" aria-label="交换语言">
+                                        <svg class="icon"><use href="#i-swap"></use></svg>
+                                    </button>
+                                    <button type="button">简体中文 <svg class="icon" style="width: 12px; height: 12px"><use href="#i-chevron"></use></svg></button>
+                                </div>
+
+                                <section class="result">
+                                    <div class="result-head">
+                                        <span class="provider-mark">G</span>
+                                        <span>Google</span>
+                                        <span class="result-mode">/ 段落</span>
+                                        <span class="complete-badge">3 句</span>
+                                        <button class="chevron" type="button" aria-label="收起">
+                                            <svg class="icon" style="width: 14px; height: 14px"><use href="#i-chevron"></use></svg>
+                                        </button>
+                                    </div>
+
+                                    <div class="paragraph-toolbar">
+                                        <div class="view-switch" aria-label="段落显示方式">
+                                            <button class="on" type="button">译文</button>
+                                            <button type="button">对照</button>
+                                        </div>
+                                        <button class="read-all" type="button">
+                                            <svg class="icon"><use href="#i-speak"></use></svg>
+                                            朗读全文
+                                        </button>
+                                    </div>
+                                    <div class="paragraph-meta" id="paragraphMeta">
+                                        <span>整段译文</span>
+                                        <i class="dot"></i>
+                                        <span>原文 3 句</span>
+                                        <i class="dot"></i>
+                                        <span>切换“对照”查看逐句</span>
+                                    </div>
+
+                                    <div class="paragraph-reading" id="paragraphTranslation">
+                                        <p>
+                                            好的设计让重要的内容一目了然。它消除阻力，让人们专注于真正重要的事。清晰不是装饰，而是产品的一部分。
+                                        </p>
+                                    </div>
+
+                                    <div class="sentence-list" id="paragraphBilingual" hidden>
+                                        <article class="sentence">
+                                            <span class="sentence-index">01</span>
+                                            <div class="sentence-copy">
+                                                <p class="sentence-source">
+                                                    Good design makes the important things easy to see.
+                                                </p>
+                                                <p class="sentence-target">好的设计让重要的内容一目了然。</p>
+                                            </div>
+                                            <button class="speak" type="button" aria-label="朗读本句译文">
+                                                <svg class="icon"><use href="#i-volume"></use></svg>
+                                            </button>
+                                        </article>
+                                        <article class="sentence">
+                                            <span class="sentence-index">02</span>
+                                            <div class="sentence-copy">
+                                                <p class="sentence-source">
+                                                    It removes friction, so people can focus on what matters.
+                                                </p>
+                                                <p class="sentence-target">它消除阻力，让人们专注于真正重要的事。</p>
+                                            </div>
+                                            <button class="speak" type="button" aria-label="朗读本句译文">
+                                                <svg class="icon"><use href="#i-volume"></use></svg>
+                                            </button>
+                                        </article>
+                                        <article class="sentence">
+                                            <span class="sentence-index">03</span>
+                                            <div class="sentence-copy">
+                                                <p class="sentence-source">
+                                                    Clarity is not decoration; it is part of the product.
+                                                </p>
+                                                <p class="sentence-target">清晰不是装饰，而是产品的一部分。</p>
+                                            </div>
+                                            <button class="speak" type="button" aria-label="朗读本句译文">
+                                                <svg class="icon"><use href="#i-volume"></use></svg>
+                                            </button>
+                                        </article>
+                                    </div>
+                                    <div class="paragraph-footnote">
+                                        <svg class="icon"><use href="#i-info"></use></svg>
+                                        译文保持整段连续；切到“对照”后按句对齐，不改变原文顺序
+                                    </div>
+                                </section>
+                            </div>
+                        </div>
+
+                        <div class="window-foot">
+                            <span class="engine"><span class="provider-mark">G</span> Google</span>
+                            <span class="foot-tools">
+                                <button type="button" aria-label="对照原文">
+                                    <svg class="icon"><use href="#i-align"></use></svg>
+                                </button>
+                            </span>
+                            <button class="copy" type="button">
+                                <svg class="icon"><use href="#i-copy"></use></svg>
+                                复制译文
+                            </button>
+                        </div>
+                    </div>
+                    <p class="specimen-foot">
+                        <b>视觉规则：</b>段落不显示音标、词性和词典释义；“译文”是一整段连续文本，
+                        只有切到“对照”才按句拆开。朗读、复制、对照都围绕整段而不是某个词。
+                    </p>
+                </article>
+            </section>
+
+            <section class="review-points">
+                <div>
+                    <span class="eyebrow">Review note</span>
+                    <h2>这版需要你确认的四点</h2>
+                    <p>
+                        这一轮只评审信息结构。颜色、圆角等视觉细节可以继续收紧；
+                        真正决定后续实现量的是下面的展示规则。
+                    </p>
+                </div>
+                <ul class="review-list">
+                    <li><b>单词：</b>结果里再次展示原文与音标，词性只做标签，所有释义保持同一字号。</li>
+                    <li><b>单词：</b>默认给出两条例句；每条原句、译文都有独立朗读按钮。</li>
+                    <li><b>短语：</b>结果区只保留译文；以表达和用法为主，替代译法同级展示。</li>
+                    <li><b>段落：</b>默认整段译文；切到“对照”后才逐句显示原文与译文。</li>
+                </ul>
+                <div class="implementation">
+                    <b>评审通过后的数据层约束</b>
+                    <code>
+                        word, phonetics[], senses[{ pos, meanings[] }], examples[2]
+                    </code>
+                    <p style="margin-top: 7px">
+                        Google 缺词性时补词典源，缺例句时补例句源或跨词条例句；译文缺失时再补一次目标语言翻译。
+                        具体供应商不在本轮锁定。
+                    </p>
+                </div>
+            </section>
+        </main>
+
+        <script>
+            const icon = (name, size = 13) =>
+                `<svg class="icon" style="width:${size}px;height:${size}px"><use href="#i-${name}"></use></svg>`;
+
+            const words = {
+                query: {
+                    heading: "query",
+                    phonetic: [
+                        ["英", "/ˈkwɪəri/"],
+                        ["美", "/ˈkwɛri/"],
+                    ],
+                    senses: [
+                        ["v.", ["询问", "询"]],
+                        ["n.", ["疑问", "质问"]],
+                    ],
+                    examples: [
+                        [
+                            "The teacher answered the student’s <mark>query</mark> about the course.",
+                            "老师回答了学生关于课程的疑问。",
+                        ],
+                        [
+                            "Please send your <mark>query</mark> to the support team.",
+                            "请把你的问题发送给支持团队。",
+                        ],
+                    ],
+                },
+                modality: {
+                    heading: "modality",
+                    phonetic: [
+                        ["英", "/məʊˈdæləti/"],
+                        ["美", "/moʊˈdæləti/"],
+                    ],
+                    senses: [
+                        ["n.", ["情态", "模态", "方式"]],
+                        ["n.", ["治疗方式", "感觉通道"]],
+                    ],
+                    examples: [
+                        [
+                            "The <mark>modality</mark> of the treatment depends on the diagnosis.",
+                            "治疗方案取决于诊断结果。",
+                        ],
+                        [
+                            "Language <mark>modality</mark> can be spoken, written, or signed.",
+                            "语言模态可以是口头的、书面的或手语的。",
+                        ],
+                    ],
+                },
+                importance: {
+                    heading: "importance",
+                    phonetic: [
+                        ["英", "/ɪmˈpɔːtəns/"],
+                        ["美", "/ɪmˈpɔːrtəns/"],
+                    ],
+                    senses: [["n.", ["重要性", "重视", "意义"]]],
+                    examples: [
+                        [
+                            "The <mark>importance</mark> of democracy cannot be overstated.",
+                            "民主的重要性怎么强调都不为过。",
+                        ],
+                        [
+                            "This decision is of great <mark>importance</mark> to us.",
+                            "这个决定对我们至关重要。",
+                        ],
+                    ],
+                },
+            };
+
+            function renderWord(key) {
+                const data = words[key];
+                document.getElementById("wordSource").textContent = data.heading;
+                document.getElementById("wordHeading").textContent = data.heading;
+                document.getElementById("wordCount").textContent = `${data.heading.length} 字符`;
+                document.getElementById("wordCompleteness").textContent = "词条完整";
+                document.getElementById("phonetics").innerHTML = data.phonetic
+                    .map(
+                        ([region, ipa]) => `
+                            <span class="phonetic">
+                                <span class="phonetic-region">${region}</span>
+                                ${ipa}
+                                <button class="speak" type="button" aria-label="朗读${region}发音">
+                                    ${icon("volume", 12)}
+                                </button>
+                            </span>
+                        `
+                    )
+                    .join("");
+                document.getElementById("senses").innerHTML = data.senses
+                    .map(
+                        ([pos, meanings]) => `
+                            <div class="sense-row">
+                                <span class="pos">${pos}</span>
+                                <div class="meanings">
+                                    ${meanings.map((meaning) => `<span class="meaning">${meaning}</span>`).join("")}
+                                </div>
+                                <button class="speak sense-speak" type="button" aria-label="朗读${pos}译文">
+                                    ${icon("volume", 12)}
+                                </button>
+                            </div>
+                        `
+                    )
+                    .join("");
+                document.getElementById("exampleCount").textContent = `${data.examples.length} 条`;
+                document.getElementById("examples").innerHTML = data.examples
+                    .map(
+                        ([source, target]) => `
+                            <article class="example-card">
+                                <div class="example-line">
+                                    <span class="line-tag">EN</span>
+                                    <p class="example-source">${source}</p>
+                                    <button class="speak" type="button" aria-label="朗读例句原文">
+                                        ${icon("volume", 12)}
+                                    </button>
+                                </div>
+                                <div class="example-line">
+                                    <span class="line-tag">中</span>
+                                    <p class="example-target">${target}</p>
+                                    <button class="speak" type="button" aria-label="朗读例句译文">
+                                        ${icon("volume", 12)}
+                                    </button>
+                                </div>
+                            </article>
+                        `
+                    )
+                    .join("");
+            }
+
+            const params = new URLSearchParams(location.search);
+            const requestedWord = params.get("word");
+            if (requestedWord && words[requestedWord]) {
+                renderWord(requestedWord);
+                document.querySelectorAll("#wordSwitch button").forEach((item) => {
+                    item.classList.toggle("on", item.dataset.word === requestedWord);
+                });
+            } else {
+                renderWord("query");
+            }
+
+            document.getElementById("wordSwitch").addEventListener("click", (event) => {
+                const button = event.target.closest("button[data-word]");
+                if (!button) return;
+                document.querySelectorAll("#wordSwitch button").forEach((item) => item.classList.remove("on"));
+                button.classList.add("on");
+                renderWord(button.dataset.word);
+            });
+
+            const themeToggle = document.getElementById("themeToggle");
+            themeToggle.addEventListener("click", () => {
+                const dark = document.body.classList.toggle("dark");
+                themeToggle.querySelector("use").setAttribute("href", dark ? "#i-sun" : "#i-moon");
+                themeToggle.querySelector("span").textContent = dark ? "浅色预览" : "深色预览";
+                localStorage.setItem("cup-design-theme", dark ? "dark" : "light");
+            });
+
+            const requestedTheme = params.get("theme");
+            const shouldUseDark =
+                requestedTheme === "dark" ||
+                (requestedTheme !== "light" && localStorage.getItem("cup-design-theme") === "dark");
+            if (shouldUseDark) {
+                document.body.classList.add("dark");
+                themeToggle.querySelector("use").setAttribute("href", "#i-sun");
+                themeToggle.querySelector("span").textContent = "浅色预览";
+            }
+
+            const focusToggle = document.getElementById("focusToggle");
+            focusToggle.addEventListener("click", () => {
+                const narrow = document.body.classList.toggle("narrow");
+                document.querySelectorAll(".window").forEach((window) => {
+                    window.style.maxWidth = narrow ? "380px" : "";
+                });
+                document.querySelectorAll(".source-text.word").forEach((element) => {
+                    element.style.fontSize = narrow ? "26px" : "";
+                });
+                focusToggle.querySelector("span").textContent = narrow ? "恢复 460px 预览" : "切换 380px 窄窗";
+            });
+
+            if (params.get("narrow") === "1") {
+                focusToggle.click();
+            }
+
+            document.querySelectorAll(".view-switch button").forEach((button) => {
+                button.addEventListener("click", () => {
+                    document.querySelectorAll(".view-switch button").forEach((item) => item.classList.remove("on"));
+                    button.classList.add("on");
+                    const bilingual = button.textContent.trim() === "对照";
+                    document.getElementById("paragraphTranslation").hidden = bilingual;
+                    document.getElementById("paragraphBilingual").hidden = !bilingual;
+                    document.getElementById("paragraphMeta").innerHTML = bilingual
+                        ? '<span>逐句对照</span><i class="dot"></i><span>保留原段落顺序</span><i class="dot"></i><span>3 组双语</span>'
+                        : '<span>整段译文</span><i class="dot"></i><span>原文 3 句</span><i class="dot"></i><span>切换“对照”查看逐句</span>';
+                });
+            });
+
+            if (params.get("paragraph") === "compare") {
+                [...document.querySelectorAll(".view-switch button")]
+                    .find((button) => button.textContent.trim() === "对照")
+                    ?.click();
+            }
+        </script>
+    </body>
+</html>

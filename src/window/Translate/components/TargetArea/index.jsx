@@ -1,45 +1,36 @@
 import { resolveSpeechService, speechText } from '../../../../utils/speechService';
 import { useSpeech } from '../../../../hooks/useSpeech';
 import { resolveLocalPair } from '../../../../services/translate/local_mt/options';
-import {
-    Card,
-    CardBody,
-    CardHeader,
-    CardFooter,
-    Button,
-    Dropdown,
-    DropdownItem,
-    DropdownMenu,
-    DropdownTrigger,
-    Tooltip,
-} from '@nextui-org/react';
+import { Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Tooltip } from '@nextui-org/react';
 import { LuChevronDown, LuChevronUp, LuGripVertical, LuRotateCcw } from 'react-icons/lu';
 import { BaseDirectory, readTextFile } from '@tauri-apps/api/fs';
 import { sendNotification } from '@tauri-apps/api/notification';
-import React, { useEffect, useState, useRef } from 'react';
-import PulseLoader from 'react-spinners/PulseLoader';
-import { LuSquare, LuLoader2, LuVolume2, LuCopy, LuArrowLeftRight, LuBookPlus } from 'react-icons/lu';
-import { semanticColors } from '@nextui-org/theme';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
+import { LuSquare, LuLoader2, LuVolume2, LuCopy, LuArrowLeftRight } from 'react-icons/lu';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import Database from 'tauri-plugin-sql-api';
-import { useTheme } from 'next-themes';
 import { useAtomValue } from 'jotai';
 import { nanoid } from 'nanoid';
-import { useSpring, animated } from '@react-spring/web';
-import useMeasure from 'react-use-measure';
 
 import * as builtinCollectionServices from '../../../../services/collection';
 import { isServiceConfigured } from '../../../../services/translate/required_config';
 import { invoke } from '@tauri-apps/api/tauri';
-import { sourceLanguageAtom, targetLanguageAtom } from '../LanguageArea';
 import { useConfig, useToastStyle, useVoice } from '../../../../hooks';
-import { sourceTextAtom, detectLanguageAtom } from '../SourceArea';
 import { translationResultToText } from '../../../../utils/translationResult';
 import { clipboardFailureMessage, writeClipboardSafely } from '../../../../utils/clipboard';
 import { invoke_plugin } from '../../../../utils/invoke_plugin';
 import * as builtinServices from '../../../../services/translate';
 import * as builtinTtsServices from '../../../../services/tts';
+import { getActiveSourceLanguage } from '../../../../utils/sourceLanguage';
+import { detectLanguageAtom, sourceLanguageAtom, sourceTextAtom, targetLanguageAtom } from '../../atoms';
+import {
+    buildParagraphEntry,
+    buildPhraseEntry,
+    buildSentencePairs,
+    buildWordEntry,
+    classifySourceText,
+} from '../../resultView';
 
 import { info, error as logError } from 'tauri-plugin-log-api';
 import {
@@ -60,6 +51,19 @@ function richTextToPlainText(value) {
     const withLineBreaks = value.replace(/<br\s*\/?\s*>/gi, '\n').replace(/<\/(?:p|div|li)>/gi, '\n');
     const document = new DOMParser().parseFromString(withLineBreaks, 'text/html');
     return document.body.textContent ?? '';
+}
+
+function escapeRegExp(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function highlightTerm(text, term) {
+    const needle = String(term || '').trim();
+    if (!needle || !text) return text;
+    const parts = text.split(new RegExp(`(${escapeRegExp(needle)})`, 'gi'));
+    return parts.map((part, index) =>
+        part.toLocaleLowerCase() === needle.toLocaleLowerCase() ? <mark key={index}>{part}</mark> : part
+    );
 }
 
 export default function TargetArea(props) {
@@ -100,9 +104,9 @@ export default function TargetArea(props) {
     const backRequest = useRef(0);
     const displayResult = showBack ? backTranslation : result;
     const activeRequest = useRef(null);
-    const [showAllExamples, setShowAllExamples] = useState(false);
     const [error, setError] = useState('');
     const [skipped, setSkipped] = useState(false);
+    const [paragraphView, setParagraphView] = useState('translation');
 
     const sourceText = useAtomValue(sourceTextAtom);
     const sourceLanguage = useAtomValue(sourceLanguageAtom);
@@ -112,7 +116,8 @@ export default function TargetArea(props) {
     const [clipboardMonitor] = useConfig('clipboard_monitor', false);
 
     const detectLanguage = useAtomValue(detectLanguageAtom);
-    const spokenLanguage = showBack ? (sourceLanguage === 'auto' ? detectLanguage : sourceLanguage) : targetLanguage;
+    const activeSourceLanguage = getActiveSourceLanguage(sourceLanguage, detectLanguage);
+    const spokenLanguage = showBack ? activeSourceLanguage : targetLanguage;
     useEffect(() => {
         backRequest.current += 1;
         setBackTranslation(null);
@@ -124,7 +129,6 @@ export default function TargetArea(props) {
     }, [result, sourceText, sourceLanguage, targetLanguage, currentTranslateServiceInstanceKey]);
     const [ttsPluginInfo, setTtsPluginInfo] = useState();
     const { t } = useTranslation();
-    const textAreaRef = useRef();
     const toastStyle = useToastStyle();
     const speak = useVoice();
     const speech = useSpeech(displayResult);
@@ -135,7 +139,6 @@ export default function TargetArea(props) {
     const exampleSpeechLabel = exampleSpeech.status === 'idle' ? t('translate.speak') : t('translate.stop_speaking');
     const sourceWordSpeechLabel =
         sourceWordSpeech.status === 'idle' ? t('translate.speak') : t('translate.stop_speaking');
-    const theme = useTheme();
 
     useEffect(() => {
         if (exampleSpeech.status === 'idle') setActiveExample('');
@@ -143,6 +146,7 @@ export default function TargetArea(props) {
     useEffect(() => {
         exampleSpeech.stop();
         setActiveExample('');
+        setParagraphView('translation');
     }, [result]);
     useEffect(() => {
         sourceWordSpeech.stop();
@@ -176,7 +180,6 @@ export default function TargetArea(props) {
     // listen to translation
     useEffect(() => {
         setResult('');
-        setShowAllExamples(false);
         if (!sourceText.trim()) setHide(true);
         setError('');
         setSkipped(false);
@@ -277,10 +280,7 @@ export default function TargetArea(props) {
                         sourceLanguage === 'auto' && targetLanguage === detectLanguage
                             ? translateSecondLanguage
                             : targetLanguage;
-                    const pair = resolveLocalPair(
-                        sourceLanguage === 'auto' ? detectLanguage : sourceLanguage,
-                        effectiveTarget
-                    );
+                    const pair = resolveLocalPair(activeSourceLanguage, effectiveTarget);
                     const status = pair ? await invoke('local_mt_model_status', { pair }) : { installed: true };
                     if (activeRequest.current !== id) return;
                     if (!status.installed) {
@@ -443,16 +443,6 @@ export default function TargetArea(props) {
         }
     };
 
-    // hide empty textarea
-    useEffect(() => {
-        if (textAreaRef.current) {
-            textAreaRef.current.style.height = '0px';
-            if (result !== '') {
-                textAreaRef.current.style.height = textAreaRef.current.scrollHeight + 'px';
-            }
-        }
-    }, [displayResult, appFontSize]);
-
     // refresh tts config
     useEffect(() => {
         if (effectiveTtsList.length > 0 && getServiceSouceType(effectiveTtsList[0]) === ServiceSourceType.PLUGIN) {
@@ -531,704 +521,721 @@ export default function TargetArea(props) {
     const singleWordPronunciation = isSingleWord
         ? serviceModule?.translate?.pronunciationFor?.(
               sourceText.trim(),
-              serviceLanguage?.[sourceLanguage] ?? sourceLanguage,
+              serviceLanguage?.[activeSourceLanguage] ?? activeSourceLanguage,
               serviceLanguage?.[effectiveTargetLanguage] ?? effectiveTargetLanguage
           ) || ''
         : '';
     const speakSourceWord = () => {
         if (!speechService || !isSingleWord) return;
         sourceWordSpeech
-            .toggle(() =>
-                speakWithService(sourceText.trim(), sourceLanguage === 'auto' ? detectLanguage : sourceLanguage)
-            )
+            .toggle(() => speakWithService(sourceText.trim(), activeSourceLanguage))
             .catch((e) => {
                 logError(`[speech] ${e}`);
                 toast.error(t('translate.speech_failed'), { style: toastStyle });
             });
     };
 
+    const detailSpeechIcon = (key) => {
+        if (activeExample === key && exampleSpeech.status === 'loading') {
+            return <LuLoader2 className='animate-spin text-[12px]' />;
+        }
+        if (activeExample === key && exampleSpeech.status === 'playing') {
+            return <LuSquare className='text-[10px]' />;
+        }
+        return <LuVolume2 className='text-[13px]' />;
+    };
+
+    const resultMode = classifySourceText(sourceText);
+    const wordEntry = useMemo(
+        () => buildWordEntry(result, sourceText, singleWordPronunciation),
+        [result, sourceText, singleWordPronunciation]
+    );
+    const phraseEntry = useMemo(
+        () =>
+            showBack
+                ? { translation: backTranslation || '', alternatives: [], usage: [], examples: [] }
+                : buildPhraseEntry(result),
+        [result, showBack, backTranslation]
+    );
+    const paragraphEntry = useMemo(() => buildParagraphEntry(displayResult), [displayResult]);
+    const sentencePairs = useMemo(
+        () => buildSentencePairs(sourceText, paragraphEntry.translation),
+        [sourceText, paragraphEntry.translation]
+    );
+    const modeLabel =
+        resultMode === 'word'
+            ? t('translate.dictionary_mode')
+            : resultMode === 'paragraph'
+              ? t('translate.mode_paragraph')
+              : t('translate.mode_phrase');
+    const resultBadge =
+        resultMode === 'word'
+            ? wordEntry.senses.length > 0 && wordEntry.examples.length >= 2
+                ? t('translate.entry_complete')
+                : t('translate.pos_count', { count: wordEntry.senses.length })
+            : resultMode === 'paragraph'
+              ? t('translate.sentence_count', { count: sentencePairs.length })
+              : phraseEntry.alternatives.length
+                ? t('translate.other_translations')
+                : '';
+
     const copyableResult = translationResultToText(displayResult);
 
-    const [boundRef, bounds] = useMeasure({ scroll: true });
-    const springs = useSpring({
-        from: { height: 0 },
-        to: { height: hide ? 0 : bounds.height },
-    });
+    const toggleBackTranslation = async () => {
+        if (backTranslation !== null) {
+            speech.stop();
+            setShowBack(!showBack);
+            return;
+        }
+        const token = ++backRequest.current;
+        setBackLoading(true);
+        try {
+            const to = activeSourceLanguage;
+            const serviceName = getServiceName(currentTranslateServiceInstanceKey);
+            const plugin = whetherPluginService(currentTranslateServiceInstanceKey);
+            const languages = plugin
+                ? pluginList.translate[serviceName].language
+                : builtinServices[serviceName].Language;
+            if (!(targetLanguage in languages) || !(to in languages)) {
+                throw new Error(t('common.language_not_supported'));
+            }
+            let translateFn, utils;
+            if (plugin) [translateFn, utils] = await invoke_plugin('translate', serviceName);
+            else translateFn = builtinServices[serviceName].translate;
+            let streamed = '';
+            const value = await translateFn(speechText(result), languages[targetLanguage], languages[to], {
+                config: {
+                    ...serviceInstanceConfigMap[currentTranslateServiceInstanceKey],
+                    ...(plugin ? { enable: 'true' } : {}),
+                },
+                detect: targetLanguage,
+                utils,
+                setResult: (value) => {
+                    streamed = translationResultToText(value);
+                },
+            });
+            if (token !== backRequest.current) return;
+            const text = translationResultToText(value) || streamed;
+            if (!text.trim()) throw new Error(t('translate.empty_back_translation'));
+            setBackTranslation(text);
+            setShowBack(true);
+            speech.stop();
+        } catch (e) {
+            if (token === backRequest.current) toast.error(e.toString(), { style: toastStyle });
+        } finally {
+            if (token === backRequest.current) setBackLoading(false);
+        }
+    };
+
+    const addToCollection = async (collectionServiceInstanceName) => {
+        try {
+            if (getServiceSouceType(collectionServiceInstanceName) === ServiceSourceType.PLUGIN) {
+                const pluginConfig = serviceInstanceConfigMap[collectionServiceInstanceName];
+                const [func, utils] = await invoke_plugin('collection', getServiceName(collectionServiceInstanceName));
+                await func(sourceText.trim(), translationResultToText(result), {
+                    config: pluginConfig,
+                    utils,
+                });
+            } else {
+                const instanceConfig = serviceInstanceConfigMap[collectionServiceInstanceName];
+                await builtinCollectionServices[getServiceName(collectionServiceInstanceName)].collection(
+                    sourceText,
+                    result,
+                    { config: instanceConfig }
+                );
+            }
+            toast.success(t('translate.add_collection_success'), { style: toastStyle });
+        } catch (e) {
+            toast.error(e.toString(), { style: toastStyle });
+        }
+    };
+
+    const translateServiceName = getServiceName(currentTranslateServiceInstanceKey);
+    const currentPluginService = whetherPluginService(currentTranslateServiceInstanceKey);
+    const engineIcon = currentPluginService
+        ? pluginList.translate[translateServiceName].icon
+        : builtinServices[translateServiceName].info.icon;
+    const engineDisplayName = getInstanceName(currentTranslateServiceInstanceKey, () =>
+        currentPluginService
+            ? pluginList.translate[translateServiceName].display
+            : t(`services.translate.${translateServiceName}.title`)
+    );
+    const sourceTag = String(activeSourceLanguage || 'en')
+        .split('_')[0]
+        .toLocaleUpperCase();
+    const targetTag = String(targetLanguage || 'zh_cn')
+        .split('_')[0]
+        .toLocaleUpperCase();
+    const showSkeleton = isLoading && !result && !error && !skipped;
 
     return (
-        <Card
-            shadow='none'
-            className={`result-panel ${primary ? 'result-primary' : ''}`}
-            style={{
-                '--cup-result-size': `${(appFontSize || 16) * 1.25}px`,
-                '--cup-hero-size': `${(appFontSize || 16) * 1.5625}px`,
-                '--cup-definition-size': `${(appFontSize || 16) * 1.0625}px`,
-                '--cup-example-size': `${(appFontSize || 16) * 0.875}px`,
-                '--cup-meta-size': `${(appFontSize || 16) * 0.75}px`,
-            }}
+        <section
+            className={`cup-result-card ${primary ? 'is-primary' : ''}`}
+            style={{ '--cup4-base': `${appFontSize || 16}px` }}
         >
-            <CardHeader
-                data-cup-header
-                className={`flex justify-between py-1 px-0 bg-content2 h-[30px] ${hide ? 'rounded-[10px]' : 'rounded-t-[10px]'}`}
-            >
-                {/* current service instance and available service instance to change */}
-                <div className='flex result-service'>
-                    <span
-                        {...drag}
-                        className='result-drag-handle'
-                        aria-label={t('translate.reorder')}
-                    >
-                        <LuGripVertical />
-                    </span>
-                    <Dropdown>
-                        <DropdownTrigger>
-                            <Button
-                                size='sm'
-                                variant='solid'
-                                className='bg-transparent'
-                                startContent={
-                                    whetherPluginService(currentTranslateServiceInstanceKey) ? (
-                                        <img
-                                            src={
-                                                pluginList['translate'][
-                                                    getServiceName(currentTranslateServiceInstanceKey)
-                                                ].icon
-                                            }
-                                            className='h-[20px] my-auto'
-                                        />
-                                    ) : (
-                                        <img
-                                            src={
-                                                builtinServices[getServiceName(currentTranslateServiceInstanceKey)].info
-                                                    .icon
-                                            }
-                                            className='h-[20px] my-auto'
-                                        />
-                                    )
-                                }
-                            >
-                                {whetherPluginService(currentTranslateServiceInstanceKey) ? (
-                                    <div className='my-auto'>{`${getInstanceName(currentTranslateServiceInstanceKey, () => pluginList['translate'][getServiceName(currentTranslateServiceInstanceKey)].display)} `}</div>
-                                ) : (
-                                    <div className='my-auto'>
-                                        {getInstanceName(currentTranslateServiceInstanceKey, () =>
-                                            t(
-                                                `services.translate.${getServiceName(currentTranslateServiceInstanceKey)}.title`
-                                            )
-                                        )}
-                                    </div>
-                                )}
-                            </Button>
-                        </DropdownTrigger>
-                        <DropdownMenu
-                            aria-label='app language'
-                            className='max-h-[40vh] overflow-y-auto'
-                            onAction={(key) => {
-                                setCurrentTranslateServiceInstanceKey(key);
-                            }}
+            <header className='cup-result-head'>
+                <span
+                    {...drag}
+                    className='cup-drag-handle'
+                    aria-label={t('translate.reorder')}
+                >
+                    <LuGripVertical className='text-[13px]' />
+                </span>
+                <Dropdown>
+                    <DropdownTrigger>
+                        <button
+                            type='button'
+                            className='cup-engine-button'
                         >
-                            {translateServiceInstanceList.map((instanceKey) => {
-                                return (
-                                    <DropdownItem
-                                        key={instanceKey}
-                                        startContent={
-                                            whetherPluginService(instanceKey) ? (
-                                                <img
-                                                    src={pluginList['translate'][getServiceName(instanceKey)].icon}
-                                                    className='h-[20px] my-auto'
-                                                />
-                                            ) : (
-                                                <img
-                                                    src={builtinServices[getServiceName(instanceKey)].info.icon}
-                                                    className='h-[20px] my-auto'
-                                                />
-                                            )
-                                        }
-                                    >
-                                        {whetherPluginService(instanceKey) ? (
-                                            <div className='my-auto'>{`${getInstanceName(instanceKey, () => pluginList['translate'][getServiceName(instanceKey)].display)} `}</div>
-                                        ) : (
-                                            <div className='my-auto'>
-                                                {getInstanceName(instanceKey, () =>
-                                                    t(`services.translate.${getServiceName(instanceKey)}.title`)
-                                                )}
-                                            </div>
-                                        )}
-                                    </DropdownItem>
-                                );
-                            })}
-                        </DropdownMenu>
-                    </Dropdown>
-                    <PulseLoader
-                        loading={isLoading}
-                        color={
-                            theme.resolvedTheme === 'dark'
-                                ? semanticColors.dark.default[500]
-                                : semanticColors.light.default[500]
-                        }
-                        size={8}
-                        cssOverride={{
-                            display: 'inline-block',
-                            margin: 'auto',
-                            marginLeft: '20px',
-                        }}
-                    />
-                </div>
-                {/* content collapse */}
-                <div className='flex'>
-                    <Button
-                        size='sm'
-                        isIconOnly
-                        variant='light'
-                        className='h-[20px] w-[20px]'
-                        aria-label={hide ? t('translate.expand') : t('translate.collapse')}
-                        aria-expanded={!hide}
-                        onPress={() => setHide(!hide)}
+                            <img
+                                src={engineIcon}
+                                alt=''
+                            />
+                            <span>{engineDisplayName}</span>
+                        </button>
+                    </DropdownTrigger>
+                    <DropdownMenu
+                        aria-label='translate engine'
+                        className='max-h-[40vh] overflow-y-auto'
+                        onAction={(key) => setCurrentTranslateServiceInstanceKey(key)}
                     >
-                        {hide ? <LuChevronDown className='text-[16px]' /> : <LuChevronUp className='text-[16px]' />}
-                    </Button>
-                </div>
-            </CardHeader>
-            <animated.div style={{ ...springs }}>
-                <div ref={boundRef}>
-                    {/* result content */}
-                    <CardBody
-                        data-cup-body
-                        className={`p-[12px] pb-0 ${hide && 'h-0 p-0'}`}
+                        {translateServiceInstanceList.map((instanceKey) => {
+                            const plugin = whetherPluginService(instanceKey);
+                            const serviceName = getServiceName(instanceKey);
+                            return (
+                                <DropdownItem
+                                    key={instanceKey}
+                                    startContent={
+                                        <img
+                                            src={
+                                                plugin
+                                                    ? pluginList.translate[serviceName].icon
+                                                    : builtinServices[serviceName].info.icon
+                                            }
+                                            className='h-[16px] w-[16px] object-contain'
+                                            alt=''
+                                        />
+                                    }
+                                >
+                                    {getInstanceName(instanceKey, () =>
+                                        plugin
+                                            ? pluginList.translate[serviceName].display
+                                            : t(`services.translate.${serviceName}.title`)
+                                    )}
+                                </DropdownItem>
+                            );
+                        })}
+                    </DropdownMenu>
+                </Dropdown>
+                <span className='cup-result-mode'>/ {modeLabel}</span>
+                {isLoading && <span className='cup-loading-dot' />}
+                {resultBadge && <span className='cup-result-badge'>{resultBadge}</span>}
+                <button
+                    type='button'
+                    className='cup-collapse-button'
+                    aria-label={hide ? t('translate.expand') : t('translate.collapse')}
+                    aria-expanded={!hide}
+                    onClick={() => setHide(!hide)}
+                >
+                    {hide ? <LuChevronDown className='text-[14px]' /> : <LuChevronUp className='text-[14px]' />}
+                </button>
+            </header>
+
+            <div className={`cup-result-body ${hide && !showSkeleton ? 'is-hidden' : ''}`}>
+                {showSkeleton && (
+                    <div
+                        className='cup-skeleton'
+                        aria-label={t('translate.result')}
                     >
-                        {typeof displayResult === 'string' ? (
-                            <>
-                                {isSingleWord && (
-                                    <div className='result-source-word'>
-                                        <span className='result-source-word-text'>{sourceText.trim()}</span>
-                                        {singleWordPronunciation && (
-                                            <span className='result-source-word-phonetic'>
-                                                {singleWordPronunciation}
-                                            </span>
-                                        )}
-                                        {speechService && (
-                                            <button
-                                                type='button'
-                                                aria-label={sourceWordSpeechLabel}
-                                                className='speech-button'
-                                                data-active={sourceWordSpeech.status !== 'idle'}
-                                                aria-pressed={sourceWordSpeech.status !== 'idle'}
-                                                onClick={speakSourceWord}
+                        <span />
+                        <span />
+                        <span />
+                    </div>
+                )}
+
+                {resultMode === 'word' && result && (
+                    <>
+                        <div className='cup-word-heading'>
+                            <div>
+                                <h3>{wordEntry.word}</h3>
+                                {wordEntry.pronunciations.length > 0 && (
+                                    <div className='cup-phonetics'>
+                                        {wordEntry.pronunciations.map((pronunciation, index) => (
+                                            <span
+                                                className='cup-phonetic'
+                                                key={`${pronunciation.region}-${pronunciation.symbol}-${index}`}
                                             >
-                                                {sourceWordSpeech.status === 'loading' ? (
-                                                    <LuLoader2 className='animate-spin text-[13px]' />
-                                                ) : sourceWordSpeech.status === 'playing' ? (
-                                                    <LuSquare className='text-[11px]' />
-                                                ) : (
-                                                    <LuVolume2 className='text-[13px]' />
+                                                {pronunciation.region && (
+                                                    <span className='cup-phonetic-region'>{pronunciation.region}</span>
                                                 )}
-                                            </button>
-                                        )}
-                                    </div>
-                                )}
-                                <textarea
-                                    ref={textAreaRef}
-                                    className='result-text h-0 resize-none bg-transparent select-text outline-none'
-                                    aria-label={t('translate.result')}
-                                    rows={1}
-                                    readOnly
-                                    value={displayResult}
-                                />
-                            </>
-                        ) : (
-                            <div className='dictionary-result'>
-                                {result['pronunciations']?.map((pronunciation, index) => (
-                                    <div
-                                        key={index}
-                                        className='dictionary-pronunciation'
-                                    >
-                                        {pronunciation['region'] && <span>{pronunciation['region']}</span>}
-                                        {pronunciation['symbol'] && <span>{pronunciation['symbol']}</span>}
-                                        {pronunciation['voice'] && (
-                                            <button
-                                                aria-label={speechLabel}
-                                                className='speech-button'
-                                                data-active={speech.status !== 'idle'}
-                                                aria-pressed={speech.status !== 'idle'}
-                                                onClick={() => speak(pronunciation['voice'])}
-                                            >
-                                                <LuVolume2 />
-                                            </button>
-                                        )}
-                                    </div>
-                                ))}
-                                {result['explanations']?.map((explanations, index) => {
-                                    const explains = explanations['explains'] ?? [];
-                                    if (!explains.length) return null;
-                                    const primaryCount = index === 0 ? 3 : 2;
-                                    return (
-                                        <div
-                                            key={index}
-                                            className={`dictionary-entry ${index === 0 ? 'dictionary-hero' : ''}`}
-                                        >
-                                            {explanations['trait'] && (
-                                                <span className='dictionary-trait'>{explanations['trait']}</span>
-                                            )}
-                                            <div
-                                                className='dictionary-meaning-row'
-                                                style={!explanations['trait'] ? { gridColumn: '1 / -1' } : undefined}
-                                            >
-                                                <div className='dictionary-meaning select-text'>
-                                                    {explains.slice(0, primaryCount).join('；')}
-                                                </div>
-                                                {index === 0 && speechService && (
+                                                {pronunciation.symbol}
+                                                {speechService && (
                                                     <button
-                                                        aria-label={speechLabel}
-                                                        className='speech-button dictionary-meaning-speech'
-                                                        data-active={speech.status !== 'idle'}
-                                                        aria-pressed={speech.status !== 'idle'}
-                                                        onClick={() =>
-                                                            speech.toggle(handleSpeak).catch((e) => {
-                                                                logError(`[speech] ${e}`);
-                                                                toast.error(t('translate.speech_failed'), {
-                                                                    style: toastStyle,
-                                                                });
-                                                            })
-                                                        }
+                                                        type='button'
+                                                        className='cup-speak-button'
+                                                        aria-label={sourceWordSpeechLabel}
+                                                        data-active={sourceWordSpeech.status !== 'idle'}
+                                                        onClick={() => {
+                                                            if (pronunciation.voice) {
+                                                                speak(pronunciation.voice);
+                                                            } else {
+                                                                speakSourceWord();
+                                                            }
+                                                        }}
                                                     >
-                                                        {speech.status === 'loading' ? (
-                                                            <LuLoader2 className='animate-spin text-[16px]' />
-                                                        ) : speech.status === 'playing' ? (
-                                                            <LuSquare className='text-[14px]' />
+                                                        {sourceWordSpeech.status === 'loading' ? (
+                                                            <LuLoader2 className='animate-spin text-[11px]' />
+                                                        ) : sourceWordSpeech.status === 'playing' ? (
+                                                            <LuSquare className='text-[9px]' />
                                                         ) : (
-                                                            <LuVolume2 className='text-[16px]' />
+                                                            <LuVolume2 className='text-[12px]' />
                                                         )}
                                                     </button>
                                                 )}
-                                            </div>
-                                            {explains.length > primaryCount && (
-                                                <div className='dictionary-more select-text'>
-                                                    {explains.slice(primaryCount).join('、')}
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                                {result['associations']?.map((association, index) => (
-                                    <p
-                                        key={index}
-                                        className='dictionary-more select-text'
-                                    >
-                                        {association}
-                                    </p>
-                                ))}
-                                {result['sentence']?.length > 0 && (
-                                    <section className='dictionary-examples'>
-                                        <div className='dictionary-section-title'>
-                                            <span>{t('translate.examples')}</span>
-                                            <span>
-                                                {Math.min(
-                                                    showAllExamples ? result['sentence'].length : 2,
-                                                    result['sentence'].length
-                                                )}{' '}
-                                                / {result['sentence'].length}
                                             </span>
-                                        </div>
-                                        {result['sentence']
-                                            .slice(0, showAllExamples ? undefined : 2)
-                                            .map((sentence, index) => (
-                                                <div
-                                                    key={index}
-                                                    className='dictionary-example select-text'
-                                                >
-                                                    {sentence['source'] && (
-                                                        <div className='dictionary-example-line'>
-                                                            <span>{richTextToPlainText(sentence['source'])}</span>
-                                                            {speechService && (
-                                                                <button
-                                                                    type='button'
-                                                                    aria-label={exampleSpeechLabel}
-                                                                    className='speech-button dictionary-example-speech'
-                                                                    data-active={activeExample === `${index}-source`}
-                                                                    aria-pressed={activeExample === `${index}-source`}
-                                                                    onClick={() =>
-                                                                        speakExample(
-                                                                            richTextToPlainText(sentence['source']),
-                                                                            sourceLanguage === 'auto'
-                                                                                ? detectLanguage
-                                                                                : sourceLanguage,
-                                                                            `${index}-source`
-                                                                        )
-                                                                    }
-                                                                >
-                                                                    {activeExample === `${index}-source` &&
-                                                                    exampleSpeech.status === 'loading' ? (
-                                                                        <LuLoader2 className='animate-spin text-[14px]' />
-                                                                    ) : activeExample === `${index}-source` &&
-                                                                      exampleSpeech.status === 'playing' ? (
-                                                                        <LuSquare className='text-[12px]' />
-                                                                    ) : (
-                                                                        <LuVolume2 className='text-[14px]' />
-                                                                    )}
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                    {sentence['target'] && (
-                                                        <div className='dictionary-example-line dictionary-example-translation'>
-                                                            <p>{richTextToPlainText(sentence['target'])}</p>
-                                                            {speechService && (
-                                                                <button
-                                                                    type='button'
-                                                                    aria-label={exampleSpeechLabel}
-                                                                    className='speech-button dictionary-example-speech'
-                                                                    data-active={activeExample === `${index}-target`}
-                                                                    aria-pressed={activeExample === `${index}-target`}
-                                                                    onClick={() =>
-                                                                        speakExample(
-                                                                            richTextToPlainText(sentence['target']),
-                                                                            targetLanguage,
-                                                                            `${index}-target`
-                                                                        )
-                                                                    }
-                                                                >
-                                                                    {activeExample === `${index}-target` &&
-                                                                    exampleSpeech.status === 'loading' ? (
-                                                                        <LuLoader2 className='animate-spin text-[14px]' />
-                                                                    ) : activeExample === `${index}-target` &&
-                                                                      exampleSpeech.status === 'playing' ? (
-                                                                        <LuSquare className='text-[12px]' />
-                                                                    ) : (
-                                                                        <LuVolume2 className='text-[14px]' />
-                                                                    )}
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        {result['sentence'].length > 2 && (
-                                            <button
-                                                className='dictionary-expand'
-                                                aria-expanded={showAllExamples}
-                                                onClick={() => setShowAllExamples(!showAllExamples)}
-                                            >
-                                                {showAllExamples
-                                                    ? t('translate.fewer_examples')
-                                                    : t('translate.more_examples')}
-                                            </button>
-                                        )}
-                                    </section>
+                                        ))}
+                                    </div>
                                 )}
                             </div>
+                            <span className='cup-word-kind'>
+                                {t('translate.mode_word')} · {t(`languages.${activeSourceLanguage || 'auto'}`)}
+                            </span>
+                        </div>
+
+                        {wordEntry.senses.length > 0 && (
+                            <>
+                                <div className='cup-section-label'>
+                                    <span>{t('translate.dictionary')}</span>
+                                    <span className='cup-section-count'>
+                                        {t('translate.pos_count', { count: wordEntry.senses.length })}
+                                    </span>
+                                </div>
+                                <div className='cup-senses'>
+                                    {wordEntry.senses.map((sense, index) => {
+                                        const speechKey = `sense-${index}`;
+                                        return (
+                                            <div
+                                                className='cup-sense-row'
+                                                key={`${sense.pos}-${index}`}
+                                            >
+                                                <span className='cup-pos'>{sense.pos}</span>
+                                                <div className='cup-meanings select-text'>
+                                                    {sense.meanings.map((meaning, meaningIndex) => (
+                                                        <span
+                                                            className='cup-meaning'
+                                                            key={`${meaning}-${meaningIndex}`}
+                                                        >
+                                                            {meaning}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                                {speechService && (
+                                                    <button
+                                                        type='button'
+                                                        className='cup-speak-button cup-sense-speak'
+                                                        aria-label={exampleSpeechLabel}
+                                                        data-active={activeExample === speechKey}
+                                                        onClick={() =>
+                                                            speakExample(
+                                                                sense.meanings.join('；'),
+                                                                targetLanguage,
+                                                                speechKey
+                                                            )
+                                                        }
+                                                    >
+                                                        {detailSpeechIcon(speechKey)}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </>
                         )}
-                        {skipped ? (
-                            // 未配置引擎：不发请求，只留一行灰字提示（比错误卡片轻，但绝不静默）
-                            <p className='text-default-500 text-xs'>{t('translate.unconfigured_skip')}</p>
-                        ) : (
-                            <></>
-                        )}
-                        {error && (
-                            <div
-                                className='result-error text-danger text-sm'
-                                role='alert'
-                            >
-                                {error
-                                    .split('\n')
-                                    .filter((line) => line.trim())
-                                    .slice(0, 3)
-                                    .map((line, index) => (
-                                        <p key={index}>{line.length > 100 ? line.slice(0, 100) + '…' : line}</p>
-                                    ))}
+
+                        {wordEntry.examples.length > 0 && (
+                            <div className='cup-examples'>
+                                <div className='cup-section-label'>
+                                    <span>{t('translate.examples')}</span>
+                                    <span className='cup-section-count'>
+                                        {t('translate.example_count', {
+                                            count: Math.min(2, wordEntry.examples.length),
+                                        })}
+                                    </span>
+                                </div>
+                                {wordEntry.examples.slice(0, 2).map((sentence, index) => (
+                                    <article
+                                        className='cup-example-card select-text'
+                                        key={`${sentence.source}-${index}`}
+                                    >
+                                        {sentence.source && (
+                                            <div className='cup-example-line'>
+                                                <span className='cup-line-tag'>{sourceTag}</span>
+                                                <p className='cup-example-source'>
+                                                    {highlightTerm(
+                                                        richTextToPlainText(sentence['source']),
+                                                        wordEntry.word
+                                                    )}
+                                                </p>
+                                                {speechService && (
+                                                    <button
+                                                        type='button'
+                                                        className='cup-speak-button'
+                                                        aria-label={exampleSpeechLabel}
+                                                        data-active={activeExample === `example-${index}-source`}
+                                                        onClick={() =>
+                                                            speakExample(
+                                                                richTextToPlainText(sentence.source),
+                                                                activeSourceLanguage,
+                                                                `example-${index}-source`
+                                                            )
+                                                        }
+                                                    >
+                                                        {detailSpeechIcon(`example-${index}-source`)}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
+                                        {sentence.target && (
+                                            <div className='cup-example-line'>
+                                                <span className='cup-line-tag'>{targetTag}</span>
+                                                <p className='cup-example-target'>
+                                                    {richTextToPlainText(sentence['target'])}
+                                                </p>
+                                                {speechService && (
+                                                    <button
+                                                        type='button'
+                                                        className='cup-speak-button'
+                                                        aria-label={exampleSpeechLabel}
+                                                        data-active={activeExample === `example-${index}-target`}
+                                                        onClick={() =>
+                                                            speakExample(
+                                                                richTextToPlainText(sentence.target),
+                                                                targetLanguage,
+                                                                `example-${index}-target`
+                                                            )
+                                                        }
+                                                    >
+                                                        {detailSpeechIcon(`example-${index}-target`)}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
+                                    </article>
+                                ))}
                             </div>
                         )}
-                        {error && (
-                            <Button
-                                size='sm'
-                                variant='light'
-                                className='result-retry'
-                                startContent={<LuRotateCcw />}
-                                onPress={() => {
-                                    setError('');
-                                    translate();
-                                }}
-                            >
-                                {t('translate.retry')}
-                            </Button>
-                        )}
-                    </CardBody>
-                    {getServiceName(currentTranslateServiceInstanceKey) === 'local_mt' &&
-                        !hide &&
-                        copyableResult &&
-                        !speechService && <p className='speech-service-note'>{t('translate.local_speech_hint')}</p>}
-                    <CardFooter
-                        data-cup-footer
-                        className={`bg-content1 rounded-none rounded-b-[10px] flex px-[12px] p-[5px] ${hide || !copyableResult ? 'hidden' : ''}`}
-                    >
-                        <div className='result-action-cluster'>
-                            <Dropdown placement='top-start'>
-                                <DropdownTrigger>
-                                    <Button
-                                        size='sm'
-                                        variant='light'
-                                        className='speech-service-trigger'
-                                        aria-label={t('translate.speech_service')}
-                                        endContent={<LuChevronDown size={12} />}
-                                    >
-                                        <span className='speech-provider-dot' />
-                                        {speechService === 'google_tts'
-                                            ? 'Google'
-                                            : speechService === 'lingva_tts'
-                                              ? 'Lingva'
-                                              : speechService
-                                                ? t('translate.local_speech')
-                                                : t('translate.speech_service')}
-                                    </Button>
-                                </DropdownTrigger>
-                                <DropdownMenu
-                                    aria-label={t('translate.speech_service')}
-                                    selectionMode='single'
-                                    disallowEmptySelection
-                                    selectedKeys={new Set([speechOverride || 'engine'])}
-                                    onAction={(key) => {
-                                        speech.stop();
-                                        setSpeechOverride(key === 'engine' ? '' : String(key));
-                                    }}
-                                >
-                                    <DropdownItem
-                                        key='engine'
-                                        description={t('translate.follow_engine_hint')}
-                                    >
-                                        {t('translate.follow_engine')}
-                                    </DropdownItem>
-                                    <DropdownItem
-                                        key='google_tts'
-                                        description={t('translate.google_speech_short')}
-                                    >
-                                        Google
-                                    </DropdownItem>
-                                    <DropdownItem
-                                        key='local_tts'
-                                        description={t('translate.local_speech_short')}
-                                    >
-                                        {t('translate.local_speech')}
-                                    </DropdownItem>
-                                </DropdownMenu>
-                            </Dropdown>
-                            <span
-                                className='result-action-divider'
-                                aria-hidden='true'
-                            />
-                            {/* 词典模式的读音按钮放在释义旁；页脚只负责普通译文 */}
-                            {typeof displayResult === 'string' && (
-                                <Tooltip content={speechLabel}>
-                                    <Button
-                                        isIconOnly
-                                        variant='light'
-                                        size='sm'
+                    </>
+                )}
+
+                {resultMode === 'phrase' && result && (
+                    <>
+                        <div className='cup-phrase-pair'>
+                            <div className='cup-phrase-row target'>
+                                <span className='cup-phrase-label'>{targetTag}</span>
+                                <span className='cup-phrase-text select-text'>{phraseEntry.translation}</span>
+                                {speechService && (
+                                    <button
+                                        type='button'
+                                        className='cup-speak-button'
                                         aria-label={speechLabel}
-                                        className='speech-button'
                                         data-active={speech.status !== 'idle'}
-                                        aria-pressed={speech.status !== 'idle'}
-                                        isDisabled={!speechService || !speechText(displayResult)}
-                                        onPress={() => {
+                                        disabled={!speechText(displayResult)}
+                                        onClick={() =>
                                             speech.toggle(handleSpeak).catch((e) => {
                                                 logError(`[speech] ${e}`);
                                                 toast.error(t('translate.speech_failed'), { style: toastStyle });
-                                            });
-                                        }}
+                                            })
+                                        }
                                     >
                                         {speech.status === 'loading' ? (
-                                            <LuLoader2 className='animate-spin text-[16px]' />
+                                            <LuLoader2 className='animate-spin text-[12px]' />
                                         ) : speech.status === 'playing' ? (
-                                            <LuSquare className='text-[14px]' />
+                                            <LuSquare className='text-[10px]' />
                                         ) : (
-                                            <LuVolume2 className='text-[16px]' />
+                                            <LuVolume2 className='text-[13px]' />
                                         )}
-                                    </Button>
-                                </Tooltip>
-                            )}
-                            {/* translate back button */}
-                            <Tooltip
-                                content={showBack ? t('translate.show_translation') : t('translate.translate_back')}
-                            >
-                                <Button
-                                    isIconOnly
-                                    variant='light'
-                                    size='sm'
-                                    isDisabled={!speechText(result)}
-                                    aria-label={
-                                        showBack ? t('translate.show_translation') : t('translate.translate_back')
-                                    }
-                                    aria-pressed={showBack}
-                                    className='speech-button'
-                                    data-active={showBack}
-                                    isLoading={backLoading}
-                                    onPress={async () => {
-                                        if (backTranslation !== null) {
-                                            speech.stop();
-                                            setShowBack(!showBack);
-                                            return;
-                                        }
-                                        const token = ++backRequest.current;
-                                        setBackLoading(true);
-                                        try {
-                                            const to = sourceLanguage === 'auto' ? detectLanguage : sourceLanguage;
-                                            const serviceName = getServiceName(currentTranslateServiceInstanceKey);
-                                            const plugin = whetherPluginService(currentTranslateServiceInstanceKey);
-                                            const languages = plugin
-                                                ? pluginList.translate[serviceName].language
-                                                : builtinServices[serviceName].Language;
-                                            if (!(targetLanguage in languages) || !(to in languages))
-                                                throw new Error(t('common.language_not_supported'));
-                                            let translateFn, utils;
-                                            if (plugin)
-                                                [translateFn, utils] = await invoke_plugin('translate', serviceName);
-                                            else translateFn = builtinServices[serviceName].translate;
-                                            let streamed = '';
-                                            const value = await translateFn(
-                                                speechText(result),
-                                                languages[targetLanguage],
-                                                languages[to],
-                                                {
-                                                    config: {
-                                                        ...serviceInstanceConfigMap[currentTranslateServiceInstanceKey],
-                                                        ...(plugin ? { enable: 'true' } : {}),
-                                                    },
-                                                    detect: targetLanguage,
-                                                    utils,
-                                                    setResult: (value) => {
-                                                        streamed = translationResultToText(value);
-                                                    },
-                                                }
-                                            );
-                                            if (token !== backRequest.current) return;
-                                            const text = translationResultToText(value) || streamed;
-                                            if (!text.trim()) throw new Error(t('translate.empty_back_translation'));
-                                            setBackTranslation(text);
-                                            setShowBack(true);
-                                            speech.stop();
-                                        } catch (e) {
-                                            if (token === backRequest.current)
-                                                toast.error(e.toString(), { style: toastStyle });
-                                        } finally {
-                                            if (token === backRequest.current) setBackLoading(false);
-                                        }
-                                    }}
-                                >
-                                    {showBack ? (
-                                        <LuRotateCcw className='text-[16px]' />
-                                    ) : (
-                                        <LuArrowLeftRight className='text-[16px]' />
-                                    )}
-                                </Button>
-                            </Tooltip>
-                            {showBack && (
-                                <span className='back-translation-label'>{t('translate.back_translation')}</span>
-                            )}
-                            {/* error retry button */}
-                            <Tooltip content={t('translate.retry')}>
-                                <Button
-                                    isIconOnly
-                                    variant='light'
-                                    size='sm'
-                                    className={`${error === '' && 'hidden'}`}
-                                    onPress={() => {
-                                        setError('');
-                                        setResult('');
-                                        setSkipped(false);
-                                        translate();
-                                    }}
-                                >
-                                    <LuBookPlus className='text-[16px]' />
-                                </Button>
-                            </Tooltip>
-                            {/* available collection service instance */}
-                            {collectionServiceList &&
-                                collectionServiceList.map((collectionServiceInstanceName) => {
-                                    return (
-                                        <Button
-                                            key={collectionServiceInstanceName}
-                                            isIconOnly
-                                            variant='light'
-                                            size='sm'
-                                            onPress={async () => {
-                                                if (
-                                                    getServiceSouceType(collectionServiceInstanceName) ===
-                                                    ServiceSourceType.PLUGIN
-                                                ) {
-                                                    const pluginConfig =
-                                                        serviceInstanceConfigMap[collectionServiceInstanceName];
-                                                    let func, utils;
-                                                    try {
-                                                        [func, utils] = await invoke_plugin(
-                                                            'collection',
-                                                            getServiceName(collectionServiceInstanceName)
-                                                        );
-                                                    } catch (e) {
-                                                        toast.error(e.toString(), { style: toastStyle });
-                                                        return;
-                                                    }
-                                                    func(sourceText.trim(), result.toString(), {
-                                                        config: pluginConfig,
-                                                        utils,
-                                                    }).then(
-                                                        (_) => {
-                                                            toast.success(t('translate.add_collection_success'), {
-                                                                style: toastStyle,
-                                                            });
-                                                        },
-                                                        (e) => {
-                                                            toast.error(e.toString(), { style: toastStyle });
-                                                        }
-                                                    );
-                                                } else {
-                                                    const instanceConfig =
-                                                        serviceInstanceConfigMap[collectionServiceInstanceName];
-                                                    builtinCollectionServices[
-                                                        getServiceName(collectionServiceInstanceName)
-                                                    ]
-                                                        .collection(sourceText, result, {
-                                                            config: instanceConfig,
-                                                        })
-                                                        .then(
-                                                            (_) => {
-                                                                toast.success(t('translate.add_collection_success'), {
-                                                                    style: toastStyle,
-                                                                });
-                                                            },
-                                                            (e) => {
-                                                                toast.error(e.toString(), { style: toastStyle });
-                                                            }
-                                                        );
-                                                }
-                                            }}
-                                        >
-                                            <img
-                                                src={
-                                                    getServiceSouceType(collectionServiceInstanceName) ===
-                                                    ServiceSourceType.PLUGIN
-                                                        ? pluginList['collection'][
-                                                              getServiceName(collectionServiceInstanceName)
-                                                          ].icon
-                                                        : builtinCollectionServices[
-                                                              getServiceName(collectionServiceInstanceName)
-                                                          ].info.icon
-                                                }
-                                                className='h-[16px] w-[16px]'
-                                            />
-                                        </Button>
-                                    );
-                                })}
+                                    </button>
+                                )}
+                            </div>
                         </div>
-                        <Button
-                            size='sm'
-                            variant='flat'
-                            className='result-copy'
-                            startContent={<LuCopy className='text-[14px]' />}
-                            isDisabled={!copyableResult}
-                            onPress={() => copyToClipboard(copyableResult, 'toast')}
+
+                        {phraseEntry.alternatives.length > 0 && (
+                            <div className='cup-alternatives'>
+                                <div className='cup-section-label'>
+                                    <span>{t('translate.other_translations')}</span>
+                                </div>
+                                {phraseEntry.alternatives.map((alternative, index) => (
+                                    <div
+                                        className='cup-alternative-row select-text'
+                                        key={`${alternative.text}-${index}`}
+                                    >
+                                        <span className='cup-alt-tag'>{alternative.tag || targetTag}</span>
+                                        <span className='cup-alt-text'>{alternative.text}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {phraseEntry.usage.length > 0 && (
+                            <div className='cup-usage select-text'>
+                                <div className='cup-usage-title'>{t('translate.usage')}</div>
+                                {phraseEntry.usage.join(' · ')}
+                            </div>
+                        )}
+
+                        {phraseEntry.examples.length > 0 && (
+                            <div className='cup-context-example select-text'>
+                                <div className='cup-section-label'>
+                                    <span>{t('translate.context_example')}</span>
+                                </div>
+                                {phraseEntry.examples.slice(0, 2).map((sentence, index) => (
+                                    <div
+                                        className='cup-example-card'
+                                        style={{ background: 'transparent', border: 0, padding: 0 }}
+                                        key={`${sentence.source}-${index}`}
+                                    >
+                                        {sentence.source && (
+                                            <div className='cup-example-line'>
+                                                <span className='cup-line-tag'>{sourceTag}</span>
+                                                <p className='cup-example-source'>{sentence.source}</p>
+                                            </div>
+                                        )}
+                                        {sentence.target && (
+                                            <div className='cup-example-line'>
+                                                <span className='cup-line-tag'>{targetTag}</span>
+                                                <p className='cup-example-target'>
+                                                    {richTextToPlainText(sentence['target'])}
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </>
+                )}
+
+                {resultMode === 'paragraph' && result && (
+                    <>
+                        <div className='cup-paragraph-toolbar'>
+                            <div className='cup-segmented'>
+                                <button
+                                    type='button'
+                                    className={paragraphView === 'translation' ? 'on' : ''}
+                                    onClick={() => setParagraphView('translation')}
+                                >
+                                    {t('translate.translation_view')}
+                                </button>
+                                <button
+                                    type='button'
+                                    className={paragraphView === 'comparison' ? 'on' : ''}
+                                    onClick={() => setParagraphView('comparison')}
+                                >
+                                    {t('translate.comparison_view')}
+                                </button>
+                            </div>
+                            {speechService && (
+                                <button
+                                    type='button'
+                                    className='cup-read-all'
+                                    onClick={() =>
+                                        speech.toggle(handleSpeak).catch((e) => {
+                                            logError(`[speech] ${e}`);
+                                            toast.error(t('translate.speech_failed'), { style: toastStyle });
+                                        })
+                                    }
+                                >
+                                    <LuVolume2 className='text-[12px]' />
+                                    {t('translate.read_all')}
+                                </button>
+                            )}
+                        </div>
+                        <div className='cup-paragraph-meta'>
+                            <span>
+                                {paragraphView === 'translation'
+                                    ? t('translate.translation_continuous')
+                                    : t('translate.compare_sentences')}
+                            </span>
+                            <i className='cup-meta-dot' />
+                            <span>{t('translate.sentence_count', { count: sentencePairs.length })}</span>
+                            <i className='cup-meta-dot' />
+                            <span>
+                                {paragraphView === 'translation'
+                                    ? t('translate.compare_hint')
+                                    : t('translate.keep_source_order')}
+                            </span>
+                        </div>
+                        {paragraphView === 'translation' ? (
+                            <div className='cup-paragraph-reading select-text'>
+                                <p>{paragraphEntry.translation}</p>
+                            </div>
+                        ) : (
+                            <div className='cup-sentence-list'>
+                                {sentencePairs.map((sentence, index) => (
+                                    <article
+                                        className='cup-sentence select-text'
+                                        key={`${sentence.source}-${index}`}
+                                    >
+                                        <span className='cup-sentence-index'>{String(index + 1).padStart(2, '0')}</span>
+                                        <div>
+                                            <p className='cup-sentence-source'>{sentence.source}</p>
+                                            <p className='cup-sentence-target'>{sentence.target}</p>
+                                        </div>
+                                        {speechService && (
+                                            <button
+                                                type='button'
+                                                className='cup-speak-button'
+                                                aria-label={exampleSpeechLabel}
+                                                data-active={activeExample === `sentence-${index}-target`}
+                                                onClick={() =>
+                                                    speakExample(
+                                                        sentence.target,
+                                                        targetLanguage,
+                                                        `sentence-${index}-target`
+                                                    )
+                                                }
+                                            >
+                                                {detailSpeechIcon(`sentence-${index}-target`)}
+                                            </button>
+                                        )}
+                                    </article>
+                                ))}
+                            </div>
+                        )}
+                    </>
+                )}
+
+                {skipped && <p className='cup-skipped'>{t('translate.unconfigured_skip')}</p>}
+                {error && (
+                    <div
+                        className='cup-result-error'
+                        role='alert'
+                    >
+                        {error
+                            .split('\n')
+                            .filter((line) => line.trim())
+                            .slice(0, 3)
+                            .map((line, index) => (
+                                <p key={index}>{line.length > 100 ? line.slice(0, 100) + '…' : line}</p>
+                            ))}
+                    </div>
+                )}
+                {error && (
+                    <button
+                        type='button'
+                        className='cup-result-retry'
+                        onClick={() => {
+                            setError('');
+                            setResult('');
+                            setSkipped(false);
+                            translate();
+                        }}
+                    >
+                        <LuRotateCcw className='text-[12px]' />
+                        {t('translate.retry')}
+                    </button>
+                )}
+                {translateServiceName === 'local_mt' && !hide && copyableResult && !speechService && (
+                    <p className='cup-speech-note'>{t('translate.local_speech_hint')}</p>
+                )}
+            </div>
+
+            <footer className={`cup-result-foot ${hide || (!copyableResult && !error) ? 'is-hidden' : ''}`}>
+                <Dropdown placement='top-start'>
+                    <DropdownTrigger>
+                        <button
+                            type='button'
+                            className='cup-foot-engine'
                         >
-                            {showBack ? t('translate.copy_back_translation') : t('translate.copy_result')}
-                        </Button>
-                    </CardFooter>
+                            <span className='cup-provider-mark'>G</span>
+                            {speechService === 'google_tts'
+                                ? 'Google'
+                                : speechService === 'lingva_tts'
+                                  ? 'Lingva'
+                                  : speechService
+                                    ? t('translate.local_speech')
+                                    : t('translate.speech_service')}
+                        </button>
+                    </DropdownTrigger>
+                    <DropdownMenu
+                        aria-label={t('translate.speech_service')}
+                        selectionMode='single'
+                        disallowEmptySelection
+                        selectedKeys={new Set([speechOverride || 'engine'])}
+                        onAction={(key) => {
+                            speech.stop();
+                            setSpeechOverride(key === 'engine' ? '' : String(key));
+                        }}
+                    >
+                        <DropdownItem
+                            key='engine'
+                            description={t('translate.follow_engine_hint')}
+                        >
+                            {t('translate.follow_engine')}
+                        </DropdownItem>
+                        <DropdownItem
+                            key='google_tts'
+                            description={t('translate.google_speech_short')}
+                        >
+                            Google
+                        </DropdownItem>
+                        <DropdownItem
+                            key='local_tts'
+                            description={t('translate.local_speech_short')}
+                        >
+                            {t('translate.local_speech')}
+                        </DropdownItem>
+                    </DropdownMenu>
+                </Dropdown>
+                <div className='cup-foot-actions'>
+                    <Tooltip content={showBack ? t('translate.show_translation') : t('translate.translate_back')}>
+                        <button
+                            type='button'
+                            className='cup-foot-icon'
+                            aria-label={showBack ? t('translate.show_translation') : t('translate.translate_back')}
+                            aria-pressed={showBack}
+                            disabled={!speechText(result) || backLoading}
+                            onClick={toggleBackTranslation}
+                        >
+                            {backLoading ? (
+                                <LuLoader2 className='animate-spin text-[14px]' />
+                            ) : (
+                                <LuArrowLeftRight className='text-[14px]' />
+                            )}
+                        </button>
+                    </Tooltip>
+                    {showBack && <span className='cup-back-label'>{t('translate.back_translation')}</span>}
+                    {collectionServiceList?.map((collectionServiceInstanceName) => (
+                        <button
+                            type='button'
+                            className='cup-foot-icon'
+                            key={collectionServiceInstanceName}
+                            onClick={() => addToCollection(collectionServiceInstanceName)}
+                        >
+                            <img
+                                src={
+                                    getServiceSouceType(collectionServiceInstanceName) === ServiceSourceType.PLUGIN
+                                        ? pluginList.collection[getServiceName(collectionServiceInstanceName)].icon
+                                        : builtinCollectionServices[getServiceName(collectionServiceInstanceName)].info
+                                              .icon
+                                }
+                                className='h-[15px] w-[15px]'
+                                alt=''
+                            />
+                        </button>
+                    ))}
                 </div>
-            </animated.div>
-        </Card>
+                <button
+                    type='button'
+                    className='cup-copy-button'
+                    disabled={!copyableResult}
+                    onClick={() => copyToClipboard(copyableResult, 'toast')}
+                >
+                    <LuCopy className='text-[12px]' />
+                    {resultMode === 'word' ? t('translate.copy_entry') : t('translate.copy_result')}
+                </button>
+            </footer>
+        </section>
     );
 }

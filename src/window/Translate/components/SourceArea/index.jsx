@@ -1,5 +1,4 @@
 import { useSpeech } from '../../../../hooks/useSpeech';
-import { Button, Card, CardBody, CardFooter, ButtonGroup, Chip, Tooltip, Spacer } from '@nextui-org/react';
 import { BaseDirectory, readTextFile } from '@tauri-apps/api/fs';
 import React, { useEffect, useRef, useState } from 'react';
 import { LuSquare, LuLoader2, LuVolume2, LuCopy, LuWrapText, LuLanguages } from 'react-icons/lu';
@@ -9,7 +8,7 @@ import { listen } from '@tauri-apps/api/event';
 import { useTranslation } from 'react-i18next';
 import { LuDelete } from 'react-icons/lu';
 import { invoke } from '@tauri-apps/api';
-import { atom, useAtom, useSetAtom } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { getServiceName, getServiceSouceType, ServiceSourceType } from '../../../../utils/service_instance';
 import { useConfig, useSyncAtom, useVoice, useToastStyle } from '../../../../hooks';
 import { clipboardFailureMessage, writeClipboardSafely } from '../../../../utils/clipboard';
@@ -18,12 +17,12 @@ import { invoke_plugin } from '../../../../utils/invoke_plugin';
 import * as recognizeServices from '../../../../services/recognize';
 import * as builtinTtsServices from '../../../../services/tts';
 import detect from '../../../../utils/lang_detect';
+import { getActiveSourceLanguage } from '../../../../utils/sourceLanguage';
+import { detectLanguageAtom, sourceLanguageAtom, sourceTextAtom } from '../../atoms';
+import { classifySourceText } from '../../resultView';
 import { store } from '../../../../utils/store';
 import { info } from 'tauri-plugin-log-api';
 import { debug } from 'tauri-plugin-log-api';
-
-export const sourceTextAtom = atom('');
-export const detectLanguageAtom = atom('');
 
 export default function SourceArea(props) {
     const { pluginList, serviceInstanceConfigMap } = props;
@@ -31,6 +30,7 @@ export default function SourceArea(props) {
     const [sourceText, setSourceText, syncSourceText] = useSyncAtom(sourceTextAtom);
     const commitSourceText = useSetAtom(sourceTextAtom);
     const [detectLanguage, setDetectLanguage] = useAtom(detectLanguageAtom);
+    const sourceLanguage = useAtomValue(sourceLanguageAtom);
     const [incrementalTranslate] = useConfig('incremental_translate', false);
     const [dynamicTranslate] = useConfig('dynamic_translate', false);
     const [deleteNewline] = useConfig('translate_delete_newline', false);
@@ -66,6 +66,8 @@ export default function SourceArea(props) {
     const speak = useVoice();
     const speech = useSpeech(sourceText);
     const speechLabel = speech.status === 'idle' ? t('translate.speak') : t('translate.stop_speaking');
+    const activeSourceLanguage = getActiveSourceLanguage(sourceLanguage, detectLanguage);
+    const sourceMode = classifySourceText(sourceText);
 
     const handleNewText = async (text) => {
         text = text.trim();
@@ -237,30 +239,30 @@ export default function SourceArea(props) {
     const handleSpeak = async () => {
         const instanceKey =
             speechPolicy === 'local' ? 'local_tts' : speechPolicy === 'configured' ? ttsServiceList[0] : 'google_tts';
-        let detected = detectLanguage;
-        if (detected === '') {
-            detected = await detect(sourceText);
-            setDetectLanguage(detected);
+        let speechLanguage = activeSourceLanguage;
+        if (speechLanguage === '') {
+            speechLanguage = await detect(sourceText);
+            setDetectLanguage(speechLanguage);
         }
         if (getServiceSouceType(instanceKey) === ServiceSourceType.PLUGIN) {
-            if (!(detected in ttsPluginInfo.language)) {
+            if (!(speechLanguage in ttsPluginInfo.language)) {
                 throw new Error(t('common.language_not_supported'));
             }
             const pluginConfig = serviceInstanceConfigMap[instanceKey];
             let [func, utils] = await invoke_plugin('tts', getServiceName(instanceKey));
-            let data = await func(sourceText, ttsPluginInfo.language[detected], {
+            let data = await func(sourceText, ttsPluginInfo.language[speechLanguage], {
                 config: pluginConfig,
                 utils,
             });
             return data;
         } else {
-            if (!(detected in builtinTtsServices[getServiceName(instanceKey)].Language)) {
+            if (!(speechLanguage in builtinTtsServices[getServiceName(instanceKey)].Language)) {
                 throw new Error(t('common.language_not_supported'));
             }
             const instanceConfig = serviceInstanceConfigMap[instanceKey] || {};
             let data = await builtinTtsServices[getServiceName(instanceKey)].tts(
                 sourceText,
-                builtinTtsServices[getServiceName(instanceKey)].Language[detected],
+                builtinTtsServices[getServiceName(instanceKey)].Language[speechLanguage],
                 {
                     config: instanceConfig,
                 }
@@ -446,142 +448,111 @@ export default function SourceArea(props) {
     };
 
     return (
-        <div className={hideSource && windowType !== '[INPUT_TRANSLATE]' ? 'hidden' : ''}>
-            <Card
-                shadow='none'
-                className='source-panel bg-content1 mt-[1px] pb-0'
-            >
-                <CardBody
-                    data-cup-body
-                    className='bg-content1 p-[12px] pb-0 max-h-[40vh] overflow-y-auto'
-                >
-                    <textarea
-                        autoFocus
-                        ref={textAreaRef}
-                        className='source-text bg-transparent h-full resize-none outline-none'
-                        style={{
-                            fontSize: `${(appFontSize || 16) * (sourceText.trim().split(/\s+/).length === 1 && sourceText.length < 35 ? 1.6875 : 1)}px`,
-                        }}
-                        aria-label={t('translate.source')}
-                        placeholder={t('translate.input_hint')}
-                        value={sourceText}
-                        onKeyDown={keyDown}
-                        onChange={(e) => {
-                            const v = e.target.value;
-                            changeSourceText(v);
-                        }}
-                    />
-                </CardBody>
+        <div
+            className={`cup-source-shell ${hideSource && windowType !== '[INPUT_TRANSLATE]' ? 'hidden' : ''}`}
+            style={{ '--cup4-base': `${appFontSize || 16}px` }}
+        >
+            <section className='cup-source-panel'>
+                <textarea
+                    autoFocus
+                    ref={textAreaRef}
+                    className={`cup-source-text ${sourceMode}`}
+                    aria-label={t('translate.source')}
+                    placeholder={t('translate.input_hint')}
+                    value={sourceText}
+                    onKeyDown={keyDown}
+                    onChange={(e) => {
+                        const v = e.target.value;
+                        changeSourceText(v);
+                    }}
+                />
 
-                <CardFooter
-                    data-cup-footer
-                    className='bg-content1 rounded-none rounded-b-[10px] flex justify-between px-[12px] p-[5px]'
-                >
-                    <div className='flex justify-start'>
-                        <ButtonGroup className='mr-[5px]'>
-                            <Tooltip content={speechLabel}>
-                                <Button
-                                    isIconOnly
-                                    variant='light'
-                                    size='sm'
-                                    isDisabled={!sourceText}
-                                    aria-label={speechLabel}
-                                    className='speech-button'
-                                    data-active={speech.status !== 'idle'}
-                                    aria-pressed={speech.status !== 'idle'}
-                                    onPress={() => {
-                                        speech.toggle(handleSpeak).catch((e) => {
-                                            logError(`[speech] ${e}`);
-                                            toast.error(t('translate.speech_failed'), { style: toastStyle });
-                                        });
-                                    }}
-                                >
-                                    {speech.status === 'loading' ? (
-                                        <LuLoader2 className='animate-spin text-[16px]' />
-                                    ) : speech.status === 'playing' ? (
-                                        <LuSquare className='text-[14px]' />
-                                    ) : (
-                                        <LuVolume2 className='text-[16px]' />
-                                    )}
-                                </Button>
-                            </Tooltip>
-                            <Tooltip content={t('translate.copy')}>
-                                <Button
-                                    isIconOnly
-                                    variant='light'
-                                    size='sm'
-                                    aria-label={t('translate.copy')}
-                                    onPress={() => {
-                                        copyToClipboard(sourceText);
-                                    }}
-                                >
-                                    <LuCopy className='text-[16px]' />
-                                </Button>
-                            </Tooltip>
-                            <Tooltip content={t('translate.delete_newline')}>
-                                <Button
-                                    isIconOnly
-                                    variant='light'
-                                    size='sm'
-                                    aria-label={t('translate.delete_newline')}
-                                    onPress={() => {
-                                        const newText = sourceText.replace(/\-\s+/g, '').replace(/\s+/g, ' ');
-                                        setSourceText(newText);
-                                        detect_language(newText).then(() => {
-                                            syncSourceText();
-                                        });
-                                    }}
-                                >
-                                    <LuWrapText className='text-[16px]' />
-                                </Button>
-                            </Tooltip>
-                            <Tooltip content={t('common.clear')}>
-                                <Button
-                                    variant='light'
-                                    size='sm'
-                                    isIconOnly
-                                    aria-label={t('common.clear')}
-                                    isDisabled={sourceText === ''}
-                                    onPress={() => {
-                                        setSourceText('');
-                                        commitSourceText('');
-                                        setDetectLanguage('');
-                                    }}
-                                >
-                                    <LuDelete className='text-[16px]' />
-                                </Button>
-                            </Tooltip>
-                        </ButtonGroup>
-                        {detectLanguage !== '' && (
-                            <Chip
-                                size='sm'
-                                color='primary'
-                                variant='dot'
-                                className='my-auto'
-                            >
-                                {t(`languages.${detectLanguage}`)}
-                            </Chip>
+                <div className='cup-source-tools'>
+                    <button
+                        type='button'
+                        className='cup-source-tool'
+                        title={speechLabel}
+                        aria-label={speechLabel}
+                        disabled={!sourceText}
+                        data-active={speech.status !== 'idle'}
+                        aria-pressed={speech.status !== 'idle'}
+                        onClick={() => {
+                            speech.toggle(handleSpeak).catch((e) => {
+                                logError(`[speech] ${e}`);
+                                toast.error(t('translate.speech_failed'), { style: toastStyle });
+                            });
+                        }}
+                    >
+                        {speech.status === 'loading' ? (
+                            <LuLoader2 className='animate-spin text-[14px]' />
+                        ) : speech.status === 'playing' ? (
+                            <LuSquare className='text-[12px]' />
+                        ) : (
+                            <LuVolume2 className='text-[15px]' />
                         )}
-                    </div>
-                    <Tooltip content={t('translate.translate')}>
-                        <Button
-                            size='sm'
-                            color='primary'
-                            variant='light'
-                            isIconOnly
-                            aria-label={t('translate.translate')}
-                            className='text-[14px] font-bold'
-                            startContent={<LuLanguages className='text-[16px]' />}
-                            onPress={() => {
-                                detect_language(sourceText).then(() => {
-                                    syncSourceText();
-                                });
-                            }}
-                        />
-                    </Tooltip>
-                </CardFooter>
-            </Card>
-            <Spacer y={2} />
+                    </button>
+                    <button
+                        type='button'
+                        className='cup-source-tool'
+                        title={t('translate.copy')}
+                        aria-label={t('translate.copy')}
+                        onClick={() => copyToClipboard(sourceText)}
+                    >
+                        <LuCopy className='text-[14px]' />
+                    </button>
+                    <button
+                        type='button'
+                        className='cup-source-tool'
+                        title={t('translate.delete_newline')}
+                        aria-label={t('translate.delete_newline')}
+                        onClick={() => {
+                            const newText = sourceText.replace(/\-\s+/g, '').replace(/\s+/g, ' ');
+                            setSourceText(newText);
+                            detect_language(newText).then(() => {
+                                syncSourceText();
+                            });
+                        }}
+                    >
+                        <LuWrapText className='text-[14px]' />
+                    </button>
+                    <button
+                        type='button'
+                        className='cup-source-tool'
+                        title={t('common.clear')}
+                        aria-label={t('common.clear')}
+                        disabled={sourceText === ''}
+                        onClick={() => {
+                            setSourceText('');
+                            commitSourceText('');
+                            setDetectLanguage('');
+                        }}
+                    >
+                        <LuDelete className='text-[14px]' />
+                    </button>
+                    <button
+                        type='button'
+                        className='cup-source-tool'
+                        title={t('translate.translate')}
+                        aria-label={t('translate.translate')}
+                        onClick={() => {
+                            detect_language(sourceText).then(() => {
+                                syncSourceText();
+                            });
+                        }}
+                    >
+                        <LuLanguages className='text-[14px]' />
+                    </button>
+                    {activeSourceLanguage !== '' && (
+                        <span
+                            className={`cup-lang-chip ${sourceLanguage === 'auto' ? '' : 'manual'}`}
+                            aria-label={`${t('translate.source')}: ${t(`languages.${activeSourceLanguage}`)}`}
+                        >
+                            {t(`languages.${activeSourceLanguage}`)}
+                        </span>
+                    )}
+                    <span className='cup-source-count'>{t('translate.characters', { count: sourceText.length })}</span>
+                </div>
+            </section>
         </div>
     );
 }

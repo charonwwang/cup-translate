@@ -22,7 +22,7 @@ const settings = new Map(
         app_theme: params.get('theme') || 'light',
         app_font_size: Number(params.get('font')) || 16,
         translate_detect_engine: 'local',
-        translate_source_language: 'auto',
+        translate_source_language: params.get('source') || 'auto',
         translate_target_language: 'zh_cn',
         translate_service_list: scenario === 'multi' ? ['google', 'google@2'] : ['google'],
         google: {},
@@ -33,7 +33,16 @@ const settings = new Map(
         translate_close_on_blur: false,
     })
 );
-const source = scenario === 'dictionary' ? 'term' : 'Good design makes the important things easy to see.';
+const fixtureText = {
+    phrase: 'take something into account',
+    paragraph:
+        'Good design makes the important things easy to see. It removes friction, so people can focus on what matters. Clarity is not decoration; it is part of the product.',
+};
+const source =
+    params.get('text') ||
+    (scenario === 'dictionary'
+        ? 'term'
+        : fixtureText[scenario] || 'Good design makes the important things easy to see.');
 const fixtureHistory = params.has('history')
     ? Array.from({ length: 24 }, (_, index) => ({
           id: index + 1,
@@ -100,7 +109,7 @@ window.__TAURI_IPC__ = async (args) => {
                 header.setUint16(offset, value, true);
             value = Array.from(bytes);
         } else if (cmd === 'get_text') value = source;
-        else if (cmd === 'lang_detect') value = 'en';
+        else if (cmd === 'lang_detect') value = params.get('detect') || 'en';
         else if (cmd === 'local_mt_model_status') value = { installed: false };
         else if (module === 'Path') value = message.cmd === 'join' ? message.paths.join('/') : '/fixture';
         else if (module === 'Os')
@@ -146,32 +155,37 @@ window.__TAURI_IPC__ = async (args) => {
                     });
                     return;
                 }
-                const data =
-                    scenario === 'dictionary'
-                        ? [
+                const dictionaryRequest =
+                    scenario === 'dictionary' && message.options?.query?.q === source;
+                const data = dictionaryRequest
+                    ? [
+                          [
+                              ['术语', 'term'],
+                              [null, null, null, 'tɜːrm'],
+                          ],
+                          [
                               [
-                                  ['术语', 'term'],
-                                  [null, null, null, 'tɜːrm'],
+                                  '名词',
+                                  null,
+                                  [['术语'], ['学期'], ['期限'], ['用语'], ['词语'], ['条款'], ['条件']],
                               ],
+                              ['动词', null, [['称为'], ['把…叫作']]],
+                          ],
+                      ]
+                    : [
+                          [
                               [
-                                  [
-                                      '名词',
-                                      null,
-                                      [['术语'], ['学期'], ['期限'], ['用语'], ['词语'], ['条款'], ['条件']],
-                                  ],
-                                  ['动词', null, [['称为'], ['把…叫作']]],
-                              ],
-                          ]
-                        : [
-                              [
-                                  [
-                                      message.options?.query?.tl === 'en'
+                                  scenario === 'phrase'
+                                      ? '考虑到；顾及'
+                                      : scenario === 'paragraph'
+                                        ? '好的设计让重要的内容一目了然。它消除阻力，让人们专注于真正重要的事。清晰不是装饰，而是产品的一部分。'
+                                        : message.options?.query?.tl === 'en'
                                           ? 'Good design makes important content clear.'
                                           : '好的设计，让重要的内容一目了然。',
-                                  ],
                               ],
-                          ];
-                if (scenario === 'dictionary')
+                          ],
+                      ];
+                if (dictionaryRequest)
                     data[13] = [
                         [
                             ['The <b>term</b> starts tomorrow.'],

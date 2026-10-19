@@ -3,6 +3,10 @@
 运行 `pnpm dev --host 127.0.0.1`，打开：
 
 - `/tests/visual/index.html?view=translate`：词典（默认关闭所有 TTS，覆盖空列表）。
+- `?view=translate&scenario=phrase`：短语结果，只显示译文。
+- `?view=translate&scenario=paragraph`：段落整段译文，可切换逐句对照。
+- `?view=translate&width=350`：默认窄窗布局。
+- `?view=translate&source=en&detect=it`：手动源语言覆盖旧的自动识别结果。
 - `?view=translate&theme=dark&font=20`：深色、大字号。
 - `?view=translate&scenario=multi`：两个引擎，第一份展开，第二份按需展开。
 - `?view=translate&scenario=error`：失败与重试。
