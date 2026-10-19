@@ -5,6 +5,8 @@
 - Windows 提供 x64、x86、ARM64 的 NSIS `setup.exe`，并为 x64/x86 额外提供 MSI。
 - Linux 提供 x64 的 AppImage 压缩包和 ARM64 的 deb/rpm 压缩包，统一以 `linux_<arch>.tar.gz` 发布。
 - `update.json` 同时覆盖 macOS 两个架构、Windows 三个架构和 Linux x64；更新包在发布前校验 Tauri 签名。
+- 更新弹窗单独显示实际版本和发布日期；开始下载/安装前增加确认，并明确说明开始后不能取消。
+- 词典例句改为原语言与目标语言双语对照，支持逐句朗读；译文读音按钮移到释义旁。
 - macOS 包仍使用 ad-hoc 签名，尚无 Developer ID 和 Apple 公证，首次打开可能出现系统安全提示。
 
 ## 3.0.9 (2026-10-16)

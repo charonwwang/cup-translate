@@ -128,8 +128,15 @@ export default function TargetArea(props) {
     const toastStyle = useToastStyle();
     const speak = useVoice();
     const speech = useSpeech(displayResult);
+    const exampleSpeech = useSpeech('dictionary-example');
+    const [activeExample, setActiveExample] = useState('');
     const speechLabel = speech.status === 'idle' ? t('translate.speak') : t('translate.stop_speaking');
+    const exampleSpeechLabel = exampleSpeech.status === 'idle' ? t('translate.speak') : t('translate.stop_speaking');
     const theme = useTheme();
+
+    useEffect(() => {
+        if (exampleSpeech.status === 'idle') setActiveExample('');
+    }, [exampleSpeech.status]);
 
     const copyToClipboard = (text, feedback = 'toast') =>
         writeClipboardSafely(text, {
@@ -456,34 +463,54 @@ export default function TargetArea(props) {
         }
     }, [speechService]);
 
-    // handle tts speak
-    const handleSpeak = async () => {
+    // handle tts speak for any text, not just the main translation
+    const speakWithService = async (text, language) => {
         const instanceKey = speechService;
+        if (!instanceKey || !text?.trim()) throw new Error(t('translate.speech_failed'));
         if (getServiceSouceType(instanceKey) === ServiceSourceType.PLUGIN) {
             const pluginConfig = serviceInstanceConfigMap[instanceKey];
-            if (!(spokenLanguage in ttsPluginInfo.language)) {
+            if (!(language in ttsPluginInfo.language)) {
                 throw new Error(t('common.language_not_supported'));
             }
             let [func, utils] = await invoke_plugin('tts', getServiceName(instanceKey));
-            let data = await func(speechText(displayResult), ttsPluginInfo.language[spokenLanguage], {
+            let data = await func(text, ttsPluginInfo.language[language], {
                 config: pluginConfig,
                 utils,
             });
             return data;
         } else {
-            if (!(spokenLanguage in builtinTtsServices[getServiceName(instanceKey)].Language)) {
+            if (!(language in builtinTtsServices[getServiceName(instanceKey)].Language)) {
                 throw new Error(t('common.language_not_supported'));
             }
             const instanceConfig = serviceInstanceConfigMap[instanceKey] || {};
             let data = await builtinTtsServices[getServiceName(instanceKey)].tts(
-                speechText(displayResult),
-                builtinTtsServices[getServiceName(instanceKey)].Language[spokenLanguage],
+                text,
+                builtinTtsServices[getServiceName(instanceKey)].Language[language],
                 {
                     config: instanceConfig,
                 }
             );
             return data;
         }
+    };
+
+    const handleSpeak = async () => speakWithService(speechText(displayResult), spokenLanguage);
+
+    const speakExample = (text, language, key) => {
+        if (!text?.trim() || !speechService) return;
+        if (exampleSpeech.status !== 'idle' && activeExample === key) {
+            exampleSpeech.stop();
+            setActiveExample('');
+            return;
+        }
+        if (exampleSpeech.status !== 'idle') exampleSpeech.stop();
+        setActiveExample(key);
+        exampleSpeech
+            .toggle(() => speakWithService(text, language))
+            .catch((e) => {
+                logError(`[speech] ${e}`);
+                toast.error(t('translate.speech_failed'), { style: toastStyle });
+            });
     };
 
     const copyableResult = translationResultToText(displayResult);
@@ -678,16 +705,43 @@ export default function TargetArea(props) {
                                             {explanations['trait'] && (
                                                 <span className='dictionary-trait'>{explanations['trait']}</span>
                                             )}
-                                            <div style={!explanations['trait'] ? { gridColumn: '1 / -1' } : undefined}>
+                                            <div
+                                                className='dictionary-meaning-row'
+                                                style={!explanations['trait'] ? { gridColumn: '1 / -1' } : undefined}
+                                            >
                                                 <div className='dictionary-meaning select-text'>
                                                     {explains.slice(0, primaryCount).join('；')}
                                                 </div>
-                                                {explains.length > primaryCount && (
-                                                    <div className='dictionary-more select-text'>
-                                                        {explains.slice(primaryCount).join('、')}
-                                                    </div>
+                                                {index === 0 && speechService && (
+                                                    <button
+                                                        aria-label={speechLabel}
+                                                        className='speech-button dictionary-meaning-speech'
+                                                        data-active={speech.status !== 'idle'}
+                                                        aria-pressed={speech.status !== 'idle'}
+                                                        onClick={() =>
+                                                            speech.toggle(handleSpeak).catch((e) => {
+                                                                logError(`[speech] ${e}`);
+                                                                toast.error(t('translate.speech_failed'), {
+                                                                    style: toastStyle,
+                                                                });
+                                                            })
+                                                        }
+                                                    >
+                                                        {speech.status === 'loading' ? (
+                                                            <LuLoader2 className='animate-spin text-[16px]' />
+                                                        ) : speech.status === 'playing' ? (
+                                                            <LuSquare className='text-[14px]' />
+                                                        ) : (
+                                                            <LuVolume2 className='text-[16px]' />
+                                                        )}
+                                                    </button>
                                                 )}
                                             </div>
+                                            {explains.length > primaryCount && (
+                                                <div className='dictionary-more select-text'>
+                                                    {explains.slice(primaryCount).join('、')}
+                                                </div>
+                                            )}
                                         </div>
                                     );
                                 })}
@@ -719,10 +773,68 @@ export default function TargetArea(props) {
                                                     className='dictionary-example select-text'
                                                 >
                                                     {sentence['source'] && (
-                                                        <div>{richTextToPlainText(sentence['source'])}</div>
+                                                        <div className='dictionary-example-line'>
+                                                            <span>{richTextToPlainText(sentence['source'])}</span>
+                                                            {speechService && (
+                                                                <button
+                                                                    type='button'
+                                                                    aria-label={exampleSpeechLabel}
+                                                                    className='speech-button dictionary-example-speech'
+                                                                    data-active={activeExample === `${index}-source`}
+                                                                    aria-pressed={activeExample === `${index}-source`}
+                                                                    onClick={() =>
+                                                                        speakExample(
+                                                                            richTextToPlainText(sentence['source']),
+                                                                            sourceLanguage === 'auto'
+                                                                                ? detectLanguage
+                                                                                : sourceLanguage,
+                                                                            `${index}-source`
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    {activeExample === `${index}-source` &&
+                                                                    exampleSpeech.status === 'loading' ? (
+                                                                        <LuLoader2 className='animate-spin text-[14px]' />
+                                                                    ) : activeExample === `${index}-source` &&
+                                                                      exampleSpeech.status === 'playing' ? (
+                                                                        <LuSquare className='text-[12px]' />
+                                                                    ) : (
+                                                                        <LuVolume2 className='text-[14px]' />
+                                                                    )}
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                     )}
                                                     {sentence['target'] && (
-                                                        <p>{richTextToPlainText(sentence['target'])}</p>
+                                                        <div className='dictionary-example-line dictionary-example-translation'>
+                                                            <p>{richTextToPlainText(sentence['target'])}</p>
+                                                            {speechService && (
+                                                                <button
+                                                                    type='button'
+                                                                    aria-label={exampleSpeechLabel}
+                                                                    className='speech-button dictionary-example-speech'
+                                                                    data-active={activeExample === `${index}-target`}
+                                                                    aria-pressed={activeExample === `${index}-target`}
+                                                                    onClick={() =>
+                                                                        speakExample(
+                                                                            richTextToPlainText(sentence['target']),
+                                                                            targetLanguage,
+                                                                            `${index}-target`
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    {activeExample === `${index}-target` &&
+                                                                    exampleSpeech.status === 'loading' ? (
+                                                                        <LuLoader2 className='animate-spin text-[14px]' />
+                                                                    ) : activeExample === `${index}-target` &&
+                                                                      exampleSpeech.status === 'playing' ? (
+                                                                        <LuSquare className='text-[12px]' />
+                                                                    ) : (
+                                                                        <LuVolume2 className='text-[14px]' />
+                                                                    )}
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                     )}
                                                 </div>
                                             ))}
@@ -838,33 +950,35 @@ export default function TargetArea(props) {
                                 className='result-action-divider'
                                 aria-hidden='true'
                             />
-                            {/* speak button */}
-                            <Tooltip content={speechLabel}>
-                                <Button
-                                    isIconOnly
-                                    variant='light'
-                                    size='sm'
-                                    aria-label={speechLabel}
-                                    className='speech-button'
-                                    data-active={speech.status !== 'idle'}
-                                    aria-pressed={speech.status !== 'idle'}
-                                    isDisabled={!speechService || !speechText(displayResult)}
-                                    onPress={() => {
-                                        speech.toggle(handleSpeak).catch((e) => {
-                                            logError(`[speech] ${e}`);
-                                            toast.error(t('translate.speech_failed'), { style: toastStyle });
-                                        });
-                                    }}
-                                >
-                                    {speech.status === 'loading' ? (
-                                        <LuLoader2 className='animate-spin text-[16px]' />
-                                    ) : speech.status === 'playing' ? (
-                                        <LuSquare className='text-[14px]' />
-                                    ) : (
-                                        <LuVolume2 className='text-[16px]' />
-                                    )}
-                                </Button>
-                            </Tooltip>
+                            {/* 词典模式的读音按钮放在释义旁；页脚只负责普通译文 */}
+                            {typeof displayResult === 'string' && (
+                                <Tooltip content={speechLabel}>
+                                    <Button
+                                        isIconOnly
+                                        variant='light'
+                                        size='sm'
+                                        aria-label={speechLabel}
+                                        className='speech-button'
+                                        data-active={speech.status !== 'idle'}
+                                        aria-pressed={speech.status !== 'idle'}
+                                        isDisabled={!speechService || !speechText(displayResult)}
+                                        onPress={() => {
+                                            speech.toggle(handleSpeak).catch((e) => {
+                                                logError(`[speech] ${e}`);
+                                                toast.error(t('translate.speech_failed'), { style: toastStyle });
+                                            });
+                                        }}
+                                    >
+                                        {speech.status === 'loading' ? (
+                                            <LuLoader2 className='animate-spin text-[16px]' />
+                                        ) : speech.status === 'playing' ? (
+                                            <LuSquare className='text-[14px]' />
+                                        ) : (
+                                            <LuVolume2 className='text-[16px]' />
+                                        )}
+                                    </Button>
+                                </Tooltip>
+                            )}
                             {/* translate back button */}
                             <Tooltip
                                 content={showBack ? t('translate.show_translation') : t('translate.translate_back')}

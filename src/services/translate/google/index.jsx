@@ -136,9 +136,35 @@ async function requestTranslation(text, from, to, options = {}) {
             }
             // 例句
             if (result[13]) {
-                for (let i of result[13][0]) {
-                    target.sentence.push({ source: i[0] });
+                const examples = result[13][0].slice(0, 4);
+                const detected = result[2] || from;
+                // Google 词典的 ex 通道只返回例句原文。用户查词时需要能对照目标语言，
+                // 因此这里只为少量例句补一次翻译；失败时保留原文，不阻断整个词条。
+                const translated = [];
+                for (let i = 0; i < examples.length; i += 2) {
+                    const chunk = examples.slice(i, i + 2);
+                    translated.push(
+                        ...(await Promise.all(
+                            chunk.map(async (example) => {
+                                const source = String(example[0] || '')
+                                    .replace(/<[^>]+>/g, '')
+                                    .replace(/\s+/g, ' ')
+                                    .trim();
+                                if (!source) return '';
+                                try {
+                                    const value = await requestTranslation(source, detected, to, options);
+                                    return typeof value === 'string' ? value.trim() : '';
+                                } catch {
+                                    return '';
+                                }
+                            })
+                        ))
+                    );
                 }
+                target.sentence = examples.map((example, index) => ({
+                    source: example[0],
+                    target: translated[index] || '',
+                }));
             }
             return target;
         } else {

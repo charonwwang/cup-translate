@@ -295,6 +295,23 @@ button,
     font-weight: 500;
     white-space: pre-wrap;
 }
+.dictionary-meaning-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    min-width: 0;
+}
+.dictionary-meaning-row .dictionary-meaning {
+    flex: 1;
+    min-width: 0;
+}
+.dictionary-meaning-speech {
+    flex: none;
+    margin-top: 2px;
+}
+.dictionary-entry > .dictionary-more {
+    grid-column: 1 / -1;
+}
 .dictionary-hero .dictionary-meaning {
     font-size: var(--cup-hero-size);
     font-weight: 600;
@@ -326,6 +343,26 @@ button,
     line-height: 1.7;
     white-space: pre-wrap;
 }
+.dictionary-example-line {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+}
+.dictionary-example-line > span,
+.dictionary-example-line > p {
+    flex: 1;
+    min-width: 0;
+}
+.dictionary-example-translation {
+    margin-top: 4px;
+}
+.dictionary-example-translation p {
+    margin-top: 0;
+}
+.dictionary-example-speech {
+    flex: none;
+    margin-top: 2px;
+}
 .dictionary-example p {
     color: var(--cup-text-soft);
     font-size: var(--cup-meta-size);
@@ -336,6 +373,19 @@ button,
     font-size: var(--cup-meta-size);
     padding: 5px 0;
     text-align: start;
+}
+.updater-version {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+    color: var(--cup-text-soft);
+    font-size: var(--cup-meta-size);
+}
+.updater-version strong {
+    color: inherit;
+    font-size: 16px;
 }
 .result-error {
     padding: 10px 12px;

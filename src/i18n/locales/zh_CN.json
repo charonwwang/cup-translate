@@ -273,6 +273,8 @@
             "latest": "## 已经是最新版本",
             "progress": "下载进度",
             "update": "更新",
+            "confirm_update": "继续更新",
+            "cannot_cancel": "更新开始下载和安装后无法取消；完成后应用会自动重启。",
             "downloading": "下载中…",
             "installing": "安装中…",
             "cancel": "取消",

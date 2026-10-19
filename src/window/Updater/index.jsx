@@ -17,11 +17,18 @@ export default function Updater() {
     const [downloaded, setDownloaded] = useState(0);
     const [total, setTotal] = useState(0);
     const [body, setBody] = useState('');
+    const [manifest, setManifest] = useState(null);
     const [status, setStatus] = useState('checking');
     const busy = useRef(false);
     const [attempt, setAttempt] = useState(0);
     const { t } = useTranslation();
     const toastStyle = useToastStyle();
+    const formatDate = (value) => {
+        if (!value) return '';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return value;
+        return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date);
+    };
 
     useEffect(() => {
         if (appWindow.label === 'updater') {
@@ -32,11 +39,13 @@ export default function Updater() {
         let removeListener;
         setStatus('checking');
         setBody('');
+        setManifest(null);
         checkForUpdate().then(
             (update) => {
                 if (disposed) return;
                 setStatus(update.shouldUpdate ? 'available' : 'latest');
                 if (update.shouldUpdate) {
+                    setManifest(update.manifest || null);
                     setBody(update.manifest?.body || `v${update.manifest?.version || ''}`);
                 } else {
                     setBody(t('updater.latest'));
@@ -101,6 +110,12 @@ export default function Updater() {
             </div>
             <Card className='mx-[24px] mt-[10px] overscroll-auto h-[calc(100vh-150px)]'>
                 <CardBody>
+                    {manifest && ['available', 'confirming', 'installing'].includes(status) && (
+                        <div className='updater-version'>
+                            <strong>v{manifest.version}</strong>
+                            {manifest.date && <span>{formatDate(manifest.date)}</span>}
+                        </div>
+                    )}
                     {body === '' ? (
                         <div className='space-y-3'>
                             <Skeleton className='w-3/5 rounded-lg'>
@@ -188,7 +203,11 @@ export default function Updater() {
                             setAttempt((value) => value + 1);
                             return;
                         }
-                        if (status !== 'available' || busy.current) return;
+                        if (status === 'available') {
+                            setStatus('confirming');
+                            return;
+                        }
+                        if (status !== 'confirming' || busy.current) return;
                         busy.current = true;
                         setDownloaded(0);
                         setTotal(0);
@@ -213,9 +232,11 @@ export default function Updater() {
                         : t(
                               status === 'error'
                                   ? 'updater.retry'
-                                  : status === 'checking'
-                                    ? 'updater.checking'
-                                    : 'updater.update'
+                                  : status === 'confirming'
+                                    ? 'updater.confirm_update'
+                                    : status === 'checking'
+                                      ? 'updater.checking'
+                                      : 'updater.update'
                           )}
                 </Button>
                 <Button
@@ -223,12 +244,19 @@ export default function Updater() {
                     isDisabled={status === 'installing'}
                     color='default'
                     onPress={() => {
-                        appWindow.close();
+                        if (status === 'confirming') setStatus('available');
+                        else appWindow.close();
                     }}
                 >
                     {t('updater.cancel')}
                 </Button>
             </div>
+            {status === 'confirming' && (
+                <p className='updater-note text-default-500 text-xs px-[24px] pb-[6px]'>{t('updater.cannot_cancel')}</p>
+            )}
+            {status === 'installing' && (
+                <p className='updater-note text-default-500 text-xs px-[24px] pb-[6px]'>{t('updater.cannot_cancel')}</p>
+            )}
         </div>
     );
 }

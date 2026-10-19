@@ -76,6 +76,16 @@ export async function translate(text, from, to, options = {}) {
                     })
                 );
             }
+            const pairs = result['blng_sents_part']?.['sentence-pair'];
+            if (Array.isArray(pairs)) {
+                target['sentence'] = pairs
+                    .slice(0, 4)
+                    .map((pair) => ({
+                        source: pair?.['sentence'] || '',
+                        target: pair?.['sentence-translation'] || '',
+                    }))
+                    .filter((pair) => pair.source);
+            }
             return target;
         } else {
             if (result['translation']) {
