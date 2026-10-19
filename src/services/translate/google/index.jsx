@@ -14,6 +14,20 @@ const ENDPOINTS = [
 const BROWSER_UA =
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
+// 单词直译时 Google 仍会在 result[0][1][3] 返回音标，但没有走词典分支。
+// 用一个很小的会话级缓存把音标带给 UI，避免为了显示音标再发一次请求。
+const pronunciationCache = new Map();
+function rememberPronunciation(text, from, to, symbol) {
+    if (typeof symbol !== 'string' || !symbol.trim()) return;
+    const key = `${from}|${to}|${text}`;
+    pronunciationCache.delete(key);
+    pronunciationCache.set(key, symbol.trim());
+    if (pronunciationCache.size > 50) pronunciationCache.delete(pronunciationCache.keys().next().value);
+}
+function pronunciationFor(text, from, to) {
+    return pronunciationCache.get(`${from}|${to}|${text}`) || '';
+}
+
 async function tryTranslate(customUrl, text, from, to) {
     return await fetch(`${customUrl}/translate_a/single?dt=at&dt=bd&dt=ex&dt=ld&dt=md&dt=qca&dt=rw&dt=rm&dt=ss&dt=t`, {
         method: 'GET',
@@ -169,6 +183,7 @@ async function requestTranslation(text, from, to, options = {}) {
             return target;
         } else {
             // 翻译模式
+            rememberPronunciation(text, from, to, result[0]?.[1]?.[3]);
             let target = '';
             for (let r of result[0]) {
                 if (r[0]) {
@@ -186,6 +201,7 @@ export async function translate(text, from, to, options = {}) {
     const key = JSON.stringify([text, from, to, options.config?.custom_url ?? '']);
     return cachedRequest(key, () => requestTranslation(text, from, to, options));
 }
+translate.pronunciationFor = pronunciationFor;
 
 export * from './Config';
 export * from './info';

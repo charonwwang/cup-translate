@@ -227,6 +227,22 @@ button,
 .result-panel [data-cup-body] {
     padding: 4px 0 0;
 }
+.result-source-word {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 2px;
+    color: var(--cup-text-soft);
+    font-size: var(--cup-meta-size);
+    line-height: 1.5;
+}
+.result-source-word-text {
+    font-weight: 500;
+    overflow-wrap: anywhere;
+}
+.result-source-word-phonetic {
+    opacity: 0.85;
+}
 .result-text {
     font-size: var(--cup-result-size);
     line-height: 1.7;

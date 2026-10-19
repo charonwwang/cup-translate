@@ -129,9 +129,12 @@ export default function TargetArea(props) {
     const speak = useVoice();
     const speech = useSpeech(displayResult);
     const exampleSpeech = useSpeech('dictionary-example');
+    const sourceWordSpeech = useSpeech('source-word');
     const [activeExample, setActiveExample] = useState('');
     const speechLabel = speech.status === 'idle' ? t('translate.speak') : t('translate.stop_speaking');
     const exampleSpeechLabel = exampleSpeech.status === 'idle' ? t('translate.speak') : t('translate.stop_speaking');
+    const sourceWordSpeechLabel =
+        sourceWordSpeech.status === 'idle' ? t('translate.speak') : t('translate.stop_speaking');
     const theme = useTheme();
 
     useEffect(() => {
@@ -141,6 +144,9 @@ export default function TargetArea(props) {
         exampleSpeech.stop();
         setActiveExample('');
     }, [result]);
+    useEffect(() => {
+        sourceWordSpeech.stop();
+    }, [sourceText]);
 
     const copyToClipboard = (text, feedback = 'toast') =>
         writeClipboardSafely(text, {
@@ -517,6 +523,30 @@ export default function TargetArea(props) {
             });
     };
 
+    const isSingleWord = sourceText.trim() !== '' && !/\s/.test(sourceText.trim());
+    const serviceModule = builtinServices[getServiceName(currentTranslateServiceInstanceKey)];
+    const serviceLanguage = serviceModule?.Language;
+    const effectiveTargetLanguage =
+        sourceLanguage === 'auto' && targetLanguage === detectLanguage ? translateSecondLanguage : targetLanguage;
+    const singleWordPronunciation = isSingleWord
+        ? serviceModule?.translate?.pronunciationFor?.(
+              sourceText.trim(),
+              serviceLanguage?.[sourceLanguage] ?? sourceLanguage,
+              serviceLanguage?.[effectiveTargetLanguage] ?? effectiveTargetLanguage
+          ) || ''
+        : '';
+    const speakSourceWord = () => {
+        if (!speechService || !isSingleWord) return;
+        sourceWordSpeech
+            .toggle(() =>
+                speakWithService(sourceText.trim(), sourceLanguage === 'auto' ? detectLanguage : sourceLanguage)
+            )
+            .catch((e) => {
+                logError(`[speech] ${e}`);
+                toast.error(t('translate.speech_failed'), { style: toastStyle });
+            });
+    };
+
     const copyableResult = translationResultToText(displayResult);
 
     const [boundRef, bounds] = useMeasure({ scroll: true });
@@ -667,14 +697,44 @@ export default function TargetArea(props) {
                         className={`p-[12px] pb-0 ${hide && 'h-0 p-0'}`}
                     >
                         {typeof displayResult === 'string' ? (
-                            <textarea
-                                ref={textAreaRef}
-                                className='result-text h-0 resize-none bg-transparent select-text outline-none'
-                                aria-label={t('translate.result')}
-                                rows={1}
-                                readOnly
-                                value={displayResult}
-                            />
+                            <>
+                                {isSingleWord && (
+                                    <div className='result-source-word'>
+                                        <span className='result-source-word-text'>{sourceText.trim()}</span>
+                                        {singleWordPronunciation && (
+                                            <span className='result-source-word-phonetic'>
+                                                {singleWordPronunciation}
+                                            </span>
+                                        )}
+                                        {speechService && (
+                                            <button
+                                                type='button'
+                                                aria-label={sourceWordSpeechLabel}
+                                                className='speech-button'
+                                                data-active={sourceWordSpeech.status !== 'idle'}
+                                                aria-pressed={sourceWordSpeech.status !== 'idle'}
+                                                onClick={speakSourceWord}
+                                            >
+                                                {sourceWordSpeech.status === 'loading' ? (
+                                                    <LuLoader2 className='animate-spin text-[13px]' />
+                                                ) : sourceWordSpeech.status === 'playing' ? (
+                                                    <LuSquare className='text-[11px]' />
+                                                ) : (
+                                                    <LuVolume2 className='text-[13px]' />
+                                                )}
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                                <textarea
+                                    ref={textAreaRef}
+                                    className='result-text h-0 resize-none bg-transparent select-text outline-none'
+                                    aria-label={t('translate.result')}
+                                    rows={1}
+                                    readOnly
+                                    value={displayResult}
+                                />
+                            </>
                         ) : (
                             <div className='dictionary-result'>
                                 {result['pronunciations']?.map((pronunciation, index) => (
