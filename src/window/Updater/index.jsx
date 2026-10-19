@@ -113,7 +113,7 @@ export default function Updater() {
             </div>
             <Card className='mx-[24px] mt-[10px] overscroll-auto h-[calc(100vh-150px)]'>
                 <CardBody>
-                    {manifest && ['available', 'confirming', 'installing'].includes(status) && (
+                    {manifest && ['available', 'confirming', 'installing', 'error'].includes(status) && (
                         <div className='updater-version'>
                             <strong>v{manifest.version}</strong>
                             {manifest.date && <span>{formatDate(manifest.date)}</span>}
