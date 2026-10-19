@@ -1,3 +1,9 @@
+## 3.0.11 (2026-10-19)
+
+- 整理发布结构：主 Release 只保留 9 个安装包、对应源码、`update.json` 和 `SHA256SUMS`。
+- 自动更新压缩包和签名移到单独的 `updater-v3.0.11` Release，避免和安装包混在一起。
+- Linux x64/ARM64 主包只包含 deb 和 rpm，去掉 Tauri 的临时解压目录；x64 AppImage 仅作为自动更新包提供。
+
 ## 3.0.10 (2026-10-19)
 
 - 正式发布覆盖 macOS、Windows 和 Linux，不再只提供 macOS 安装包。

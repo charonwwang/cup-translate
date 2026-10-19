@@ -239,11 +239,12 @@ jobs:
                   version="${RELEASE_TAG#v}"
                   bundle="src-tauri/target/${{ matrix.target }}/release/bundle"
                   mkdir -p release-assets
+                  stage=$(mktemp -d)
+                  cp "$bundle"/deb/*.deb "$bundle"/rpm/*.rpm "$stage"/
+                  tar -czf "release-assets/cup-translate_${version}_linux_${{ matrix.arch }}.tar.gz" -C "$stage" .
                   if [ "${{ matrix.arch }}" = "x64" ]; then
-                      cp "$bundle"/appimage/*.AppImage.tar.gz "release-assets/cup-translate_${version}_linux_x64.tar.gz"
-                      cp "$bundle"/appimage/*.AppImage.tar.gz.sig "release-assets/cup-translate_${version}_linux_x64.tar.gz.sig"
-                  else
-                      tar -czf "release-assets/cup-translate_${version}_linux_arm64.tar.gz" -C "$bundle" deb rpm
+                      cp "$bundle"/appimage/*.AppImage.tar.gz "release-assets/cup-translate_${version}_linux_x64.AppImage.tar.gz"
+                      cp "$bundle"/appimage/*.AppImage.tar.gz.sig "release-assets/cup-translate_${version}_linux_x64.AppImage.tar.gz.sig"
                   fi
             - uses: actions/upload-artifact@v4
               with:

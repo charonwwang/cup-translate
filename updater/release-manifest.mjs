@@ -71,19 +71,23 @@ const desktopPlatforms = [
     ['windows-x86_64', 'windows_x64_setup.nsis.zip'],
     ['windows-i686', 'windows_x86_setup.nsis.zip'],
     ['windows-aarch64', 'windows_arm64_setup.nsis.zip'],
-    ['linux-x86_64', 'linux_x64.tar.gz'],
+    ['linux-x86_64', 'linux_x64.AppImage.tar.gz'],
 ];
 
 export async function desktopManifest({
     directory,
     repository,
     tag,
+    downloadTag = tag,
     notes = '',
     publicKey,
     date = new Date().toISOString(),
 }) {
     releaseRepository(repository);
     const version = releaseVersion(tag);
+    const downloadVersion = String(downloadTag).match(/(\d+\.\d+\.\d+)$/)?.[1];
+    if (!downloadVersion)
+        throw new Error(`Invalid updater download tag: ${downloadTag}`);
     const platforms = {};
     for (const [target, suffix] of desktopPlatforms) {
         const name = `cup-translate_${version}_${suffix}`;
@@ -91,7 +95,7 @@ export async function desktopManifest({
         const signature = (await readFile(`${directory}/${name}.sig`, 'utf8')).trim();
         verifyUpdateSignature(bytes, signature, publicKey);
         platforms[target] = {
-            url: `https://github.com/${repository}/releases/download/v${version}/${name}`,
+            url: `https://github.com/${repository}/releases/download/${downloadTag}/${name}`,
             signature,
         };
     }

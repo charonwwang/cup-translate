@@ -24,16 +24,29 @@ function signer() {
     };
 }
 
-const platformFiles = [
+const updaterPlatformFiles = [
     'mac_arm64.app.tar.gz',
     'mac_x64.app.tar.gz',
     'windows_x64_setup.nsis.zip',
     'windows_x86_setup.nsis.zip',
     'windows_arm64_setup.nsis.zip',
-    'linux_x64.tar.gz',
+    'linux_x64.AppImage.tar.gz',
 ];
 
-test('desktop workflow builds macOS, Windows and Linux in one release', async () => {
+const mainFiles = [
+    'source.tar.gz',
+    'mac_arm64.dmg',
+    'mac_x64.dmg',
+    'windows_x64_setup.exe',
+    'windows_x86_setup.exe',
+    'windows_arm64_setup.exe',
+    'windows_x64.msi',
+    'windows_x86.msi',
+    'linux_x64.tar.gz',
+    'linux_arm64.tar.gz',
+];
+
+test('desktop workflow builds all platforms and separates updater payloads', async () => {
     const workflow = await readFile('.github/workflows/release-desktop.yml', 'utf8');
     for (const fragment of [
         'macos-15',
@@ -46,28 +59,31 @@ test('desktop workflow builds macOS, Windows and Linux in one release', async ()
         'aarch64-unknown-linux-gnu',
         'mac_${new}.${suffix}',
         'windows_${{ matrix.arch }}_setup.exe',
-        'linux_arm64.tar.gz',
+        'linux_${{ matrix.arch }}.tar.gz',
+        'linux_x64.AppImage.tar.gz',
         'updater/publish-desktop.mjs',
     ])
         assert.ok(workflow.includes(fragment), `release workflow must contain ${fragment}`);
 });
 
-test('desktop manifest covers every released updater platform', async () => {
+test('desktop manifest points updater platforms at the dedicated updater release', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'cup-desktop-manifest-'));
     try {
         const key = signer();
-        for (const suffix of platformFiles) {
+        for (const suffix of updaterPlatformFiles) {
             const bytes = Buffer.from(suffix);
-            const name = `cup-translate_3.0.10_${suffix}`;
+            const name = `cup-translate_3.0.11_${suffix}`;
             await writeFile(join(directory, name), bytes);
             await writeFile(join(directory, `${name}.sig`), key.signature(bytes));
         }
-        const manifest = await desktopManifest({
+        const options = {
             directory,
             repository: 'owner/downloads',
-            tag: 'v3.0.10',
+            tag: 'v3.0.11',
+            downloadTag: 'updater-v3.0.11',
             publicKey: key.publicKey,
-        });
+        };
+        const manifest = await desktopManifest(options);
         assert.deepEqual(Object.keys(manifest.platforms).sort(), [
             'darwin-aarch64',
             'darwin-x86_64',
@@ -78,23 +94,20 @@ test('desktop manifest covers every released updater platform', async () => {
         ]);
         assert.equal(
             manifest.platforms['windows-x86_64'].url,
-            'https://github.com/owner/downloads/releases/download/v3.0.10/cup-translate_3.0.10_windows_x64_setup.nsis.zip'
+            'https://github.com/owner/downloads/releases/download/updater-v3.0.11/cup-translate_3.0.11_windows_x64_setup.nsis.zip'
         );
-        await writeFile(join(directory, 'cup-translate_3.0.10_linux_x64.tar.gz'), 'tampered');
-        await assert.rejects(
-            desktopManifest({
-                directory,
-                repository: 'owner/downloads',
-                tag: 'v3.0.10',
-                publicKey: key.publicKey,
-            })
+        assert.equal(
+            manifest.platforms['linux-x86_64'].url,
+            'https://github.com/owner/downloads/releases/download/updater-v3.0.11/cup-translate_3.0.11_linux_x64.AppImage.tar.gz'
         );
+        await writeFile(join(directory, 'cup-translate_3.0.11_linux_x64.AppImage.tar.gz'), 'tampered');
+        await assert.rejects(desktopManifest(options));
     } finally {
         await rm(directory, { recursive: true, force: true });
     }
 });
 
-test('desktop publisher uploads all platforms before making the release public', async () => {
+test('desktop publisher keeps installers and updater payloads in separate releases', async () => {
     const { publishDesktop } = await import('../updater/publish-desktop.mjs');
     const directory = await mkdtemp(join(tmpdir(), 'cup-desktop-publish-'));
     const previous = process.cwd();
@@ -107,81 +120,97 @@ test('desktop publisher uploads all platforms before making the release public',
             JSON.stringify({ tauri: { updater: { pubkey: key.publicKey } } })
         );
         await writeFile(join(directory, 'CHANGELOG'), 'Desktop release');
-        const binaries = [
-            'source.tar.gz',
-            'mac_arm64.dmg',
-            'mac_x64.dmg',
-            'mac_arm64.app.tar.gz',
-            'mac_x64.app.tar.gz',
-            'windows_x64_setup.exe',
-            'windows_x86_setup.exe',
-            'windows_arm64_setup.exe',
-            'windows_x64.msi',
-            'windows_x86.msi',
-            'windows_x64_setup.nsis.zip',
-            'windows_x86_setup.nsis.zip',
-            'windows_arm64_setup.nsis.zip',
-            'linux_x64.tar.gz',
-            'linux_arm64.tar.gz',
-        ];
-        for (const suffix of binaries) {
-            const name = `cup-translate_3.0.10_${suffix}`;
+        for (const suffix of mainFiles) {
+            const name = `cup-translate_3.0.11_${suffix}`;
+            await writeFile(join(directory, 'release-assets', name), Buffer.from(suffix));
+        }
+        for (const suffix of updaterPlatformFiles) {
+            const name = `cup-translate_3.0.11_${suffix}`;
             const bytes = Buffer.from(suffix);
             await writeFile(join(directory, 'release-assets', name), bytes);
-            if (platformFiles.includes(suffix))
-                await writeFile(join(directory, 'release-assets', `${name}.sig`), key.signature(bytes));
+            await writeFile(join(directory, 'release-assets', `${name}.sig`), key.signature(bytes));
         }
         process.chdir(directory);
-        const uploaded = [];
-        let published = false;
+        const uploaded = new Map([
+            [1, []],
+            [2, []],
+        ]);
+        let updaterPublished = false;
+        let mainPublished = false;
         const fakeFetch = async (url, options = {}) => {
-            if (url.includes('/releases/latest/')) {
-                assert.equal(published, true);
+            if (url.includes('/releases/latest/download/update.json')) {
+                assert.equal(mainPublished, true);
                 assert.equal(options.headers?.Authorization, undefined);
-                return Response.json({ version: '3.0.10' });
+                return Response.json({ version: '3.0.11' });
             }
             if (url.startsWith('https://uploads.github.com/')) {
-                assert.equal(published, false);
-                uploaded.push(new URL(url).searchParams.get('name'));
+                const id = Number(new URL(url).pathname.match(/releases\/(\d+)\/assets/)?.[1]);
+                uploaded.get(id).push(new URL(url).searchParams.get('name'));
                 return Response.json({});
             }
-            if (url.endsWith('/releases/tags/v3.0.10')) return new Response('', { status: 404 });
-            if (options.method === 'POST') {
-                assert.equal(JSON.parse(options.body).draft, true);
+            if (url.endsWith('/releases/tags/v3.0.11') || url.endsWith('/releases/tags/updater-v3.0.11'))
+                return new Response('', { status: 404 });
+            if (url.endsWith('/releases') && options.method === 'POST') {
+                const body = JSON.parse(options.body);
+                const id = body.tag_name.startsWith('updater-') ? 1 : 2;
                 return Response.json({
-                    id: 123,
-                    upload_url: 'https://uploads.github.com/repos/owner/downloads/releases/123/assets{?name}',
+                    id,
+                    upload_url: `https://uploads.github.com/repos/owner/downloads/releases/${id}/assets{?name}`,
                     assets: [],
                 });
             }
-            if (options.method === 'PATCH') {
-                assert.equal(uploaded.length, 23);
-                assert.ok(uploaded.includes('cup-translate_3.0.10_windows_arm64_setup.exe'));
-                assert.ok(uploaded.includes('cup-translate_3.0.10_linux_arm64.tar.gz'));
-                assert.ok(uploaded.includes('update.json'));
-                assert.ok(uploaded.includes('SHA256SUMS'));
-                published = true;
+            if (url.endsWith('/releases/1') && options.method === 'PATCH') {
+                const body = JSON.parse(options.body);
+                assert.deepEqual(body, { draft: false, prerelease: true });
+                updaterPublished = true;
+                return Response.json({});
+            }
+            if (url.endsWith('/releases/2') && options.method === 'PATCH') {
+                const body = JSON.parse(options.body);
+                assert.deepEqual(body, { draft: false, prerelease: false, make_latest: 'true' });
+                assert.equal(updaterPublished, true);
+                mainPublished = true;
                 return Response.json({});
             }
             return Response.json({ private: false });
         };
         await publishDesktop({
             env: {
-                RELEASE_TAG: 'v3.0.10',
+                RELEASE_TAG: 'v3.0.11',
                 RELEASE_REPOSITORY: 'owner/downloads',
                 GITHUB_TOKEN: 'disposable-test-token',
             },
             fetch: fakeFetch,
         });
-        assert.equal(published, true);
+        assert.equal(mainPublished, true);
+        assert.equal(updaterPublished, true);
+        assert.equal(uploaded.get(1).length, 12);
+        assert.equal(uploaded.get(2).length, 12);
+        for (const name of uploaded.get(2)) {
+            assert.ok(!name.endsWith('.sig'));
+            assert.ok(!name.endsWith('.nsis.zip'));
+            assert.ok(!name.endsWith('.app.tar.gz'));
+            assert.ok(!name.includes('AppImage'));
+        }
+        assert.ok(uploaded.get(2).includes('cup-translate_3.0.11_windows_arm64_setup.exe'));
+        assert.ok(uploaded.get(2).includes('cup-translate_3.0.11_linux_arm64.tar.gz'));
+        assert.ok(uploaded.get(2).includes('update.json'));
+        assert.ok(uploaded.get(2).includes('SHA256SUMS'));
+        assert.ok(uploaded.get(1).includes('cup-translate_3.0.11_linux_x64.AppImage.tar.gz'));
+        const manifest = JSON.parse(await readFile('release-assets/update.json', 'utf8'));
+        assert.ok(
+            Object.values(manifest.platforms).every((platform) =>
+                platform.url.includes('/releases/download/updater-v3.0.11/')
+            )
+        );
         const checksums = await readFile('release-assets/SHA256SUMS', 'utf8');
-        assert.equal(checksums.trim().split('\n').length, 22);
+        assert.equal(checksums.trim().split('\n').length, 11);
         let requests = 0;
-        await writeFile('release-assets/cup-translate_3.0.10_mac_x64.app.tar.gz', 'tampered');
+        await writeFile('release-assets/cup-translate_3.0.11_mac_x64.app.tar.gz', 'tampered');
         await assert.rejects(
             publishDesktop({
                 env: {
-                    RELEASE_TAG: 'v3.0.10',
+                    RELEASE_TAG: 'v3.0.11',
                     RELEASE_REPOSITORY: 'owner/downloads',
                     GITHUB_TOKEN: 'disposable-test-token',
                 },
