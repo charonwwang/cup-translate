@@ -81,6 +81,11 @@ jobs:
                   targets: ${{ matrix.target }}
             - name: Install build dependencies
               run: brew install cmake
+            - name: Install dmgbuild for the standard drag-to-Applications layout
+              run: |
+                  python3 -m venv "$RUNNER_TEMP/dmgbuild"
+                  "$RUNNER_TEMP/dmgbuild/bin/pip" install dmgbuild
+                  echo "DMGBUILD=$RUNNER_TEMP/dmgbuild/bin/dmgbuild" >> "$GITHUB_ENV"
             - run: pnpm install --frozen-lockfile
             - name: Check updater signing secret
               env:

@@ -447,4 +447,12 @@ retry = 3
 
 ### macOS DMG 与公开更新发布
 
-运行 `pnpm package:macos:dmg` 可生成本机架构的 DMG。双架构 GitHub Release、更新签名校验、公开下载仓库及 Apple 证书配置见 [MACOS_RELEASE.md](MACOS_RELEASE.md)。无 Apple Developer 账号时使用 ad-hoc 签名；这不等同于 Developer ID 或 Apple 公证。
+运行 `pnpm package:macos:dmg` 可生成本机架构的 DMG。标准“拖入 Applications”布局由 `dmgbuild` 写入 `.DS_Store`，背景图为 `packaging/dmg-background.png`；本地未安装 `dmgbuild` 时会回退到普通布局。安装方式：
+
+```bash
+python3 -m venv .venv-dmg
+.venv-dmg/bin/pip install dmgbuild
+DMGBUILD=.venv-dmg/bin/dmgbuild pnpm package:macos:dmg
+```
+
+双架构 GitHub Release、更新签名校验、公开下载仓库及 Apple 证书配置见 [MACOS_RELEASE.md](MACOS_RELEASE.md)。无 Apple Developer 账号时使用 ad-hoc 签名；这不等同于 Developer ID 或 Apple 公证。

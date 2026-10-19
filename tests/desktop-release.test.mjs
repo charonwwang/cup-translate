@@ -66,6 +66,20 @@ test('desktop workflow builds all platforms and separates updater payloads', asy
         assert.ok(workflow.includes(fragment), `release workflow must contain ${fragment}`);
 });
 
+test('dmgbuild packaging keeps updater archives rooted at the staged app', async () => {
+    const packager = await readFile('packaging/package-macos.mjs', 'utf8');
+    assert.match(
+        packager,
+        /const source = join\(stage, 'contents'\)/,
+        'the fallback source directory must be declared outside the fallback branch'
+    );
+    assert.match(
+        packager,
+        /'-C',\s*useDmgbuild \? stage : source,\s*basename\(app\)/,
+        'updater packaging must use the stage root for dmgbuild and contents/ for the fallback'
+    );
+});
+
 test('desktop manifest points updater platforms at the dedicated updater release', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'cup-desktop-manifest-'));
     try {
