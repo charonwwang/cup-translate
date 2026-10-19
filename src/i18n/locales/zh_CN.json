@@ -275,6 +275,7 @@
             "update": "更新",
             "confirm_update": "继续更新",
             "cannot_cancel": "更新开始下载和安装后无法取消；完成后应用会自动重启。",
+            "notes_missing": "此版本的更新说明未随清单提供，请查看发布页。",
             "downloading": "下载中…",
             "installing": "安装中…",
             "cancel": "取消",

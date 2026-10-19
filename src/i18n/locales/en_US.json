@@ -275,6 +275,7 @@
             "update": "Update",
             "confirm_update": "Continue update",
             "cannot_cancel": "Once the download and installation start, the update cannot be cancelled. The app restarts when it finishes.",
+            "notes_missing": "Release notes were not included in this update manifest. See the release page.",
             "downloading": "Downloading…",
             "installing": "Installing…",
             "cancel": "Cancel",

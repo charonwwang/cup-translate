@@ -137,6 +137,10 @@ export default function TargetArea(props) {
     useEffect(() => {
         if (exampleSpeech.status === 'idle') setActiveExample('');
     }, [exampleSpeech.status]);
+    useEffect(() => {
+        exampleSpeech.stop();
+        setActiveExample('');
+    }, [result]);
 
     const copyToClipboard = (text, feedback = 'toast') =>
         writeClipboardSafely(text, {

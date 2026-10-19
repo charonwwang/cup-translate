@@ -46,7 +46,10 @@ export default function Updater() {
                 setStatus(update.shouldUpdate ? 'available' : 'latest');
                 if (update.shouldUpdate) {
                     setManifest(update.manifest || null);
-                    setBody(update.manifest?.body || `v${update.manifest?.version || ''}`);
+                    const notes = update.manifest?.body || '';
+                    const heading = notes.match(/^##\s+v?(\d+\.\d+\.\d+)/);
+                    const stale = heading && update.manifest?.version && heading[1] !== update.manifest.version;
+                    setBody(stale ? t('updater.notes_missing') : notes || t('updater.notes_missing'));
                 } else {
                     setBody(t('updater.latest'));
                 }

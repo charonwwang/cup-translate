@@ -136,7 +136,7 @@ async function requestTranslation(text, from, to, options = {}) {
             }
             // 例句
             if (result[13]) {
-                const examples = result[13][0].slice(0, 4);
+                const examples = Array.isArray(result[13]?.[0]) ? result[13][0].slice(0, 4) : [];
                 const detected = result[2] || from;
                 // Google 词典的 ex 通道只返回例句原文。用户查词时需要能对照目标语言，
                 // 因此这里只为少量例句补一次翻译；失败时保留原文，不阻断整个词条。
