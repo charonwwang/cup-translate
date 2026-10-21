@@ -63,6 +63,7 @@ jobs:
         runs-on: ${{ matrix.os }}
         timeout-minutes: 90
         env:
+            MACOSX_DEPLOYMENT_TARGET: '10.15'
             RELEASE_TARGET: ${{ matrix.target }}
             RELEASE_OUTPUT: release-assets
         steps:

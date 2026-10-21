@@ -102,3 +102,10 @@ test('eSpeak host and target tools can compile phonemes under long CI paths', as
     assert.ok(failingPath.length > 160 + 20);
     assert.ok(failingPath.length < 4096);
 });
+
+test('macOS compilation and installer metadata allow the C++ filesystem dependency', async () => {
+    const config = JSON.parse(await readFile('src-tauri/tauri.conf.json', 'utf8'));
+    assert.equal(config.tauri.bundle.macOS.minimumSystemVersion, '10.15');
+    const workflow = await readFile('.github/workflows/release-desktop.yml', 'utf8');
+    assert.match(workflow, /MACOSX_DEPLOYMENT_TARGET: '10.15'/);
+});

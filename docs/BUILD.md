@@ -468,3 +468,6 @@ macOS 使用 ad-hoc 签名和经过校验的 Tauri 更新签名，Developer ID/�
 
 
 eSpeak NG 默认 POSIX 数据目录缓冲只有 160 字节。显式 `--target` 的干净 CI 构建会在 `compiledata.c` 拼接音素源文件名时截断路径；`.cargo/config.toml` 通过上游支持的 `N_PATH_HOME=4096` 编译宏同时扩大宿主工具与内嵌音素引擎的目录容量。自定义 `CFLAGS` 时请保留此宏。
+
+
+3.0.12 新增的 llama.cpp C++ bridge 使用 `std::filesystem`，Intel Mac 不能继续采用 Tauri 隐含的 macOS 10.13 编译下限。`bundle.macOS.minimumSystemVersion` 与发布 job 的 `MACOSX_DEPLOYMENT_TARGET` 同设为 `10.15`，覆盖应用编译和独立 Rust 测试；Apple Silicon 本身至少 macOS 11，Piper 的单独 ONNX Runtime 仍要求 macOS 14+。Kokoro 内嵌 universal 运行库的 Intel 最低版本由 Mach-O 检查确认为 10.15（ONNX）/10.14（sherpa），应用统一取更高下限。
