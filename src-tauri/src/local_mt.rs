@@ -6,7 +6,7 @@
 // 需要本地化的文案请走前端的 `t()`。
 // 例外：`license` 字段是**许可证署名元数据**（法律要求，必须准确），
 // 且前端并不读它（用 `services.translate.local_mt.license_<pair>`），保留原文。
-// 用 CTranslate2（ct2rs，内嵌 CT2 源码静态编译）跑 OPUS-MT en↔zh 的 CT2 int8 模型。
+// CTranslate2（ct2rs）运行 OPUS-MT 中英模型，以及单份 M2M-100 418M int8 多语种模型。
 // 模型按需下载到 <app_config_dir>/models/<dir>/，不随包分发：
 //   en→zh 派生自 Helsinki-NLP/opus-mt-en-zh（Apache-2.0）
 //   zh→en 派生自 Helsinki-NLP/opus-mt-zh-en（CC-BY-4.0，界面已标注署名）
@@ -25,14 +25,22 @@ use tauri::AppHandle;
 
 struct MtTranslator {
     engine: ct2rs::sys::Translator,
-    tokenizer: AutoTokenizer,
+    tokenizer: Box<dyn Tokenizer + Send + Sync>,
 }
 
 impl MtTranslator {
     fn new(path: &std::path::Path, config: &Ct2Config) -> Result<Self, String> {
         Ok(Self {
             engine: ct2rs::sys::Translator::new(path, config).map_err(|e| e.to_string())?,
-            tokenizer: AutoTokenizer::new(path).map_err(|e| e.to_string())?,
+            tokenizer: if path.join("sentencepiece.bpe.model").is_file() {
+                let spm = path.join("sentencepiece.bpe.model");
+                Box::new(
+                    ct2rs::tokenizers::sentencepiece::Tokenizer::from_file(&spm, &spm)
+                        .map_err(|e| e.to_string())?,
+                )
+            } else {
+                Box::new(AutoTokenizer::new(path).map_err(|e| e.to_string())?)
+            },
         })
     }
 }
@@ -60,6 +68,7 @@ struct ModelSpec {
 /// ——那个文件从不会被下载，用户看到的只是一个含糊的 missing 报错。
 /// 该契约由 `the_model_file_list_and_the_checksum_list_are_the_same_set` 守住
 /// （实测：修复前给它加一个多余哈希项，全量测试仍然全绿）。
+#[cfg(test)]
 const MODEL_FILES: &[&str] = &[
     "config.json",
     "shared_vocabulary.json",
@@ -124,10 +133,90 @@ fn model_spec(pair: &str) -> Result<ModelSpec, String> {
                 ("target.spm", ZH_EN_TARGET_SPM_SHA256),
             ],
         }),
+        "hymt-q4" => Ok(ModelSpec {
+            dir_name: "hymt-q4",
+            repo: "tencent/HY-MT1.5-1.8B-GGUF",
+            revision: "265b2e615a7dc9b06c435dc878829ad99a512ba2",
+            source_prefix: None,
+            license: "Tencent Hunyuan Community License (see upstream License.txt)",
+            expected_sha256: &[
+                (
+                    "HY-MT1.5-1.8B-Q4_K_M.gguf",
+                    "4383ac0c3c8e476de98ff979c2a3f069f8c4fb385e7860cf2d28da896cc477c7",
+                ),
+                (
+                    "License.txt",
+                    "d7d9db858500ac9073f4b5decef8e208454357226f535f65079ce4376047569f",
+                ),
+            ],
+        }),
+        "hymt-q8" => Ok(ModelSpec {
+            dir_name: "hymt-q8",
+            repo: "tencent/HY-MT1.5-1.8B-GGUF",
+            revision: "265b2e615a7dc9b06c435dc878829ad99a512ba2",
+            source_prefix: None,
+            license: "Tencent Hunyuan Community License (see upstream License.txt)",
+            expected_sha256: &[
+                (
+                    "HY-MT1.5-1.8B-Q8_0.gguf",
+                    "6789b06d0902f2f5312c0e1703d56ccbddfcfb6c653d22519b7c720f7db9a98e",
+                ),
+                (
+                    "License.txt",
+                    "d7d9db858500ac9073f4b5decef8e208454357226f535f65079ce4376047569f",
+                ),
+            ],
+        }),
+        "m2m100" => Ok(ModelSpec {
+            dir_name: "m2m100-418m-ct2-int8",
+            repo: "jncraton/m2m100_418M-ct2-int8",
+            revision: "7c1b2620a4e58dacecbd8bf89cfd6da7eb9eb7b0",
+            source_prefix: None,
+            license: "MIT (Meta / facebook/m2m100_418M; CT2 int8 conversion: jncraton)",
+            expected_sha256: &[
+                (
+                    "config.json",
+                    "4244772990e30069563e3ddfb4ad6dc95bdfd2ac3de667ea8858c9b0a8433fa8",
+                ),
+                (
+                    "shared_vocabulary.json",
+                    "7eb5d0ff184c6095c7c10f9911c0aea492250abd12854f9c3d787c64b1c6397e",
+                ),
+                (
+                    "sentencepiece.bpe.model",
+                    "d8f7c76ed2a5e0822be39f0a4f95a55eb19c78f4593ce609e2edbc2aea4d380a",
+                ),
+                (
+                    "model.bin",
+                    "d6703dd9f920ff896e45c3d97b490761bed5944937b90bbe6a7245f5652542d4",
+                ),
+            ],
+        }),
         _ => Err(format!(
-            "Unsupported language pair: {pair} (local offline translation only supports en-zh / zh-en)"
+            "Unsupported language pair: {pair} (expected en-zh / zh-en / m2m100)"
         )),
     }
+}
+
+fn model_files(pair: &str) -> Vec<&'static str> {
+    model_spec(pair)
+        .map(|s| s.expected_sha256.iter().map(|(name, _)| *name).collect())
+        .unwrap_or_default()
+}
+
+// The model has one Chinese token: Traditional output and dialect/script claims are
+// intentionally not advertised. Frontend aliases are normalized before invoking.
+const M2M_LANGUAGES: &str = "af am ar ast az ba be bg bn br bs ca ceb cs cy da de el en es et fa ff fi fr fy ga gd gl gu ha he hi hr ht hu hy id ig ilo is it ja jv ka kk km kn ko lb lg ln lo lt lv mg mk ml mn mr ms my ne nl no ns oc or pa pl ps pt ro ru sd si sk sl so sq sr ss su sv sw ta th tl tn tr uk ur uz vi wo xh yi yo zh zu";
+fn m2m_direction(source: Option<&str>, target: Option<&str>) -> Result<(String, String), String> {
+    let from = source.ok_or("Select or detect a source language for M2M-100")?;
+    let to = target.ok_or("Select a target language for M2M-100")?;
+    if from == to
+        || !M2M_LANGUAGES.split_whitespace().any(|l| l == from)
+        || !M2M_LANGUAGES.split_whitespace().any(|l| l == to)
+    {
+        return Err("Unsupported M2M-100 language direction".into());
+    }
+    Ok((format!("__{from}__"), format!("__{to}__")))
 }
 
 /// 计算文件 SHA256（十六进制小写），流式读取避免大文件全量加载进内存
@@ -172,6 +261,10 @@ fn verify_model_checksums(dir: &std::path::Path, spec: &ModelSpec) -> Vec<String
 }
 
 fn model_dir(app_handle: &AppHandle, pair: &str) -> Result<PathBuf, String> {
+    let versioned = version_dir(app_handle, pair)?;
+    if versioned.is_dir() {
+        return Ok(versioned);
+    }
     let spec = model_spec(pair)?;
     Ok(app_handle
         .path_resolver()
@@ -274,140 +367,647 @@ impl Drop for DownloadGuard {
     }
 }
 
-#[tauri::command]
-pub async fn local_mt_model_status(app_handle: AppHandle, pair: String) -> Result<Value, String> {
-    let spec = model_spec(&pair)?;
-    let dir = model_dir(&app_handle, &pair)?;
-    let missing: Vec<&str> = MODEL_FILES
-        .iter()
-        .copied()
-        .filter(|f| !dir.join(f).is_file())
-        .collect();
-    Ok(json!({
-        "pair": pair,
-        "installed": missing.is_empty(),
-        "loaded": translator_cache().try_lock().map(|cache| cache.contains_key(&pair)).unwrap_or(false),
-        "missing": missing,
-        "license": spec.license,
-        "dir": dir.display().to_string(),
-    }))
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct InstallTask {
+    pair: String,
+    revision: String,
+    state: String,
+    file: String,
+    bytes: u64,
+    total: u64,
+    validator: Option<String>,
+    origin: String,
+    error: Option<String>,
+    #[serde(default)]
+    failed_stage: Option<String>,
 }
-
-#[tauri::command]
-pub async fn local_mt_download_model(app_handle: AppHandle, pair: String) -> Result<(), String> {
-    let _guard = DownloadGuard::acquire(&pair)?;
-    let spec = model_spec(&pair)?;
-    let dir = model_dir(&app_handle, &pair)?;
-    std::fs::create_dir_all(&dir)
-        .map_err(|e| format!("Failed to create the model directory: {e}"))?;
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(900))
-        .build()
-        .map_err(|e| e.to_string())?;
-    let expected: std::collections::HashMap<&str, &str> =
-        spec.expected_sha256.iter().copied().collect();
-    for file in MODEL_FILES {
-        let dest = dir.join(file);
-        // 已存在的文件也要校验：防止历史版本下载损坏或被篡改的旧文件被直接复用
-        if dest.is_file() {
-            if let Some(sha) = expected.get(file) {
-                match file_sha256(&dest) {
-                    Ok(actual) if actual.eq_ignore_ascii_case(sha) => continue,
-                    Ok(_) | Err(_) => {
-                        log::warn!(
-                            "[local_mt] {file} exists but failed verification, re-downloading"
-                        );
-                        let _ = std::fs::remove_file(&dest);
-                    }
-                }
-            } else {
-                continue;
-            }
-        }
-        // huggingface 直连与 hf-mirror 镜像二选一（中国大陆网络通常只有镜像可达）
-        let mut last_err = String::new();
-        let mut done = false;
-        'download_loop: for base in ["https://huggingface.co", "https://hf-mirror.com"] {
-            let url = format!("{}/{}/resolve/{}/{}", base, spec.repo, spec.revision, file);
-            log::info!("[local_mt] downloading {url}");
-            match client.get(&url).send().await {
-                Ok(mut resp) if resp.status().is_success() => {
-                    // 流式写入磁盘：resp.bytes() 会把整个文件（model.bin 80MB）
-                    // 加载进内存，用 chunk() 分块写入避免内存峰值
-                    let partial = dest.with_extension("part");
-                    let mut dest_file = std::fs::File::create(&partial)
-                        .map_err(|e| format!("Failed to create {file}: {e}"))?;
-                    let mut total: u64 = 0;
-                    loop {
-                        match resp.chunk().await {
-                            Ok(Some(chunk)) => {
-                                dest_file
-                                    .write_all(&chunk)
-                                    .map_err(|e| format!("Failed to write {file}: {e}"))?;
-                                total += chunk.len() as u64;
-                            }
-                            Ok(None) => break,
-                            Err(e) => {
-                                last_err = format!("{url}: {e}");
-                                let _ = std::fs::remove_file(&partial);
-                                continue 'download_loop;
-                            }
-                        }
-                    }
-                    log::info!("[local_mt] downloaded {} ({} bytes)", file, total);
-                    // 下载后立即校验 SHA256；不匹配则视为本次下载失败，尝试下一个镜像
-                    if let Some(sha) = expected.get(file) {
-                        match file_sha256(&partial) {
-                            Ok(actual) if actual.eq_ignore_ascii_case(sha) => {}
-                            Ok(actual) => {
-                                last_err = format!(
-                                    "{url}: SHA256 mismatch (expected {sha}, got {actual}); the mirror may be tampered with or the transfer corrupted"
-                                );
-                                let _ = std::fs::remove_file(&partial);
-                                continue;
-                            }
-                            Err(e) => {
-                                last_err = format!("{url}: verification failed: {e}");
-                                let _ = std::fs::remove_file(&partial);
-                                continue;
-                            }
-                        }
-                    }
-                    drop(dest_file);
-                    std::fs::rename(&partial, &dest)
-                        .map_err(|e| format!("Failed to install {file}: {e}"))?;
-                    done = true;
-                    break;
-                }
-                Ok(resp) => last_err = format!("{url}: HTTP {}", resp.status()),
-                Err(e) => last_err = format!("{url}: {e}"),
-            }
-        }
-        if !done {
-            return Err(format!(
-                "Failed to download {file} (neither huggingface.co nor hf-mirror.com is reachable): {last_err}"
-            ));
-        }
+fn task_path(app: &AppHandle, pair: &str) -> Result<PathBuf, String> {
+    let spec = model_spec(pair)?;
+    Ok(app
+        .path_resolver()
+        .app_config_dir()
+        .ok_or("Config directory unavailable")?
+        .join("models")
+        .join(format!("{}.task.json", spec.dir_name)))
+}
+fn task_control() -> &'static Mutex<HashMap<String, String>> {
+    static CONTROL: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
+    CONTROL.get_or_init(|| Mutex::new(HashMap::new()))
+}
+fn persist_task(app: &AppHandle, task: &InstallTask) -> Result<(), String> {
+    use tauri::Manager;
+    let path = task_path(app, &task.pair)?;
+    std::fs::create_dir_all(path.parent().unwrap()).map_err(|_| "Cannot create task directory")?;
+    let temp = path.with_extension("tmp");
+    let mut file = std::fs::File::create(&temp).map_err(|_| "Cannot save install task")?;
+    file.write_all(&serde_json::to_vec(task).map_err(|_| "Cannot serialize task")?)
+        .map_err(|_| "Cannot save install task")?;
+    file.sync_all().map_err(|_| "Cannot flush install task")?;
+    std::fs::rename(temp, path).map_err(|_| "Cannot commit install task")?;
+    app.emit_all("local_mt_task", task)
+        .map_err(|_| "Cannot notify model windows")?;
+    Ok(())
+}
+fn read_task(app: &AppHandle, pair: &str) -> Option<InstallTask> {
+    serde_json::from_slice(&std::fs::read(task_path(app, pair).ok()?).ok()?).ok()
+}
+fn version_dir(app: &AppHandle, pair: &str) -> Result<PathBuf, String> {
+    let spec = model_spec(pair)?;
+    Ok(app
+        .path_resolver()
+        .app_config_dir()
+        .ok_or("Config directory unavailable")?
+        .join("models")
+        .join(format!("{}-{}", spec.dir_name, spec.revision)))
+}
+fn file_bytes(pair: &str, name: &str) -> u64 {
+    match (pair, name) {
+        ("hymt-q4", "HY-MT1.5-1.8B-Q4_K_M.gguf") => 1133080512,
+        ("hymt-q8", "HY-MT1.5-1.8B-Q8_0.gguf") => 1908528288,
+        ("hymt-q4" | "hymt-q8", "License.txt") => 16270,
+        ("m2m100", "config.json") => 189,
+        ("m2m100", "model.bin") => 490_667_713,
+        ("m2m100", "shared_vocabulary.json") => 2_796_509,
+        ("m2m100", "sentencepiece.bpe.model") => 2_423_393,
+        (_, "config.json") => 223,
+        (_, "model.bin") => 79_567_635,
+        ("en-zh", "shared_vocabulary.json") => 1_303_887,
+        ("en-zh", "source.spm") => 806_435,
+        ("en-zh", "target.spm") => 804_600,
+        ("zh-en", "shared_vocabulary.json") => 1_303_998,
+        ("zh-en", "source.spm") => 804_677,
+        ("zh-en", "target.spm") => 806_530,
+        _ => 0,
     }
-    // 全部文件就绪后做一次整目录终检，兜底「单文件校验通过但目录整体损坏」的边界情况
-    let bad = verify_model_checksums(&dir, &spec);
-    if !bad.is_empty() {
-        return Err(format!("Model integrity check failed: {}", bad.join("; ")));
+}
+fn warm_directory(dir: &std::path::Path, pair: &str) -> Result<(), String> {
+    if pair.starts_with("hymt-") {
+        let output = crate::hy_mt::translate(
+            dir,
+            pair,
+            "Hello, world.",
+            "en",
+            "zh_cn",
+            2,
+            &crate::local_mt_tasks::Cancellation::default(),
+        );
+        crate::hy_mt::unload(pair)?;
+        return output.and_then(|v| {
+            if v.trim().is_empty() {
+                Err("HY-MT self-test returned empty text".into())
+            } else {
+                Ok(())
+            }
+        });
+    }
+    let translator = MtTranslator::new(
+        dir,
+        &Ct2Config {
+            num_threads_per_replica: 2,
+            max_queued_batches: 1,
+            ..Default::default()
+        },
+    )
+    .map_err(|_| "Model load failed during self-test")?;
+    let output = translate_with_model(
+        &translator,
+        pair,
+        if pair != "zh-en" {
+            "Hello, world."
+        } else {
+            "你好，世界。"
+        },
+        Some("balanced"),
+    )?;
+    if output.trim().is_empty() || has_private_use(&output) {
+        return Err("Model self-test returned invalid output".into());
     }
     Ok(())
+}
+fn validated_dirs() -> &'static Mutex<HashMap<PathBuf, Vec<(u64, Option<std::time::SystemTime>)>>> {
+    static VALIDATED: OnceLock<Mutex<HashMap<PathBuf, Vec<(u64, Option<std::time::SystemTime>)>>>> =
+        OnceLock::new();
+    VALIDATED.get_or_init(|| Mutex::new(HashMap::new()))
+}
+fn validate_ready(dir: &std::path::Path, pair: &str) -> bool {
+    let spec = match model_spec(pair) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    let fingerprint: Option<Vec<_>> = model_files(pair)
+        .iter()
+        .map(|name| {
+            let meta = std::fs::metadata(dir.join(name)).ok()?;
+            (meta.is_file() && meta.len() == file_bytes(pair, name))
+                .then(|| (meta.len(), meta.modified().ok()))
+        })
+        .collect();
+    let Some(fingerprint) = fingerprint else {
+        return false;
+    };
+    let mut verified = match validated_dirs().lock() {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+    if verified.get(dir) == Some(&fingerprint) {
+        return true;
+    }
+    if !verify_model_checksums(dir, &spec).is_empty() || warm_directory(dir, pair).is_err() {
+        return false;
+    }
+    verified.insert(dir.to_owned(), fingerprint);
+    true
+}
+#[tauri::command]
+pub async fn local_mt_model_status(app_handle: AppHandle, pair: String) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let spec = model_spec(&pair)?;
+        let dir = model_dir(&app_handle, &pair)?;
+        let installed = validate_ready(&dir,&pair);
+        let mut task = read_task(&app_handle,&pair);
+        let active = download_lock().lock().map_err(|_| "Model lock unavailable")?.contains_key(&pair);
+        if !active {
+            if let Some(ref mut task) = task {
+                if ["queued","downloading","verifying","warming"].contains(&task.state.as_str()) {
+                    task.state = "paused".into();
+                    persist_task(&app_handle, task)?;
+                }
+            }
+        }
+        let total: u64 = model_files(&pair).iter().map(|name| file_bytes(&pair,name)).sum();
+        Ok(json!({"pair":pair,"supported":true,"installed":installed,"loaded":if pair.starts_with("hymt-") {crate::hy_mt::loaded(&pair)} else {translator_cache().try_lock().map(|cache| cache.contains_key(&pair)).unwrap_or(false)},"missing":[],"hasFiles":dir.is_dir(),"license":spec.license,"source":spec.repo,"revision":spec.revision,"runtime":if pair.starts_with("hymt-") {"llama-cpp-2 0.1.160 / CPU GGUF"} else {"ct2rs-0.10 / CTranslate2 int8"},"bytes":total,"files":spec.expected_sha256.iter().map(|(name,sha)| json!({"name":name,"bytes":file_bytes(&pair,name),"sha256":sha})).collect::<Vec<_>>(),"downloadBase":format!("https://huggingface.co/{}/resolve/{}",spec.repo,spec.revision),"task":task,"dir":dir.display().to_string()}))
+    }).await.map_err(|_| "Model status worker failed")?
+}
+#[tauri::command]
+pub async fn local_mt_install_control(
+    app_handle: AppHandle,
+    pair: String,
+    action: String,
+) -> Result<(), String> {
+    model_spec(&pair)?;
+    if !["paused", "cancelled"].contains(&action.as_str()) {
+        return Err("Invalid install action".into());
+    }
+    task_control()
+        .lock()
+        .map_err(|_| "Model control unavailable")?
+        .insert(pair.clone(), action.clone());
+    if !download_lock()
+        .lock()
+        .map_err(|_| "Model lock unavailable")?
+        .contains_key(&pair)
+    {
+        if let Some(mut task) = read_task(&app_handle, &pair) {
+            task.state = action;
+            persist_task(&app_handle, &task)?;
+        }
+    }
+    Ok(())
+}
+#[tauri::command]
+pub async fn local_mt_device_check(
+    app_handle: AppHandle,
+    model: Option<String>,
+) -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let root = app_handle.path_resolver().app_config_dir().ok_or("Config directory unavailable")?;
+        std::fs::create_dir_all(&root).map_err(|_| "Cannot access model storage")?;
+        let available = fs2::available_space(&root).map_err(|_| "Cannot read available disk space")?;
+        // Memory estimates are deliberately absent: no portable measurement is available here.
+        Ok(json!({"architecture":std::env::consts::ARCH,"platform":std::env::consts::OS,"diskAvailable":available,"diskRequired":if model.as_deref().is_some_and(|m|m.starts_with("hymt-")) {4_500_000_000u64} else if model.as_deref() == Some("m2m100") { 1_200_000_000u64 } else { 400_000_000u64 },"memory":null,"supported":true,"threads":std::thread::available_parallelism().map(|n| n.get().min(4)).unwrap_or(2)}))
+    }).await.map_err(|_| "Device check worker failed")?
+}
+// Resume only with an unchanged origin and server validator. An unvalidated partial is never appended.
+fn resume_offset(status: u16, range: Option<&str>, offset: u64) -> Result<bool, String> {
+    match status {
+        200 => Ok(false),
+        206 if range
+            .and_then(|r| r.strip_prefix("bytes "))
+            .and_then(|r| r.split_once('-'))
+            .and_then(|(n, _)| n.parse::<u64>().ok())
+            == Some(offset) =>
+        {
+            Ok(true)
+        }
+        416 => Err("Range no longer satisfiable; retry restarts this file".into()),
+        _ => Err(format!("Unexpected download response: HTTP {status}")),
+    }
+}
+fn install_model(
+    app: &AppHandle,
+    pair: &str,
+    task: &mut InstallTask,
+    source_dir: Option<&std::path::Path>,
+    download_base: Option<&str>,
+) -> Result<(), String> {
+    let spec = model_spec(pair)?;
+    let final_dir = version_dir(app, pair)?;
+    let stage = final_dir.with_extension("staging");
+    std::fs::create_dir_all(&stage).map_err(|_| "Cannot create staging directory")?;
+    if fs2::available_space(&stage).map_err(|_| "Cannot inspect free disk space")?
+        < if pair == "m2m100" {
+            1_200_000_000
+        } else {
+            200_000_000
+        }
+    {
+        return Err("Insufficient disk space for model staging and repair".into());
+    }
+    if let Some(source) = source_dir {
+        for (name, sha) in spec.expected_sha256 {
+            check_install_control(app, pair, task)?;
+            task.state = "verifying".into();
+            task.file = name.to_string();
+            task.total = file_bytes(pair, name);
+            task.bytes = 0;
+            persist_task(app, task)?;
+            verify_import_file(&source.join(name), file_bytes(pair, name), sha)?;
+            task.bytes = task.total;
+            persist_task(app, task)?;
+        }
+    }
+    let existing = model_dir(app, pair)?;
+    let client = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(900))
+        .build()
+        .map_err(|_| "Cannot initialize download client")?;
+    for name in &model_files(pair) {
+        let expected = spec
+            .expected_sha256
+            .iter()
+            .find(|(n, _)| n == name)
+            .unwrap()
+            .1;
+        let dest = stage.join(name);
+        if file_sha256(&dest).ok().as_deref() == Some(expected) {
+            continue;
+        }
+        if file_sha256(&existing.join(name)).ok().as_deref() == Some(expected) {
+            std::fs::copy(existing.join(name), &dest)
+                .map_err(|_| "Cannot reuse verified model file")?;
+            continue;
+        }
+        if let Some(source) = source_dir {
+            task.file = name.to_string();
+            task.total = file_bytes(pair, name);
+            task.bytes = 0;
+            task.state = "verifying".into();
+            persist_task(app, task)?;
+            let source_file = source.join(name);
+            std::fs::copy(&source_file, &dest).map_err(|_| "Cannot copy imported model file")?;
+            task.bytes = task.total;
+            persist_task(app, task)?;
+            continue;
+        }
+        let partial = dest.with_extension("part");
+        let previous_file = task.file.clone();
+        task.file = name.to_string();
+        task.total = file_bytes(pair, name);
+        task.state = "downloading".into();
+        let mut complete = false;
+        let origins: Vec<&str> = download_base
+            .map(|base| vec![base])
+            .unwrap_or_else(|| vec!["https://huggingface.co", "https://hf-mirror.com"]);
+        for origin in origins {
+            check_install_control(app, pair, task)?;
+            let mut offset = std::fs::metadata(&partial).map(|m| m.len()).unwrap_or(0);
+            if previous_file != *name || task.origin != origin || task.validator.is_none() {
+                offset = 0;
+            }
+            if offset >= task.total {
+                offset = 0;
+            }
+            let url = if download_base.is_some() {
+                format!("{}/{}", origin.trim_end_matches('/'), name)
+            } else {
+                format!(
+                    "{}/{}/resolve/{}/{}",
+                    origin, spec.repo, spec.revision, name
+                )
+            };
+            let mut request = client.get(url);
+            if offset > 0 {
+                request = request
+                    .header("Range", format!("bytes={offset}-"))
+                    .header("If-Range", task.validator.as_deref().unwrap());
+            }
+            let mut response = match controlled_transfer(app, pair, task, request.send()) {
+                Ok(r) => r,
+                Err(_) if ["paused", "cancelled"].contains(&task.state.as_str()) => {
+                    return Err("Install stopped; temporary files retained".into())
+                }
+                Err(_) => continue,
+            };
+            let validator = response
+                .headers()
+                .get("etag")
+                .or_else(|| response.headers().get("last-modified"))
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_owned);
+            let range = response
+                .headers()
+                .get("content-range")
+                .and_then(|v| v.to_str().ok());
+            let append = match resume_offset(response.status().as_u16(), range, offset) {
+                Ok(a) => a,
+                Err(_) => {
+                    let _ = std::fs::remove_file(&partial);
+                    continue;
+                }
+            };
+            if append && offset > 0 && task.validator != validator {
+                let _ = std::fs::remove_file(&partial);
+                continue;
+            }
+            if !append {
+                offset = 0;
+            }
+            task.validator = validator;
+            task.origin = origin.into();
+            task.bytes = offset;
+            persist_task(app, task)?;
+            let mut output = std::fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .append(append && offset > 0)
+                .truncate(!append || offset == 0)
+                .open(&partial)
+                .map_err(|_| "Cannot create partial model file")?;
+            let mut tick = Instant::now();
+            loop {
+                check_install_control(app, pair, task)?;
+                let chunk = controlled_transfer(app, pair, task, response.chunk())?;
+                let Some(buffer) = chunk else {
+                    break;
+                };
+                let read = buffer.len();
+                task.bytes += read as u64;
+                if task.bytes > task.total {
+                    return Err("Downloaded file exceeds catalog size".into());
+                }
+                output
+                    .write_all(&buffer)
+                    .map_err(|_| "Model write failed (check disk space)")?;
+                if tick.elapsed() > Duration::from_millis(200) {
+                    persist_task(app, task)?;
+                    tick = Instant::now();
+                }
+            }
+            output.sync_all().map_err(|_| "Cannot flush model file")?;
+            drop(output);
+            task.state = "verifying".into();
+            persist_task(app, task)?;
+            if task.bytes == task.total && file_sha256(&partial).ok().as_deref() == Some(expected) {
+                std::fs::rename(&partial, &dest).map_err(|_| "Cannot verify model file")?;
+                complete = true;
+                break;
+            }
+            let _ = std::fs::remove_file(&partial);
+        }
+        if !complete {
+            return Err("Model download failed or checksum mismatch; mirror may be tampered with or transfer corrupted; retry available".into());
+        }
+    }
+    check_install_control(app, pair, task)?;
+    task.state = "verifying".into();
+    persist_task(app, task)?;
+    if !verify_model_checksums(&stage, &spec).is_empty() {
+        return Err("Model integrity check failed".into());
+    }
+    task.state = "warming".into();
+    persist_task(app, task)?;
+    warm_directory(&stage, pair)?;
+    check_install_control(app, pair, task)?;
+    if final_dir.exists() {
+        if validate_ready(&final_dir, pair) {
+            std::fs::remove_dir_all(stage).map_err(|_| "Cannot remove staging directory")?;
+        } else {
+            let cache = translator_cache()
+                .lock()
+                .map_err(|_| "Model cache unavailable")?;
+            if cache
+                .get(pair)
+                .is_some_and(|entry| Arc::strong_count(&entry.translator) > 1)
+            {
+                return Err("Model is in use; retry repair after translation completes".into());
+            }
+            drop(cache);
+            let previous = final_dir.with_extension("invalid");
+            if previous.exists() {
+                std::fs::remove_dir_all(&previous)
+                    .map_err(|_| "Cannot remove old invalid version")?;
+            }
+            std::fs::rename(&final_dir, &previous).map_err(|_| "Cannot stage invalid version")?;
+            if std::fs::rename(&stage, &final_dir).is_err() {
+                let _ = std::fs::rename(&previous, &final_dir);
+                return Err("Atomic model repair failed; previous files retained".into());
+            }
+            let _ = std::fs::remove_dir_all(previous);
+        }
+    } else {
+        std::fs::rename(stage, final_dir).map_err(|_| "Atomic model commit failed")?;
+    }
+    task.state = "ready".into();
+    task.error = None;
+    persist_task(app, task)?;
+    Ok(())
+}
+fn controlled_transfer<T>(
+    app: &AppHandle,
+    pair: &str,
+    task: &mut InstallTask,
+    future: impl std::future::Future<Output = Result<T, reqwest::Error>>,
+) -> Result<T, String> {
+    tauri::async_runtime::block_on(async {
+        tokio::pin!(future);
+        loop {
+            tokio::select! {
+                result = &mut future => return result.map_err(|_| "Download interrupted; resume is available".into()),
+                _ = tokio::time::sleep(Duration::from_millis(100)) => check_install_control(app,pair,task)?,
+            }
+        }
+    })
+}
+fn check_install_control(
+    app: &AppHandle,
+    pair: &str,
+    task: &mut InstallTask,
+) -> Result<(), String> {
+    if let Some(action) = task_control()
+        .lock()
+        .map_err(|_| "Model control unavailable")?
+        .remove(pair)
+    {
+        task.state = action;
+        persist_task(app, task)?;
+        return Err("Install stopped; temporary files retained for explicit resume".into());
+    }
+    Ok(())
+}
+#[tauri::command]
+pub async fn local_mt_download_model(
+    app_handle: AppHandle,
+    pair: String,
+    download_base: Option<String>,
+) -> Result<(), String> {
+    let download_base = download_base
+        .map(|base| validate_download_base(&base))
+        .transpose()?;
+    run_install(app_handle, pair, None, download_base).await
+}
+
+fn verify_import_file(path: &std::path::Path, bytes: u64, sha: &str) -> Result<(), String> {
+    let meta =
+        std::fs::symlink_metadata(path).map_err(|_| "Import is missing a required model file")?;
+    if !meta.is_file() || meta.len() != bytes {
+        return Err("Imported model has an incompatible file type or size".into());
+    }
+    if file_sha256(path)? != sha {
+        return Err("Imported model checksum differs from the selected catalog version".into());
+    }
+    Ok(())
+}
+fn validate_download_base(base: &str) -> Result<String, String> {
+    let url = reqwest::Url::parse(base.trim())
+        .map_err(|_| "Enter a complete HTTPS model directory URL")?;
+    let loopback = matches!(
+        url.host_str(),
+        Some("localhost" | "127.0.0.1" | "[::1]" | "::1")
+    );
+    if !(url.scheme() == "https" || (url.scheme() == "http" && loopback))
+        || url.host_str().is_none()
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err("Download URL must use HTTPS (HTTP only on loopback), without credentials, query or fragment".into());
+    }
+    Ok(url.as_str().trim_end_matches('/').to_string())
+}
+#[tauri::command]
+pub async fn local_mt_import_model(
+    app_handle: AppHandle,
+    pair: String,
+    source_dir: String,
+) -> Result<(), String> {
+    model_spec(&pair)?;
+    let source = std::fs::canonicalize(&source_dir)
+        .map_err(|_| "Cannot read the selected model directory")?;
+    if !source.is_dir() {
+        return Err("Choose an extracted CTranslate2 model directory".into());
+    }
+    let managed = app_handle
+        .path_resolver()
+        .app_config_dir()
+        .ok_or("Config directory unavailable")?
+        .join("models");
+    // Imports never overwrite or move their source; reject recursive staging paths.
+    if let Ok(root) = std::fs::canonicalize(managed) {
+        if source.starts_with(root) {
+            return Err("Select a model folder outside managed model storage".into());
+        }
+    }
+    run_install(app_handle, pair, Some(source), None).await
+}
+async fn run_install(
+    app_handle: AppHandle,
+    pair: String,
+    source_dir: Option<PathBuf>,
+    download_base: Option<String>,
+) -> Result<(), String> {
+    let guard = DownloadGuard::acquire(&pair)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = guard;
+        let spec = model_spec(&pair)?;
+        task_control()
+            .lock()
+            .map_err(|_| "Model control unavailable")?
+            .remove(&pair);
+        let mut task = read_task(&app_handle, &pair)
+            .filter(|t| t.revision == spec.revision)
+            .unwrap_or(InstallTask {
+                pair: pair.clone(),
+                revision: spec.revision.into(),
+                state: "queued".into(),
+                file: String::new(),
+                bytes: 0,
+                total: 0,
+                validator: None,
+                origin: String::new(),
+                error: None,
+                failed_stage: None,
+            });
+        task.state = "queued".into();
+        task.error = None;
+        persist_task(&app_handle, &task)?;
+        let result = install_model(
+            &app_handle,
+            &pair,
+            &mut task,
+            source_dir.as_deref(),
+            download_base.as_deref(),
+        );
+        if result.is_err() && !["paused", "cancelled"].contains(&task.state.as_str()) {
+            task.failed_stage = Some(task.state.clone());
+            task.error = result.as_ref().err().cloned();
+            task.state = "failed".into();
+            persist_task(&app_handle, &task)?;
+        }
+        result
+    })
+    .await
+    .map_err(|_| "Install worker failed")?
 }
 
 #[tauri::command]
 pub async fn local_mt_delete_model(app_handle: AppHandle, pair: String) -> Result<(), String> {
     let _guard = DownloadGuard::acquire(&pair)?;
     let dir = model_dir(&app_handle, &pair)?;
-    translator_cache()
+    if pair.starts_with("hymt-") {
+        crate::hy_mt::unload(&pair)?;
+    }
+    let mut cache = translator_cache()
         .lock()
-        .map_err(|e| e.to_string())?
-        .remove(&pair);
-    if dir.is_dir() {
-        std::fs::remove_dir_all(&dir)
-            .map_err(|e| format!("Failed to remove the model directory: {e}"))?;
+        .map_err(|_| "Model cache unavailable")?;
+    if cache
+        .get(&pair)
+        .is_some_and(|entry| Arc::strong_count(&entry.translator) > 1)
+    {
+        return Err("Model is in use; retry after translation completes".into());
+    }
+    cache.remove(&pair);
+    drop(cache);
+    validated_dirs()
+        .lock()
+        .map_err(|_| "Model validation unavailable")?
+        .remove(&dir);
+    let root = app_handle
+        .path_resolver()
+        .app_config_dir()
+        .ok_or("Config directory unavailable")?
+        .join("models");
+    remove_managed_model(&root, &pair)?;
+
+    Ok(())
+}
+
+fn remove_managed_model(root: &std::path::Path, pair: &str) -> Result<(), String> {
+    let spec = model_spec(pair)?;
+    let version = root.join(format!("{}-{}", spec.dir_name, spec.revision));
+    for path in [
+        root.join(spec.dir_name),
+        version.clone(),
+        version.with_extension("staging"),
+    ] {
+        if path.is_dir() {
+            std::fs::remove_dir_all(path).map_err(|_| "Cannot remove managed model files")?;
+        }
+    }
+    let task = root.join(format!("{}.task.json", spec.dir_name));
+    if task.is_file() {
+        std::fs::remove_file(task).map_err(|_| "Cannot remove completed model task")?;
     }
     Ok(())
 }
@@ -415,11 +1015,20 @@ pub async fn local_mt_delete_model(app_handle: AppHandle, pair: String) -> Resul
 #[tauri::command]
 pub async fn local_mt_unload_model(pair: String) -> Result<(), String> {
     model_spec(&pair)?;
+    if pair.starts_with("hymt-") {
+        return crate::hy_mt::unload(&pair);
+    }
     tauri::async_runtime::spawn_blocking(move || {
-        translator_cache()
+        let mut cache = translator_cache()
             .lock()
-            .map_err(|error| error.to_string())?
-            .remove(&pair);
+            .map_err(|_| "Model cache unavailable")?;
+        if cache
+            .get(&pair)
+            .is_some_and(|entry| Arc::strong_count(&entry.translator) > 1)
+        {
+            return Err("Model is in use; retry after translation completes".into());
+        }
+        cache.remove(&pair);
         Ok(())
     })
     .await
@@ -444,7 +1053,10 @@ fn load_translator(
     // Drop the old configuration before allocating replacement model weights.
     cache.remove(pair);
     let dir = model_dir(app_handle, pair)?;
-    let missing: Vec<&str> = MODEL_FILES
+    if !validate_ready(&dir, pair) {
+        return Err("Model is not verified and ready; install or repair in Settings".into());
+    }
+    let missing: Vec<&str> = model_files(pair)
         .iter()
         .copied()
         .filter(|f| !dir.join(f).is_file())
@@ -528,6 +1140,42 @@ fn translate_with_model(
     text: &str,
     quality: Option<&str>,
 ) -> Result<String, String> {
+    translate_with_languages(translator, pair, text, quality, Some("en"), Some("fr"))
+}
+fn translate_with_languages(
+    translator: &MtTranslator,
+    pair: &str,
+    text: &str,
+    quality: Option<&str>,
+    source: Option<&str>,
+    target: Option<&str>,
+) -> Result<String, String> {
+    translate_cancellable(
+        translator,
+        pair,
+        text,
+        quality,
+        source,
+        target,
+        &Default::default(),
+    )
+}
+
+fn translate_cancellable(
+    translator: &MtTranslator,
+    pair: &str,
+    text: &str,
+    quality: Option<&str>,
+    source: Option<&str>,
+    target: Option<&str>,
+    cancellation: &crate::local_mt_tasks::Cancellation,
+) -> Result<String, String> {
+    cancellation.check()?;
+    let direction = if pair == "m2m100" {
+        Some(m2m_direction(source, target)?)
+    } else {
+        None
+    };
     let spec = model_spec(pair)?;
     let options = TranslationOptions::<String, String> {
         beam_size: beam_size(quality),
@@ -536,48 +1184,95 @@ fn translate_with_model(
         max_batch_size: 1,
         ..Default::default()
     };
+    let separator = if pair == "zh-en" || (pair == "m2m100" && !matches!(target, Some("zh" | "ja")))
+    {
+        " "
+    } else {
+        ""
+    };
+    translate_chunks(text, separator, cancellation, |chunk| {
+        let tokens = prepend_language_marker(
+            translator
+                .tokenizer
+                .encode(chunk.trim())
+                .map_err(|e| format!("Tokenization failed: {e}"))?,
+            direction
+                .as_ref()
+                .map(|(from, _)| from.as_str())
+                .or(spec.source_prefix),
+        );
+        // OPUS needs the marker in source tokens, never forced decoder output.
+        let decode = |options: &TranslationOptions<String, String>| -> Result<String, String> {
+            cancellation.check()?;
+            let results = if let Some((_, to)) = &direction {
+                translator.engine.translate_batch_with_target_prefix(
+                    &[tokens.clone()],
+                    &[vec![to.as_str()]],
+                    options,
+                    None,
+                )
+            } else {
+                translator
+                    .engine
+                    .translate_batch(&[tokens.clone()], options, None)
+            }
+            .map_err(|e| format!("Local translation failed: {e}"))?;
+            cancellation.check()?;
+            let hypothesis = results
+                .into_iter()
+                .next()
+                .and_then(|result| result.hypotheses.into_iter().next())
+                .ok_or_else(|| "Local translation returned no result".to_string())?;
+            let hypothesis = if let Some((_, target)) = &direction {
+                hypothesis
+                    .into_iter()
+                    .filter(|token| {
+                        token != target && token != "</s>" && token != "<s>" && token != "<pad>"
+                    })
+                    .collect()
+            } else {
+                hypothesis
+            };
+            translator
+                .tokenizer
+                .decode(hypothesis)
+                .map_err(|e| format!("Detokenization failed: {e}"))
+        };
+        let mut first = decode(&options)?;
+        if has_private_use(&first) && !has_private_use(chunk) && options.beam_size < 5 {
+            let fallback = TranslationOptions {
+                beam_size: if options.beam_size == 1 { 2 } else { 5 },
+                ..options.clone()
+            };
+            first = decode(&fallback)?;
+        }
+        Ok(first)
+    })
+}
+
+// Keep cancellation at the same boundaries used by the real decoder, so a long
+// request cannot continue into later chunks after its selection has expired.
+fn translate_chunks(
+    text: &str,
+    separator: &str,
+    cancellation: &crate::local_mt_tasks::Cancellation,
+    mut decode: impl FnMut(&str) -> Result<String, String>,
+) -> Result<String, String> {
     let mut paragraphs = Vec::new();
     for line in text.lines() {
         let mut translated_chunks = Vec::new();
         for chunk in split_for_translation(line, 200) {
+            cancellation.check()?;
             if chunk.trim().is_empty() {
                 continue;
             }
-            let tokens = prepend_language_marker(
-                translator
-                    .tokenizer
-                    .encode(chunk.trim())
-                    .map_err(|e| format!("Tokenization failed: {e}"))?,
-                spec.source_prefix,
-            );
-            // OPUS needs the marker in source tokens, never forced decoder output.
-            let decode = |options: &TranslationOptions<String, String>| -> Result<String, String> {
-                let results = translator
-                    .engine
-                    .translate_batch(&[tokens.clone()], options, None)
-                    .map_err(|e| format!("Local translation failed: {e}"))?;
-                let hypothesis = results
-                    .into_iter()
-                    .next()
-                    .and_then(|result| result.hypotheses.into_iter().next())
-                    .ok_or_else(|| "Local translation returned no result".to_string())?;
-                translator
-                    .tokenizer
-                    .decode(hypothesis)
-                    .map_err(|e| format!("Detokenization failed: {e}"))
-            };
-            let mut first = decode(&options)?;
-            if has_private_use(&first) && !has_private_use(chunk) && options.beam_size < 5 {
-                let fallback = TranslationOptions {
-                    beam_size: if options.beam_size == 1 { 2 } else { 5 },
-                    ..options.clone()
-                };
-                first = decode(&fallback)?;
-            }
-            translated_chunks.push(first);
+            let translated = decode(chunk)?;
+            cancellation.check()?;
+            translated_chunks.push(translated);
         }
-        paragraphs.push(translated_chunks.join(if pair == "zh-en" { " " } else { "" }));
+        paragraphs.push(translated_chunks.join(separator));
     }
+    cancellation.check()?;
     Ok(paragraphs.join("\n"))
 }
 
@@ -588,24 +1283,61 @@ pub async fn local_mt_translate(
     text: String,
     threads: Option<u32>,
     quality: Option<String>,
+    source: Option<String>,
+    target: Option<String>,
+    request_id: Option<String>,
 ) -> Result<String, String> {
+    let request = crate::local_mt_tasks::Request::claim(request_id)?;
     model_spec(&pair)?;
+    if pair == "m2m100" {
+        m2m_direction(source.as_deref(), target.as_deref())?;
+    }
     if text.trim().is_empty() {
         return Ok(String::new());
     }
     if text.chars().count() > 20_000 {
         return Err("Local translation accepts at most 20000 characters per request".into());
     }
-    // Queue asynchronously, instead of filling the blocking pool with waiting
-    // inference calls. Only one local inference runs at a time across directions.
+    // Cancellable async queue: stale requests leave immediately, while a bounded
+    // registry limits admission. One native decode runs at a time across directions.
     static GATE: OnceLock<tauri::async_runtime::Mutex<()>> = OnceLock::new();
-    let _permit = GATE
-        .get_or_init(|| tauri::async_runtime::Mutex::new(()))
-        .lock()
-        .await;
+    let gate = GATE.get_or_init(|| tauri::async_runtime::Mutex::new(()));
+    let _permit = crate::local_mt_tasks::acquire(gate, &request.cancellation).await?;
+    request.cancellation.check()?;
     tauri::async_runtime::spawn_blocking(move || {
+        request.cancellation.check()?;
+        if pair.starts_with("hymt-") {
+            let from = source
+                .as_deref()
+                .ok_or("Select or detect source language for HY-MT")?;
+            let to = target
+                .as_deref()
+                .ok_or("Select target language for HY-MT")?;
+            crate::hy_mt::direction(from, to)?;
+            let dir = model_dir(&app_handle, &pair)?;
+            if !validate_ready(&dir, &pair) {
+                return Err("HY-MT is not installed or failed verification".into());
+            }
+            return crate::hy_mt::translate(
+                &dir,
+                &pair,
+                &text,
+                from,
+                to,
+                clamp_threads(threads),
+                &request.cancellation,
+            );
+        }
         let translator = load_translator(&app_handle, &pair, clamp_threads(threads))?;
-        let output = translate_with_model(&translator, &pair, &text, quality.as_deref())?;
+        let output = translate_cancellable(
+            &translator,
+            &pair,
+            &text,
+            quality.as_deref(),
+            source.as_deref(),
+            target.as_deref(),
+            &request.cancellation,
+        )?;
         if let Ok(mut cache) = translator_cache().lock() {
             if let Some(entry) = cache.get_mut(&pair) {
                 entry.last_used = Instant::now();
@@ -678,6 +1410,21 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn cancellation_during_decode_discards_output_and_stops_later_chunks() {
+        let id = crate::local_mt_tasks::local_mt_prepare_request().unwrap();
+        let request = crate::local_mt_tasks::Request::claim(Some(id.clone())).unwrap();
+        let mut calls = 0;
+        let output =
+            super::translate_chunks(&"word ".repeat(200), " ", &request.cancellation, |_| {
+                calls += 1;
+                crate::local_mt_tasks::local_mt_cancel_request(id.clone()).unwrap();
+                Ok("obsolete output".into())
+            });
+        assert!(output.is_err());
+        assert_eq!(calls, 1, "no later chunks may run after cancellation");
     }
 
     #[test]
@@ -860,5 +1607,223 @@ mod tests {
             "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
         );
         let _ = std::fs::remove_file(&path);
+    }
+}
+
+#[cfg(test)]
+mod install_contract_tests {
+    use super::*;
+    #[test]
+    fn range_contract_never_appends_a_full_response_or_an_invalid_offset() {
+        assert!(!resume_offset(200, None, 10).unwrap());
+        assert!(resume_offset(206, Some("bytes 10-19/20"), 10).unwrap());
+        assert!(resume_offset(206, Some("bytes 0-19/20"), 10).is_err());
+        assert!(resume_offset(206, None, 10).is_err());
+        assert!(resume_offset(416, Some("bytes */20"), 20).is_err());
+        assert!(resume_offset(500, None, 0).is_err());
+    }
+    #[test]
+    fn persisted_tasks_recover_exact_offsets_validators_and_revision_without_secrets() {
+        let task = InstallTask {
+            pair: "en-zh".into(),
+            revision: model_spec("en-zh").unwrap().revision.into(),
+            state: "paused".into(),
+            file: "model.bin".into(),
+            bytes: 12345,
+            total: file_bytes("en-zh", "model.bin"),
+            validator: Some("etag-v1".into()),
+            origin: "https://huggingface.co".into(),
+            error: None,
+            failed_stage: None,
+        };
+        let bytes = serde_json::to_vec(&task).unwrap();
+        let restored: InstallTask = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(restored.bytes, 12345);
+        assert_eq!(restored.validator.as_deref(), Some("etag-v1"));
+        assert_eq!(restored.revision, model_spec("en-zh").unwrap().revision);
+        assert!(!String::from_utf8(bytes).unwrap().contains("token"));
+    }
+    #[test]
+    fn file_presence_or_same_size_corruption_does_not_grant_readiness() {
+        let root = std::env::temp_dir().join(format!("cup-not-ready-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        for name in MODEL_FILES {
+            let file = std::fs::File::create(root.join(name)).unwrap();
+            file.set_len(file_bytes("en-zh", name)).unwrap();
+        }
+        assert!(!validate_ready(&root, "en-zh"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn pinned_catalog_has_sizes_revision_runtime_and_directional_license() {
+        for pair in ["en-zh", "zh-en"] {
+            let spec = model_spec(pair).unwrap();
+            assert_eq!(spec.revision.len(), 40);
+            assert!(!spec.license.is_empty());
+            let size: u64 = MODEL_FILES.iter().map(|file| file_bytes(pair, file)).sum();
+            assert!(size > 80_000_000 && size < 84_000_000);
+            assert!(MODEL_FILES.iter().all(|file| file_bytes(pair, file) > 0));
+        }
+    }
+}
+
+#[cfg(test)]
+mod multilingual_tests {
+    use super::*;
+    #[test]
+    fn multilingual_manifest_is_one_pinned_download_with_known_sizes() {
+        let spec = model_spec("m2m100").unwrap();
+        assert_eq!(spec.revision.len(), 40);
+        assert_eq!(model_files("m2m100").len(), 4);
+        assert!(spec
+            .expected_sha256
+            .iter()
+            .all(|(file, sha)| sha.len() == 64 && file_bytes("m2m100", file) > 0));
+        assert_eq!(
+            model_files("m2m100")
+                .iter()
+                .map(|file| file_bytes("m2m100", file))
+                .sum::<u64>(),
+            495_887_804
+        );
+        assert_eq!(M2M_LANGUAGES.split_whitespace().count(), 100);
+    }
+    #[test]
+    fn multilingual_language_tokens_follow_the_explicit_direction() {
+        assert_eq!(
+            m2m_direction(Some("ja"), Some("fr")).unwrap(),
+            ("__ja__".into(), "__fr__".into())
+        );
+        for (from, to) in [
+            ("auto", "fr"),
+            ("en", "zh_tw"),
+            ("en", "en"),
+            ("../en", "fr"),
+        ] {
+            assert!(m2m_direction(Some(from), Some(to)).is_err());
+        }
+        assert!(m2m_direction(None, Some("fr")).is_err());
+    }
+    #[test]
+    #[ignore = "requires a verified M2M-100 directory in CUP_M2M_MODEL_DIR"]
+    fn real_multilingual_model_translates_multiple_directions_without_reloading() {
+        let dir = PathBuf::from(std::env::var("CUP_M2M_MODEL_DIR").expect("set CUP_M2M_MODEL_DIR"));
+        assert!(verify_model_checksums(&dir, &model_spec("m2m100").unwrap()).is_empty());
+        let start = Instant::now();
+        let translator = MtTranslator::new(
+            &dir,
+            &Ct2Config {
+                num_threads_per_replica: 4,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        eprintln!("M2M-100 cold load: {:?}", start.elapsed());
+        for (from, to, text) in [
+            ("en", "fr", "Hello, world!"),
+            ("en", "ja", "Thank you very much."),
+            ("ja", "zh", "今日はいい天気ですね。"),
+            ("fr", "de", "Bonjour, comment allez-vous ?"),
+        ] {
+            let start = Instant::now();
+            let output = translate_with_languages(
+                &translator,
+                "m2m100",
+                text,
+                Some("balanced"),
+                Some(from),
+                Some(to),
+            )
+            .unwrap();
+            eprintln!("{from} → {to}: {output} ({:?})", start.elapsed());
+            assert!(
+                !output.trim().is_empty() && !output.contains("__") && !has_private_use(&output)
+            );
+            if to == "ja" {
+                assert!(output
+                    .chars()
+                    .any(|c| ('\u{3040}'..='\u{30ff}').contains(&c)));
+            }
+            if to == "zh" {
+                assert!(output
+                    .chars()
+                    .any(|c| ('\u{4e00}'..='\u{9fff}').contains(&c)));
+            }
+            if to == "de" {
+                assert!(output.to_lowercase().contains("wie"));
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod catalog_management_tests {
+    use super::*;
+    #[test]
+    fn custom_download_urls_preserve_directories_and_reject_unsafe_or_ambiguous_inputs() {
+        assert_eq!(
+            validate_download_base(" https://example.org/models/rev/ ").unwrap(),
+            "https://example.org/models/rev"
+        );
+        assert!(validate_download_base("http://127.0.0.1:61239/model").is_ok());
+        for bad in [
+            "http://example.org/model",
+            "file:///tmp/model",
+            "https://user:pass@example.org/model",
+            "https://example.org/model?token=fake",
+            "https://example.org/model#file",
+            "example.org/model",
+        ] {
+            assert!(validate_download_base(bad).is_err(), "must reject {bad}");
+        }
+    }
+    #[test]
+    fn import_rejects_missing_wrong_size_or_tampered_files() {
+        let root = std::env::temp_dir().join(format!("cup-import-test-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let file = root.join("config.json");
+        assert!(verify_import_file(&file, 3, "fake").is_err());
+        std::fs::write(&file, b"abc").unwrap();
+        let sha = file_sha256(&file).unwrap();
+        assert!(verify_import_file(&file, 3, &sha).is_ok());
+        assert!(verify_import_file(&file, 4, &sha).is_err());
+        assert!(verify_import_file(&file, 3, &"0".repeat(64)).is_err());
+        assert!(verify_import_file(&root, 3, &sha).is_err());
+        #[cfg(unix)]
+        {
+            let link = root.join("linked.json");
+            std::os::unix::fs::symlink(&file, &link).unwrap();
+            assert!(verify_import_file(&link, 3, &sha).is_err());
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn uninstall_clears_legacy_version_staging_and_task_but_preserves_other_models() {
+        let root = std::env::temp_dir().join(format!("cup-uninstall-test-{}", std::process::id()));
+        let spec = model_spec("en-zh").unwrap();
+        let version = root.join(format!("{}-{}", spec.dir_name, spec.revision));
+        let stage = version.with_extension("staging");
+        for dir in [
+            root.join(spec.dir_name),
+            version.clone(),
+            stage.clone(),
+            root.join("unrelated"),
+        ] {
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join("model.bin"), b"fixture").unwrap();
+        }
+        let task = root.join(format!("{}.task.json", spec.dir_name));
+        std::fs::write(&task, b"{}").unwrap();
+        remove_managed_model(&root, "en-zh").unwrap();
+        assert!(
+            !root.join(spec.dir_name).exists()
+                && !version.exists()
+                && !stage.exists()
+                && !task.exists()
+        );
+        assert!(root.join("unrelated/model.bin").exists());
+        remove_managed_model(&root, "en-zh").unwrap();
+        assert!(remove_managed_model(&root, "../unrelated").is_err());
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

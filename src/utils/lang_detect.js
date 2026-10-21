@@ -267,7 +267,10 @@ async function local_detect(text) {
 export default async function detect(text) {
     try {
         // 默认走本地（lingua）检测：零网络、零隐私风险、零配置
-        let langDetectEngine = (await store.get('translate_detect_engine')) ?? 'local';
+        let langDetectEngine =
+            (await store.get('privacy_mode')) === 'device_only'
+                ? 'local'
+                : (await store.get('translate_detect_engine')) ?? 'local';
 
         switch (langDetectEngine) {
             case 'baidu':
@@ -291,7 +294,7 @@ export default async function detect(text) {
     } catch (error) {
         // 语言检测失败不应阻断翻译流程：退化为英文（与各引擎的既有兜底一致），
         // 但要留下日志，避免问题被完全静默。
-        logError(`Language detection failed, falling back to 'en': ${error}`);
+        logError('Language detection failed');
         return 'en';
     }
 }

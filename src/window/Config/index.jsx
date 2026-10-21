@@ -66,10 +66,12 @@ export default function Config() {
                     aria-label={t(`config.${pageKey}.title`)}
                     className='config-content'
                 >
-                    <div className='config-page-heading'>
-                        <h1>{t(`config.${pageKey}.title`)}</h1>
-                        <p>{t(`config.ui.${pageKey}_description`)}</p>
-                    </div>
+                    {pageKey !== 'models' && (
+                        <div className='config-page-heading'>
+                            <h1>{t(`config.${pageKey}.title`)}</h1>
+                            <p>{t(`config.ui.${pageKey}_description`)}</p>
+                        </div>
+                    )}
                     <div className='config-page-body'>
                         <Suspense fallback={<div role='status'>cup-translate</div>}>{page}</Suspense>
                     </div>

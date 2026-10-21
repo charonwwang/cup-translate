@@ -49,14 +49,20 @@ export function parseConfigTransfer(text) {
     }
     return data.settings;
 }
-export function createConfigTransfer(settings, includeSecrets = false) {
+export function createConfigTransfer(settings) {
     const clean = (value) =>
         Array.isArray(value)
             ? value.map(clean)
             : value && typeof value === 'object'
               ? Object.fromEntries(
                     Object.entries(value)
-                        .filter(([key]) => !forbidden.has(key) && (includeSecrets || !sensitive.test(key)))
+                        .filter(
+                            ([key]) =>
+                                !forbidden.has(key) &&
+                                !sensitive.test(key) &&
+                                key !== 'headers' &&
+                                !key.startsWith('plugin')
+                        )
                         .map(([key, item]) => [key, clean(item)])
                 )
               : value;

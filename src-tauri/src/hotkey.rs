@@ -142,7 +142,9 @@ where
         return Ok(());
     }
     #[cfg(target_os = "macos")]
-    if !hotkey.is_empty() { probe_macos_shortcut(&hotkey)?; }
+    if !hotkey.is_empty() {
+        probe_macos_shortcut(&hotkey)?;
+    }
     let previous = unregister_previous(app_handle, name);
 
     if hotkey.is_empty() {
@@ -395,7 +397,10 @@ pub fn accessibility_permission(request: bool) -> bool {
         return macos_accessibility_client::accessibility::application_is_trusted();
     }
     #[cfg(not(target_os = "macos"))]
-    { let _ = request; true }
+    {
+        let _ = request;
+        true
+    }
 }
 
 // The bundled tao 0.16 backend discards Carbon registration errors. Probe first
@@ -404,11 +409,21 @@ pub fn accessibility_permission(request: bool) -> bool {
 fn probe_macos_shortcut(shortcut: &str) -> Result<(), String> {
     use std::ffi::c_void;
     #[repr(C)]
-    struct HotKeyId { signature: u32, id: u32 }
+    struct HotKeyId {
+        signature: u32,
+        id: u32,
+    }
     #[link(name = "Carbon", kind = "framework")]
     extern "C" {
         fn GetApplicationEventTarget() -> *mut c_void;
-        fn RegisterEventHotKey(key: u32, modifiers: u32, id: HotKeyId, target: *mut c_void, options: u32, reference: *mut *mut c_void) -> i32;
+        fn RegisterEventHotKey(
+            key: u32,
+            modifiers: u32,
+            id: HotKeyId,
+            target: *mut c_void,
+            options: u32,
+            reference: *mut *mut c_void,
+        ) -> i32;
         fn UnregisterEventHotKey(reference: *mut c_void) -> i32;
     }
     let mut modifiers = 0;
@@ -418,30 +433,122 @@ fn probe_macos_shortcut(shortcut: &str) -> Result<(), String> {
             "ctrl" | "control" => modifiers |= 4096,
             "shift" => modifiers |= 512,
             "alt" | "option" => modifiers |= 2048,
-            "command" | "cmd" | "super" | "meta" | "commandorcontrol" | "cmdorctrl" => modifiers |= 256,
+            "command" | "cmd" | "super" | "meta" | "commandorcontrol" | "cmdorctrl" => {
+                modifiers |= 256
+            }
             value => key = macos_keycode(value),
         }
     }
-    let key = key.ok_or("Unsupported shortcut key; choose a letter, digit, function key or navigation key")?;
+    let key = key.ok_or(
+        "Unsupported shortcut key; choose a letter, digit, function key or navigation key",
+    )?;
     unsafe {
         let mut reference = std::ptr::null_mut();
-        let status = RegisterEventHotKey(key, modifiers, HotKeyId { signature: u32::from_be_bytes(*b"cupP"), id: 1 }, GetApplicationEventTarget(), 0, &mut reference);
-        if status != 0 { return Err(format!("Shortcut unavailable or occupied (macOS status {status})")); }
-        if !reference.is_null() { UnregisterEventHotKey(reference); }
+        let status = RegisterEventHotKey(
+            key,
+            modifiers,
+            HotKeyId {
+                signature: u32::from_be_bytes(*b"cupP"),
+                id: 1,
+            },
+            GetApplicationEventTarget(),
+            0,
+            &mut reference,
+        );
+        if status != 0 {
+            return Err(format!(
+                "Shortcut unavailable or occupied (macOS status {status})"
+            ));
+        }
+        if !reference.is_null() {
+            UnregisterEventHotKey(reference);
+        }
     }
     Ok(())
 }
 
 #[cfg(target_os = "macos")]
 fn macos_keycode(key: &str) -> Option<u32> {
-    let keys = ["a","s","d","f","h","g","z","x","c","v","§","b","q","w","e","r","y","t","1","2","3","4","6","5","=","9","7","-","8","0",
-        "]","o","u","[","i","p","enter","l","j","'","k",";","\\",",","/","n","m",".","tab","space","`","backspace"];
-    if let Some(index) = keys.iter().position(|value| *value == key) { return Some(index as u32); }
+    let keys = [
+        "a",
+        "s",
+        "d",
+        "f",
+        "h",
+        "g",
+        "z",
+        "x",
+        "c",
+        "v",
+        "§",
+        "b",
+        "q",
+        "w",
+        "e",
+        "r",
+        "y",
+        "t",
+        "1",
+        "2",
+        "3",
+        "4",
+        "6",
+        "5",
+        "=",
+        "9",
+        "7",
+        "-",
+        "8",
+        "0",
+        "]",
+        "o",
+        "u",
+        "[",
+        "i",
+        "p",
+        "enter",
+        "l",
+        "j",
+        "'",
+        "k",
+        ";",
+        "\\",
+        ",",
+        "/",
+        "n",
+        "m",
+        ".",
+        "tab",
+        "space",
+        "`",
+        "backspace",
+    ];
+    if let Some(index) = keys.iter().position(|value| *value == key) {
+        return Some(index as u32);
+    }
     match key {
-        "esc" | "escape" => Some(53), "delete" => Some(117),
-        "left" => Some(123), "right" => Some(124), "down" => Some(125), "up" => Some(126),
-        "home" => Some(115), "end" => Some(119), "pageup" => Some(116), "pagedown" => Some(121),
-        "f1" => Some(122), "f2" => Some(120), "f3" => Some(99), "f4" => Some(118), "f5" => Some(96), "f6" => Some(97), "f7" => Some(98), "f8" => Some(100), "f9" => Some(101), "f10" => Some(109), "f11" => Some(103), "f12" => Some(111),
+        "esc" | "escape" => Some(53),
+        "delete" => Some(117),
+        "left" => Some(123),
+        "right" => Some(124),
+        "down" => Some(125),
+        "up" => Some(126),
+        "home" => Some(115),
+        "end" => Some(119),
+        "pageup" => Some(116),
+        "pagedown" => Some(121),
+        "f1" => Some(122),
+        "f2" => Some(120),
+        "f3" => Some(99),
+        "f4" => Some(118),
+        "f5" => Some(96),
+        "f6" => Some(97),
+        "f7" => Some(98),
+        "f8" => Some(100),
+        "f9" => Some(101),
+        "f10" => Some(109),
+        "f11" => Some(103),
+        "f12" => Some(111),
         _ => None,
     }
 }
@@ -452,18 +559,40 @@ mod macos_probe_tests {
     fn carbon_probe_detects_an_occupied_hotkey() {
         use std::ffi::c_void;
         #[repr(C)]
-        struct Id { signature: u32, id: u32 }
+        struct Id {
+            signature: u32,
+            id: u32,
+        }
         #[link(name = "Carbon", kind = "framework")]
         extern "C" {
             fn GetApplicationEventTarget() -> *mut c_void;
-            fn RegisterEventHotKey(key: u32, modifiers: u32, id: Id, target: *mut c_void, options: u32, reference: *mut *mut c_void) -> i32;
+            fn RegisterEventHotKey(
+                key: u32,
+                modifiers: u32,
+                id: Id,
+                target: *mut c_void,
+                options: u32,
+                reference: *mut *mut c_void,
+            ) -> i32;
             fn UnregisterEventHotKey(reference: *mut c_void) -> i32;
         }
         unsafe {
             let mut reference = std::ptr::null_mut();
-            let status = RegisterEventHotKey(111, 4096 | 512 | 2048, Id {signature: u32::from_be_bytes(*b"cupT"), id: 99}, GetApplicationEventTarget(), 0, &mut reference);
+            let status = RegisterEventHotKey(
+                111,
+                4096 | 512 | 2048,
+                Id {
+                    signature: u32::from_be_bytes(*b"cupT"),
+                    id: 99,
+                },
+                GetApplicationEventTarget(),
+                0,
+                &mut reference,
+            );
             let probe = super::probe_macos_shortcut("Ctrl+Shift+Alt+F12");
-            if status == 0 && !reference.is_null() { UnregisterEventHotKey(reference); }
+            if status == 0 && !reference.is_null() {
+                UnregisterEventHotKey(reference);
+            }
             assert!(probe.is_err(), "occupied shortcut must not be accepted");
         }
     }

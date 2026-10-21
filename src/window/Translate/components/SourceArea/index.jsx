@@ -1,3 +1,6 @@
+import SpeechPreference from '../../../../components/SpeechPreference';
+import { resolveSpeechService } from '../../../../utils/speechService';
+import { invalidateRequests } from '../../../../utils/requestRuntime';
 import { useSpeech } from '../../../../hooks/useSpeech';
 import { BaseDirectory, readTextFile } from '@tauri-apps/api/fs';
 import React, { useEffect, useRef, useState } from 'react';
@@ -63,13 +66,31 @@ export default function SourceArea(props) {
     const textAreaRef = useRef();
     const handleNewTextRef = useRef();
     const [speechPolicy] = useConfig('speech_policy', 'engine');
+    const [showSpeechChoice, setShowSpeechChoice] = useState(false);
+    const [privacyMode] = useConfig('privacy_mode', 'standard');
+    const resolvedSourceSpeech = resolveSpeechService('source', speechPolicy, ttsServiceList);
+    const sourceSpeechService =
+        privacyMode === 'device_only' &&
+        !['local_tts', 'piper_tts', 'kokoro_tts'].includes(getServiceName(resolvedSourceSpeech ?? ''))
+            ? null
+            : resolvedSourceSpeech;
     const speak = useVoice();
-    const speech = useSpeech(sourceText);
+    const speech = useSpeech(`${sourceLanguage}:${speechPolicy}:${sourceText}`);
     const speechLabel = speech.status === 'idle' ? t('translate.speak') : t('translate.stop_speaking');
     const activeSourceLanguage = getActiveSourceLanguage(sourceLanguage, detectLanguage);
     const sourceMode = classifySourceText(sourceText);
 
+    const inputEpoch = useRef(0);
+    useEffect(
+        () => () => {
+            inputEpoch.current += 1;
+        },
+        []
+    );
     const handleNewText = async (text) => {
+        const epoch = ++inputEpoch.current;
+        const current = () => epoch === inputEpoch.current;
+        invalidateRequests();
         text = text.trim();
         if (hideWindow) {
             appWindow.hide();
@@ -91,6 +112,7 @@ export default function SourceArea(props) {
         } else if (text === '[IMAGE_TRANSLATE]') {
             setWindowType('[IMAGE_TRANSLATE]');
             const base64 = await invoke('get_base64');
+            if (!current()) return;
             const serviceInstanceKey = recognizeServiceList[0];
             if (getServiceSouceType(serviceInstanceKey) === ServiceSourceType.PLUGIN) {
                 if (recognizeLanguage in pluginList['recognize'][getServiceName(serviceInstanceKey)].language) {
@@ -100,9 +122,10 @@ export default function SourceArea(props) {
                     try {
                         [func, utils] = await invoke_plugin('recognize', getServiceName(serviceInstanceKey));
                     } catch (e) {
-                        setSourceText(e.toString());
+                        if (current()) setSourceText(e.toString());
                         return;
                     }
+                    if (!current()) return;
                     func(
                         base64,
                         pluginList['recognize'][getServiceName(serviceInstanceKey)].language[recognizeLanguage],
@@ -112,6 +135,7 @@ export default function SourceArea(props) {
                         }
                     ).then(
                         (v) => {
+                            if (!current()) return;
                             let newText = v.trim();
                             if (deleteNewline) {
                                 newText = v.replace(/\-\s+/g, '').replace(/\s+/g, ' ');
@@ -127,12 +151,14 @@ export default function SourceArea(props) {
                             } else {
                                 setSourceText(newText);
                             }
-                            detect_language(newText).then(() => {
-                                syncSourceText();
-                            });
+                            detect_language(newText)
+                                .then(() => {
+                                    if (current()) syncSourceText();
+                                })
+                                .catch(() => {});
                         },
                         (e) => {
-                            setSourceText(e.toString());
+                            if (current()) setSourceText(e.toString());
                         }
                     );
                 } else {
@@ -151,6 +177,7 @@ export default function SourceArea(props) {
                         )
                         .then(
                             (v) => {
+                                if (!current()) return;
                                 let newText = v.trim();
                                 if (deleteNewline) {
                                     newText = v.replace(/\-\s+/g, '').replace(/\s+/g, ' ');
@@ -166,12 +193,14 @@ export default function SourceArea(props) {
                                 } else {
                                     setSourceText(newText);
                                 }
-                                detect_language(newText).then(() => {
-                                    syncSourceText();
-                                });
+                                detect_language(newText)
+                                    .then(() => {
+                                        if (current()) syncSourceText();
+                                    })
+                                    .catch(() => {});
                             },
                             (e) => {
-                                setSourceText(e.toString());
+                                if (current()) setSourceText(e.toString());
                             }
                         );
                 } else {
@@ -195,9 +224,11 @@ export default function SourceArea(props) {
             } else {
                 setSourceText(newText);
             }
-            detect_language(newText).then(() => {
-                syncSourceText();
-            });
+            detect_language(newText)
+                .then(() => {
+                    syncSourceText();
+                })
+                .catch(() => {});
         }
     };
 
@@ -237,8 +268,11 @@ export default function SourceArea(props) {
     };
 
     const handleSpeak = async () => {
-        const instanceKey =
-            speechPolicy === 'local' ? 'local_tts' : speechPolicy === 'configured' ? ttsServiceList[0] : 'google_tts';
+        const instanceKey = sourceSpeechService;
+        if (!instanceKey) {
+            setShowSpeechChoice(true);
+            return [];
+        }
         let speechLanguage = activeSourceLanguage;
         if (speechLanguage === '') {
             speechLanguage = await detect(sourceText);
@@ -336,13 +370,18 @@ export default function SourceArea(props) {
     }, [sourceText, appFontSize]);
 
     const detect_language = async (text) => {
-        setDetectLanguage(await detect(text));
+        const epoch = inputEpoch.current;
+        const detected = await detect(text);
+        if (epoch !== inputEpoch.current) throw new DOMException('Expired detection', 'AbortError');
+        setDetectLanguage(detected);
     };
 
     // 用 useRef 而非局部变量：局部变量每次调用 changeSourceText 都重建，
     // 无法清理上一次调用留下的未触发定时器（连续输入时旧定时器会叠加触发）
     const sourceTextChangeTimerRef = useRef(null);
     const changeSourceText = async (text) => {
+        inputEpoch.current += 1;
+        invalidateRequests();
         setDetectLanguage('');
         await setSourceText(text);
         if (dynamicTranslate) {
@@ -357,10 +396,10 @@ export default function SourceArea(props) {
                 // 保证「无论如何都同步」这一语义不被将来的改动破坏。
                 detect_language(text)
                     .catch((error) => {
-                        logError(`Language detection failed in dynamic translate: ${error}`);
-                        setDetectLanguage('en');
+                        logError('Language detection failed in dynamic translate');
+                        if (error?.name !== 'AbortError') setDetectLanguage('en');
                     })
-                    .finally(() => {
+                    .then(() => {
                         syncSourceText();
                     });
             }, 1000);
@@ -467,6 +506,7 @@ export default function SourceArea(props) {
                     }}
                 />
 
+                {showSpeechChoice && !sourceSpeechService && <SpeechPreference compact />}
                 <div className='cup-source-tools'>
                     <button
                         type='button'
@@ -478,8 +518,17 @@ export default function SourceArea(props) {
                         aria-pressed={speech.status !== 'idle'}
                         onClick={() => {
                             speech.toggle(handleSpeak).catch((e) => {
-                                logError(`[speech] ${e}`);
-                                toast.error(t('translate.speech_failed'), { style: toastStyle });
+                                logError('[speech] failed');
+                                toast.error(
+                                    t(
+                                        sourceSpeechService === 'piper_tts'
+                                            ? 'models.piper_speech_failed'
+                                            : sourceSpeechService === 'kokoro_tts'
+                                              ? 'models.kokoro_speech_failed'
+                                              : 'translate.speech_failed'
+                                    ),
+                                    { style: toastStyle }
+                                );
                             });
                         }}
                     >
@@ -508,9 +557,11 @@ export default function SourceArea(props) {
                         onClick={() => {
                             const newText = sourceText.replace(/\-\s+/g, '').replace(/\s+/g, ' ');
                             setSourceText(newText);
-                            detect_language(newText).then(() => {
-                                syncSourceText();
-                            });
+                            detect_language(newText)
+                                .then(() => {
+                                    syncSourceText();
+                                })
+                                .catch(() => {});
                         }}
                     >
                         <LuWrapText className='text-[14px]' />

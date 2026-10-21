@@ -1,0 +1,11 @@
+.cup-speech-choice { margin:10px 0 2px; padding:9px 11px; border:1px solid var(--cup-border); border-radius:8px; font-size:11px; line-height:1.6; color:var(--cup-text-soft); }
+.cup-speech-choice > p { font-size:11px; margin:0 0 5px; }
+.cup-speech-choice > div { display:flex; align-items:center; flex-wrap:wrap; gap:6px; }
+.cup-speech-choice button { font-size:11px; border:1px solid var(--cup-border); background:transparent; border-radius:5px; padding:3px 7px; color:var(--cup-text); }
+.cup-speech-choice button small { font-size:9px; opacity:.55; margin-left:3px; }
+.cup-speech-choice button:disabled { opacity:.4; cursor:not-allowed; }
+.cup-speech-choice button[aria-pressed='true'] { background:var(--cup-brand-soft); color:var(--cup-brand); }
+.cup-speech-choice > small { display:block; font-size:10px; margin-top:5px; }
+.cup-dictionary-tools { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:6px; font-size:10px; color:var(--cup-text-soft); }
+.cup-dictionary-tools button { color:var(--cup-brand); font-size:10px; text-decoration:underline; text-underline-offset:3px; }
+.cup-lexical-note { font-size:10px; color:var(--cup-text-soft); margin:5px 0; }

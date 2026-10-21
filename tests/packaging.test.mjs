@@ -112,7 +112,9 @@ test('Rust service whitelists stay in sync with the frontend registries', async 
 
     const extractExports = async (path) => {
         const source = await readFile(path, 'utf8');
-        return [...source.matchAll(/^export const (\w+) = _\w+;/gm)].map((entry) => entry[1]).sort();
+        return [...source.matchAll(/^export const (\w+) = (?:_\w+|guardService\([^;]+\));/gm)]
+            .map((entry) => entry[1])
+            .sort();
     };
 
     assert.deepEqual(extractList('builtin_translate_list'), await extractExports('src/services/translate/index.jsx'));

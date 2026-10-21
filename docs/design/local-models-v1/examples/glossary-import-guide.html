@@ -1,0 +1,735 @@
+<!doctype html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="utf-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1"
+        />
+        <title>术语库导入格式说明 · cup-translate</title>
+        <style>
+            :root {
+                --bg: #eef1eb;
+                --surface: #fffefb;
+                --surface-2: #f4f7f2;
+                --ink: #17231e;
+                --ink-2: #3d5046;
+                --ink-3: #6d7d74;
+                --line: #d9e1d8;
+                --brand: #1e7459;
+                --brand-strong: #155b45;
+                --brand-soft: #e2f3e9;
+                --accent: #d4a63e;
+                --accent-soft: #faf0d7;
+                --code: #132019;
+                --code-ink: #dceee3;
+                --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+                --mono: 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace;
+            }
+
+            * {
+                box-sizing: border-box;
+            }
+
+            body {
+                margin: 0;
+                background:
+                    radial-gradient(circle at 12% 0%, rgba(255, 255, 255, 0.92), transparent 28%),
+                    radial-gradient(circle at 92% 2%, rgba(30, 116, 89, 0.08), transparent 24%),
+                    linear-gradient(135deg, var(--bg), #e4e8e1);
+                color: var(--ink);
+                font-family: var(--font);
+                -webkit-font-smoothing: antialiased;
+            }
+
+            a {
+                color: var(--brand-strong);
+            }
+
+            .topbar {
+                position: sticky;
+                top: 0;
+                z-index: 20;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                min-height: 60px;
+                padding: 10px 28px;
+                background: rgba(255, 254, 251, 0.9);
+                border-bottom: 1px solid var(--line);
+                backdrop-filter: blur(16px);
+            }
+
+            .mark {
+                width: 32px;
+                height: 32px;
+                border-radius: 10px;
+                display: grid;
+                place-items: center;
+                background: linear-gradient(145deg, var(--brand), #0f4d3a);
+                color: #fff;
+                font-size: 14px;
+                font-weight: 750;
+            }
+
+            .brand strong {
+                display: block;
+                font-size: 12px;
+            }
+
+            .brand span {
+                display: block;
+                margin-top: 2px;
+                color: var(--ink-3);
+                font-size: 10px;
+            }
+
+            .topbar .back {
+                margin-left: auto;
+                border: 1px solid var(--line);
+                background: var(--surface);
+                border-radius: 8px;
+                padding: 7px 11px;
+                color: var(--ink-2);
+                font-size: 11px;
+                text-decoration: none;
+            }
+
+            .layout {
+                width: min(1180px, calc(100% - 40px));
+                margin: 28px auto 60px;
+                display: grid;
+                grid-template-columns: 210px minmax(0, 1fr);
+                gap: 34px;
+                align-items: start;
+            }
+
+            .toc {
+                position: sticky;
+                top: 88px;
+                border: 1px solid var(--line);
+                border-radius: 14px;
+                background: rgba(255, 254, 251, 0.78);
+                padding: 14px;
+                backdrop-filter: blur(12px);
+            }
+
+            .toc strong {
+                display: block;
+                padding: 0 5px 9px;
+                color: var(--ink-3);
+                font-size: 9px;
+                letter-spacing: 0.8px;
+                text-transform: uppercase;
+            }
+
+            .toc a {
+                display: block;
+                padding: 7px 8px;
+                border-radius: 7px;
+                color: var(--ink-2);
+                font-size: 10px;
+                text-decoration: none;
+            }
+
+            .toc a:hover {
+                background: var(--brand-soft);
+                color: var(--brand-strong);
+            }
+
+            .content {
+                min-width: 0;
+            }
+
+            .hero {
+                padding: 12px 0 26px;
+                border-bottom: 1px solid var(--line);
+            }
+
+            .eyebrow {
+                color: var(--brand-strong);
+                font-size: 10px;
+                font-weight: 650;
+                letter-spacing: 1.1px;
+                text-transform: uppercase;
+            }
+
+            .hero h1 {
+                margin: 11px 0 9px;
+                max-width: 760px;
+                font-size: clamp(30px, 4vw, 48px);
+                line-height: 1.12;
+                letter-spacing: -1.6px;
+                font-weight: 620;
+            }
+
+            .hero p {
+                max-width: 720px;
+                margin: 0;
+                color: var(--ink-2);
+                font-size: 13px;
+                line-height: 1.8;
+            }
+
+            .downloads {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 10px;
+                margin-top: 20px;
+            }
+
+            .download {
+                display: block;
+                padding: 13px 14px;
+                border: 1px solid var(--line);
+                border-radius: 11px;
+                background: var(--surface);
+                text-decoration: none;
+                transition: 150ms ease;
+            }
+
+            .download:hover {
+                border-color: var(--brand);
+                transform: translateY(-1px);
+                box-shadow: 0 8px 20px rgba(31, 50, 40, 0.08);
+            }
+
+            .download strong {
+                display: block;
+                color: var(--ink);
+                font-size: 11px;
+            }
+
+            .download span {
+                display: block;
+                margin-top: 3px;
+                color: var(--ink-3);
+                font-size: 9px;
+            }
+
+            section {
+                padding-top: 34px;
+                scroll-margin-top: 86px;
+            }
+
+            section h2 {
+                margin: 0 0 8px;
+                font-size: 24px;
+                letter-spacing: -0.5px;
+            }
+
+            section h3 {
+                margin: 24px 0 8px;
+                font-size: 15px;
+            }
+
+            section p {
+                color: var(--ink-2);
+                font-size: 11px;
+                line-height: 1.8;
+            }
+
+            .note {
+                margin: 13px 0;
+                padding: 11px 13px;
+                border-left: 3px solid var(--accent);
+                border-radius: 0 8px 8px 0;
+                background: var(--accent-soft);
+                color: var(--ink-2);
+                font-size: 10px;
+                line-height: 1.7;
+            }
+
+            .note strong {
+                color: var(--ink);
+            }
+
+            .cards {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 10px;
+                margin-top: 14px;
+            }
+
+            .card {
+                border: 1px solid var(--line);
+                border-radius: 11px;
+                background: var(--surface);
+                padding: 14px;
+            }
+
+            .card strong {
+                display: block;
+                font-size: 11px;
+            }
+
+            .card p {
+                margin: 5px 0 0;
+                font-size: 9.5px;
+            }
+
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin: 12px 0 16px;
+                border: 1px solid var(--line);
+                border-radius: 10px;
+                overflow: hidden;
+                background: var(--surface);
+            }
+
+            th {
+                padding: 9px 11px;
+                text-align: left;
+                background: var(--surface-2);
+                color: var(--ink-3);
+                font-size: 9px;
+                font-weight: 600;
+                border-bottom: 1px solid var(--line);
+            }
+
+            td {
+                padding: 9px 11px;
+                color: var(--ink-2);
+                font-size: 9.5px;
+                border-bottom: 1px solid var(--line);
+                vertical-align: top;
+            }
+
+            tr:last-child td {
+                border-bottom: 0;
+            }
+
+            code {
+                font-family: var(--mono);
+                font-size: 0.92em;
+                background: var(--surface-2);
+                border: 1px solid var(--line);
+                border-radius: 4px;
+                padding: 1px 4px;
+            }
+
+            pre {
+                margin: 12px 0 16px;
+                padding: 14px 15px;
+                border-radius: 10px;
+                background: var(--code);
+                color: var(--code-ink);
+                overflow-x: auto;
+                font-family: var(--mono);
+                font-size: 9.5px;
+                line-height: 1.65;
+                tab-size: 4;
+            }
+
+            pre code {
+                background: transparent;
+                border: 0;
+                padding: 0;
+                color: inherit;
+                font-size: inherit;
+            }
+
+            .pill {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                padding: 2px 6px;
+                border-radius: 99px;
+                background: var(--brand-soft);
+                color: var(--brand-strong);
+                font-size: 8px;
+                font-weight: 600;
+            }
+
+            .rule-list {
+                margin: 10px 0 0;
+                padding: 0;
+                list-style: none;
+                display: grid;
+                gap: 8px;
+            }
+
+            .rule-list li {
+                position: relative;
+                padding-left: 15px;
+                color: var(--ink-2);
+                font-size: 10px;
+                line-height: 1.7;
+            }
+
+            .rule-list li::before {
+                content: '';
+                position: absolute;
+                left: 2px;
+                top: 7px;
+                width: 5px;
+                height: 5px;
+                border-radius: 50%;
+                background: var(--brand);
+            }
+
+            .footer {
+                margin-top: 38px;
+                padding-top: 18px;
+                border-top: 1px solid var(--line);
+                color: var(--ink-3);
+                font-size: 9px;
+                line-height: 1.7;
+            }
+
+            @media (max-width: 860px) {
+                .layout {
+                    grid-template-columns: 1fr;
+                }
+
+                .toc {
+                    display: none;
+                }
+
+                .downloads,
+                .cards {
+                    grid-template-columns: 1fr;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div role="note" style="padding:12px 24px;background:#fff3cd;color:#3b2e00;font:14px/1.6 system-ui">
+            v2 格式设计说明，功能待实现：首发仅 CSV/JSON。TMX 与链接同步为后续设计。
+            原文命中、译法出现和强制约束是不同能力；首发不保证强制译法。
+            <a href="../README.md">完整实施方案</a>
+        </div>
+        <header class="topbar">
+            <div class="mark">C</div>
+            <div class="brand">
+                <strong>cup-translate</strong>
+                <span>术语库导入格式说明</span>
+            </div>
+            <a
+                class="back"
+                href="../index.html#glossary"
+            >
+                返回设计稿
+            </a>
+        </header>
+
+        <main class="layout">
+            <aside class="toc">
+                <strong>目录</strong>
+                <a href="#quick-start">快速开始</a>
+                <a href="#csv">CSV 格式</a>
+                <a href="#json">JSON 格式</a>
+                <a href="#tmx">TMX 格式</a>
+                <a href="#sync">链接同步</a>
+                <a href="#fields">字段规则</a>
+                <a href="#conflicts">冲突与合并</a>
+                <a href="#limits">限制与安全</a>
+            </aside>
+
+            <article class="content">
+                <div class="hero">
+                    <span class="eyebrow">Glossary import spec · v1</span>
+                    <h1>把团队术语带进来，<br />不需要改代码。</h1>
+                    <p>
+                        首发计划支持本地 CSV、JSON 导入；TMX 与 HTTPS 定时同步列入后续。
+                        第一次使用建议从 CSV 开始；需要保留完整字段时使用 JSON。TMX 翻译记忆需后续单独适配。
+                    </p>
+
+                    <div class="downloads">
+                        <a
+                            class="download"
+                            href="glossary-template.csv"
+                            download
+                        >
+                            <strong>下载 CSV 模板</strong>
+                            <span>适合 Excel / Numbers 编辑</span>
+                        </a>
+                        <a
+                            class="download"
+                            href="glossary-template.json"
+                            download
+                        >
+                            <strong>下载 JSON 模板</strong>
+                            <span>适合脚本生成与链接同步</span>
+                        </a>
+                        <a
+                            class="download"
+                            href="glossary-template.tmx"
+                            download
+                        >
+                            <strong>下载 TMX 模板</strong>
+                            <span>兼容常见 CAT 工具</span>
+                        </a>
+                    </div>
+                </div>
+
+                <section id="quick-start">
+                    <h2>快速开始</h2>
+                    <p>在“术语与风格”页面点击“导入术语库”，选择来源后先预览，再决定合并方式。导入不会直接覆盖当前术语库。</p>
+                    <div class="cards">
+                        <div class="card">
+                            <strong>第一次使用：CSV</strong>
+                            <p>一行一个术语，首行是字段名。可以用 Excel 编辑，另存为 UTF-8 CSV。</p>
+                        </div>
+                        <div class="card">
+                            <strong>需要自动更新：JSON + 链接</strong>
+                            <p>把 JSON 放在固定 HTTPS 地址，设置每天或每周检查一次。</p>
+                        </div>
+                        <div class="card">
+                            <strong>已有翻译记忆：TMX</strong>
+                            <p>后续支持 TMX 1.4；导入时区分翻译记忆与术语候选，默认建议，不作为强制术语。</p>
+                        </div>
+                        <div class="card">
+                            <strong>需要完整说明：JSON</strong>
+                            <p>可以保留标签、大小写规则、优先级和注释。</p>
+                        </div>
+                    </div>
+                    <div class="note">
+                        <strong>最小可用文件</strong>只需要两列：原文和译文。其他字段都是可选的；导入向导会自动补默认值。
+                    </div>
+                </section>
+
+                <section id="csv">
+                    <h2>CSV 格式</h2>
+                    <p>首行必须是字段名，逗号分隔。包含逗号、引号或换行的内容请使用双引号包裹。</p>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>列名</th>
+                                <th>必填</th>
+                                <th>说明</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>source</code></td>
+                                <td>是</td>
+                                <td>原文术语或短语</td>
+                            </tr>
+                            <tr>
+                                <td><code>target</code></td>
+                                <td>是</td>
+                                <td>希望固定输出的译法</td>
+                            </tr>
+                            <tr>
+                                <td><code>mode</code></td>
+                                <td>否</td>
+                                <td><span class="pill">suggest</span> 建议（默认）；旧 <span class="pill">locked</span> 仅保留约束意图，首发显示不支持强制约束</td>
+                            </tr>
+                            <tr>
+                                <td><code>case_sensitive</code></td>
+                                <td>否</td>
+                                <td><code>true</code> / <code>false</code>，默认 false</td>
+                            </tr>
+                            <tr>
+                                <td><code>priority</code></td>
+                                <td>否</td>
+                                <td>整数，越大越优先，默认 50</td>
+                            </tr>
+                            <tr>
+                                <td><code>comment</code></td>
+                                <td>否</td>
+                                <td>给团队看的说明，不参与翻译</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <pre><code>source,target,mode,case_sensitive,priority,comment
+worker threads,工作线程,suggest,false,100,"区别于“工人线”"
+memory leak,内存泄漏,suggest,false,100,"团队统一使用“泄漏”"
+shutdown,关闭,suggest,false,50,"按语境也可使用“停机”"</code></pre>
+                    <div class="note">
+                        从 Excel 导出时选择“CSV UTF-8”。不要使用公式单元格；以 <code>=</code>、<code>+</code>、<code>-</code>、<code>@</code>
+                        开头的内容会按普通文本处理。
+                    </div>
+                </section>
+
+                <section id="json">
+                    <p>新版顶层 id 与 entries[].id 是稳定标识，编辑时不变。CSV 可省略 id 并在导入时生成；重复导入需预览确认。CSV 语言方向在向导中必选。首发限制、迁移与冲突规则以 v2 方案为准。</p>
+                    <h2>JSON 格式</h2>
+                    <p>JSON 适合动态生成与版本管理；链接同步不在首发范围。顶层是一个对象，<code>entries</code> 是术语数组。</p>
+                    <pre><code>{
+  "schemaVersion": 2,
+  "id": "tech-en-zh-cn",
+  "name": "技术研发",
+  "sourceLanguage": "en",
+  "targetLanguage": "zh-CN",
+  "description": "后端与基础架构术语",
+  "entries": [
+    {
+      "id": "tech-001",
+      "source": "worker threads",
+      "target": "工作线程",
+      "mode": "suggest",
+      "caseSensitive": false,
+      "priority": 100,
+      "comment": "区别于“工人线”",
+      "tags": ["backend", "runtime"]
+    }
+  ]
+}</code></pre>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>字段</th>
+                                <th>类型</th>
+                                <th>说明</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>schemaVersion</code></td>
+                                <td>number</td>
+                                <td>新版为 <code>2</code>；兼容导入旧版 1，未知版本拒绝</td>
+                            </tr>
+                            <tr>
+                                <td><code>sourceLanguage</code></td>
+                                <td>string</td>
+                                <td>ISO 语言代码，例如 <code>en</code></td>
+                            </tr>
+                            <tr>
+                                <td><code>targetLanguage</code></td>
+                                <td>string</td>
+                                <td>ISO 语言代码，例如 <code>zh-CN</code></td>
+                            </tr>
+                            <tr>
+                                <td><code>entries[].source</code></td>
+                                <td>string</td>
+                                <td>原文，不能为空</td>
+                            </tr>
+                            <tr>
+                                <td><code>entries[].target</code></td>
+                                <td>string</td>
+                                <td>译文，不能为空</td>
+                            </tr>
+                            <tr>
+                                <td><code>entries[].mode</code></td>
+                                <td>string</td>
+                                <td>默认 <code>suggest</code>；旧 locked 仅保留意图并显示能力限制</td>
+                            </tr>
+                            <tr>
+                                <td><code>entries[].tags</code></td>
+                                <td>string[]</td>
+                                <td>可选，用于筛选与批量管理</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <section id="tmx">
+                    <h2>TMX 格式（后续）</h2>
+                    <p>首发不提供 TMX 导入。后续设计拟支持 TMX 1.4 的 <code>tu</code> / <code>tuv</code> / <code>seg</code>。导入器只读取源语言和目标语言两个句段。</p>
+                    <pre><code>&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;tmx version="1.4"&gt;
+  &lt;header srclang="en" /&gt;
+  &lt;body&gt;
+    &lt;tu&gt;
+      &lt;tuv xml:lang="en"&gt;&lt;seg&gt;worker threads&lt;/seg&gt;&lt;/tuv&gt;
+      &lt;tuv xml:lang="zh-CN"&gt;&lt;seg&gt;工作线程&lt;/seg&gt;&lt;/tuv&gt;
+    &lt;/tu&gt;
+  &lt;/body&gt;
+&lt;/tmx&gt;</code></pre>
+                    <div class="note">后续 TMX 导入默认作为建议候选，优先级 50；整句翻译记忆不能默认变成强制术语。重复和冲突需要预览确认。</div>
+                </section>
+
+                <section id="sync">
+                    <h2>链接同步（后续）</h2>
+                    <p>链接同步读取一个返回 JSON 的 HTTPS 地址，适合团队共享术语库或由脚本生成术语表。</p>
+                    <ul class="rule-list">
+                        <li>只支持 HTTPS；URL 必须返回 <code>application/json</code>。</li>
+                        <li>文件结构与 JSON 导入完全一致，建议使用固定版本化地址。</li>
+                        <li>可以设置每天、每周、每次启动或仅手动检查。</li>
+                        <li>同步失败时保留上一次成功版本，并标记“已过期”，不会清空术语库。</li>
+                        <li>会读取 <code>ETag</code> / <code>Last-Modified</code>，未变化时不重复下载。</li>
+                    </ul>
+                    <div class="note">
+                        链接同步只会保存解析后的术语和文件摘要，不执行远端 JavaScript、HTML 或任意代码。
+                    </div>
+                </section>
+
+                <section id="fields">
+                    <h2>字段规则</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>规则</th>
+                                <th>行为</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>大小写</td>
+                                <td><code>caseSensitive: false</code> 时英文默认忽略大小写</td>
+                            </tr>
+                            <tr>
+                                <td>优先级</td>
+                                <td>数值越大越优先；手动词条高于导入词条</td>
+                            </tr>
+                            <tr>
+                                <td>最长匹配</td>
+                                <td><code>worker threads</code> 优先于 <code>threads</code></td>
+                            </tr>
+                            <tr>
+                                <td>强制模式</td>
+                                <td>首发不支持强制；旧 locked 条目保留意图并显示能力限制，不能标记为已锁定</td>
+                            </tr>
+                            <tr>
+                                <td>建议模式</td>
+                                <td>模型未使用该译法时提示，不强行破坏句子</td>
+                            </tr>
+                            <tr>
+                                <td>代码标识符</td>
+                                <td>URL、邮箱和明确标记的代码区域跳过；普通文本中的变量名不能保证自动识别</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </section>
+
+                <section id="conflicts">
+                    <h2>冲突与合并</h2>
+                    <p>导入向导会先显示新增、更新、重复、需确认和格式错误的数量，再让你选择合并方式。</p>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>模式</th>
+                                <th>行为</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>合并（推荐）</td>
+                                <td>新增缺失词条；已有词条按导入内容更新</td>
+                            </tr>
+                            <tr>
+                                <td>跳过重复</td>
+                                <td>保留现有译法，只导入新词条</td>
+                            </tr>
+                            <tr>
+                                <td>整体替换</td>
+                                <td>清空当前术语库后导入，执行前需要二次确认</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="note">
+                        同一原文出现不同译文、空值、超长文本或与现有术语冲突时，会进入“需确认”，不会静默导入。
+                    </div>
+                </section>
+
+                <section id="limits">
+                    <h2>限制与安全</h2>
+                    <ul class="rule-list">
+                        <li>单文件最大 10 MB，最多 50,000 条术语。</li>
+                        <li>只接受 UTF-8 编码；CSV 建议带 UTF-8 BOM 以兼容 Excel。</li>
+                        <li>导入文件在本机解析，不上传到 cup-translate 服务器。</li>
+                        <li>链接同步只读取 HTTPS，不执行远端代码，不跟随跨域重定向。</li>
+                        <li>导入前会备份上一版术语库；出现问题时可在“版本记录”中恢复。</li>
+                    </ul>
+
+                    <div class="footer">
+                        这是 cup-translate 的格式说明示例页。实际字段以应用内导入向导显示为准；如果团队已有固定表格，可以在导入时手动调整列映射。
+                    </div>
+                </section>
+            </article>
+        </main>
+    </body>
+</html>

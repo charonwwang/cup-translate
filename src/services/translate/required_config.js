@@ -23,6 +23,9 @@ const REQUIRED_CONFIG_KEYS = {
 
 // 配置语义特殊的引擎：返回 true 表示「配置齐全、可以调用」
 const SPECIAL_CONFIG_CHECK = {
+    openai: (config) =>
+        isFilledString(config.requestPath) &&
+        (isFilledString(config.apiKey) || isFilledString(config.secretRefs?.apiKey) || config.allowAnonymous === true),
     // apiKey 为 "id.secret" 两段式。
     //
     // ⚠️ 这里**必须**用 isFilledString 判两段，不能只写 `includes('.')`：
@@ -98,5 +101,5 @@ export function isServiceConfigured(serviceName, instanceConfig) {
     if (!requiredKeys) {
         return true;
     }
-    return requiredKeys.every((key) => isFilledString(config[key]));
+    return requiredKeys.every((key) => isFilledString(config[key]) || isFilledString(config.secretRefs?.[key]));
 }

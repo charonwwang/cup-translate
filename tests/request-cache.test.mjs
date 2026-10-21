@@ -2,6 +2,28 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createRequestCache } from '../src/utils/requestCache.js';
 
+test('a new request does not inherit another caller cancellation through in-flight deduplication', async () => {
+    const cached = createRequestCache();
+    const first = new AbortController();
+    const second = new AbortController();
+    let rejectOld;
+    const old = cached(
+        'same text',
+        () =>
+            new Promise((_resolve, reject) => {
+                rejectOld = reject;
+            }),
+        first.signal
+    );
+    await Promise.resolve();
+    first.abort();
+    const fresh = cached('same text', async () => 'fresh result', second.signal);
+    rejectOld(new DOMException('Cancelled', 'AbortError'));
+    await assert.rejects(old, { name: 'AbortError' });
+    assert.equal(await fresh, 'fresh result');
+    assert.equal(await cached('same text', () => assert.fail('successful result should be cached')), 'fresh result');
+});
+
 test('concurrent identical translations share a request; successful repeats use cache', async () => {
     const cached = createRequestCache();
     let calls = 0;

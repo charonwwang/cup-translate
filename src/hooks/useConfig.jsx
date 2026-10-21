@@ -6,7 +6,7 @@ import { debounce } from '../utils';
 
 export const useConfig = (key, defaultValue, options = {}) => {
     const [property, setPropertyState, getProperty] = useGetState(null);
-    const { sync = true } = options;
+    const { sync = true, immediate = false } = options;
 
     // defaultValue 用 ref 保存「最新值」，而不是放进依赖数组。
     //
@@ -18,6 +18,10 @@ export const useConfig = (key, defaultValue, options = {}) => {
     const defaultValueRef = useRef(defaultValue);
     defaultValueRef.current = defaultValue;
 
+    // Async reads must not overwrite a newer edit or another service instance.
+    const readContext = useRef({ key, revision: 0 });
+    if (readContext.current.key !== key) readContext.current = { key, revision: 0 };
+
     // 同步到Store (State -> Store)
     //
     // 依赖数组里**必须**有 key：debounce 的闭包捕获了 key，而 key 是动态的
@@ -26,11 +30,18 @@ export const useConfig = (key, defaultValue, options = {}) => {
     // 配置写进旧实例的键——用户看到「保存成功」，重开却发现没保存。
     // 这与下面 useEffect 的 `[key]` 是同一件事的两半：那边重新订阅，这边重新绑定写入目标。
     const syncToStore = useCallback(
-        debounce((v) => {
-            store.set(key, v);
-            store.save();
-            let eventKey = key.replaceAll('.', '_').replaceAll('@', ':');
-            emit(`${eventKey}_changed`, v);
+        debounce(async (v) => {
+            try {
+                await store.set(key, v);
+                await store.save();
+                // Events cross webviews: publish only the sealed value from the store.
+                const safe = await store.get(key);
+                const eventKey = key.replaceAll('.', '_').replaceAll('@', ':');
+                await emit(`${eventKey}_changed`, safe);
+            } catch {
+                console.error('Configuration save failed; credential store may be unavailable');
+                return;
+            }
         }),
         [key]
     );
@@ -43,17 +54,25 @@ export const useConfig = (key, defaultValue, options = {}) => {
     // 若把它也放进依赖数组，9 个传内联 {} / [] 的调用点会无限重渲染。
     const syncToState = useCallback(
         (v) => {
+            const context = readContext.current;
+            const revision = ++context.revision;
+            const current = () => readContext.current === context && context.revision === revision;
             if (v !== null) {
                 setPropertyState(v);
             } else {
                 store
                     .get(key)
-                    .then((v) => {
+                    .then(async (v) => {
+                        if (!current()) return;
                         if (v === null) {
                             const fallback = defaultValueRef.current;
                             setPropertyState(fallback);
-                            store.set(key, fallback);
-                            store.save();
+                            try {
+                                await store.set(key, fallback);
+                                await store.save();
+                            } catch {
+                                console.error(`[useConfig] failed to persist default for '${key}'`);
+                            }
                         } else {
                             setPropertyState(v);
                         }
@@ -76,7 +95,7 @@ export const useConfig = (key, defaultValue, options = {}) => {
                     // 比显示默认值严重得多。写盘留给用户下次真实修改触发。
                     .catch((e) => {
                         console.error(`[useConfig] failed to read '${key}' from the store:`, e);
-                        setPropertyState(defaultValueRef.current);
+                        if (current()) setPropertyState(defaultValueRef.current);
                     });
             }
         },
@@ -88,11 +107,15 @@ export const useConfig = (key, defaultValue, options = {}) => {
     // syncToStore（连带把上面那两处修复一起抵消掉）。
     const setProperty = useCallback(
         (v, forceSync = false) => {
+            readContext.current.revision++;
             setPropertyState(v);
             const isSync = forceSync || sync;
-            isSync && syncToStore(v);
+            if (isSync) {
+                syncToStore(v);
+                if (immediate) syncToStore.flush();
+            }
         },
-        [sync, syncToStore]
+        [sync, syncToStore, immediate]
     );
 
     // 初始化（key 变化时重新订阅：serviceInstanceKey 等动态 key 的场景）
@@ -103,6 +126,7 @@ export const useConfig = (key, defaultValue, options = {}) => {
             syncToState(e.payload);
         });
         return () => {
+            readContext.current.revision++;
             unlisten.then((f) => {
                 f();
             });
@@ -120,9 +144,14 @@ export const useConfig = (key, defaultValue, options = {}) => {
     return [property, setProperty, getProperty];
 };
 
-export const deleteKey = (key) => {
-    if (store.has(key)) {
-        store.delete(key);
-        store.save();
+export const deleteKey = async (key) => {
+    try {
+        if (!(await store.has(key))) return false;
+        await store.delete(key);
+        await store.save();
+        return true;
+    } catch {
+        console.error('Configuration deletion failed');
+        return false;
     }
 };

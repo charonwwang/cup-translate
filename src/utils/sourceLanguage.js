@@ -10,3 +10,13 @@ export function getActiveSourceLanguage(selectedSourceLanguage, detectedLanguage
     }
     return detectedLanguage || '';
 }
+
+// The window owns the selected target; inference must not replace it with a fallback.
+export function translationLanguages(selectedSource, detectedSource, selectedTarget) {
+    return { source: getActiveSourceLanguage(selectedSource, detectedSource), target: selectedTarget };
+}
+export function automaticTargetLanguage(source, detected, current, fallback, userSelected = false) {
+    return !userSelected && source === 'auto' && detected && detected === current && fallback !== detected
+        ? fallback
+        : current;
+}

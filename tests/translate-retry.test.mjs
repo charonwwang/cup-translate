@@ -47,8 +47,13 @@ async function loadRealTranslate({ responses }) {
         return next;
     };
 
-    const factory = new Function('fetch', '__slept', 'createRequestCache', `${body}\nreturn { translate };`);
-    return { translate: factory(fetch, slept, createRequestCache).translate, slept, attempted, requestOptions };
+    const factory = new Function(
+        'fetch',
+        '__slept',
+        'createRequestCache',
+        `${body}\nreturn { translate, supplement };`
+    );
+    return { ...factory(fetch, slept, createRequestCache), slept, attempted, requestOptions };
 }
 
 test('real translate: no backoff sleep after the final attempt', async () => {
@@ -115,7 +120,7 @@ test('real translate: a single word without a dictionary branch still becomes a 
             ['Language <b>modality</b> can be spoken, written, or signed.'],
         ],
     ];
-    const { translate } = await loadRealTranslate({
+    const { translate, supplement } = await loadRealTranslate({
         responses: [
             { ok: true, status: 200, data: wordData },
             { ok: true, status: 200, data: [[['治疗方式取决于诊断结果。']]] },
@@ -126,7 +131,9 @@ test('real translate: a single word without a dictionary branch still becomes a 
     const result = await translate('modality', 'en', 'zh-CN', { config: {} });
     assert.deepEqual(result.explanations, [{ trait: '', explains: ['情态'] }]);
     assert.equal(result.sentence.length, 2);
-    assert.equal(result.sentence[0].target, '治疗方式取决于诊断结果。');
+    assert.equal(result.sentence[0].target, '', 'main result returns without waiting for example translations');
+    const enriched = await supplement(result, 'en', 'zh-CN', { config: {} });
+    assert.equal(enriched.sentence[0].target, '治疗方式取决于诊断结果。');
 });
 
 test('real translate: 429 on the last attempt does not sleep either', async () => {

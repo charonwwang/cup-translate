@@ -174,7 +174,9 @@ mod tests {
     fn everything_except_zh_cn_falls_back_to_english() {
         for kind in ALL {
             let en = kind.text("en");
-            for lang in ["zh_tw", "ja", "ko", "fr", "de", "es", "ru", "", "unknown", "ZH_CN", "zh-CN"] {
+            for lang in [
+                "zh_tw", "ja", "ko", "fr", "de", "es", "ru", "", "unknown", "ZH_CN", "zh-CN",
+            ] {
                 let other = kind.text(lang);
                 assert_eq!(
                     other.title, en.title,
@@ -192,7 +194,10 @@ mod tests {
             for lang in ["en", "zh_cn"] {
                 let text = kind.text(lang);
                 for field in [text.title, text.body] {
-                    assert!(!field.contains("{}"), "unformatted placeholder in {kind:?}/{lang}");
+                    assert!(
+                        !field.contains("{}"),
+                        "unformatted placeholder in {kind:?}/{lang}"
+                    );
                     assert!(!field.contains("TODO"), "TODO left in {kind:?}/{lang}");
                     assert!(
                         !field.contains('\n'),
@@ -210,7 +215,9 @@ mod tests {
             let text = kind.text("en");
             for field in [text.title, text.body] {
                 assert!(
-                    !field.chars().any(|c| ('\u{4e00}'..='\u{9fff}').contains(&c)),
+                    !field
+                        .chars()
+                        .any(|c| ('\u{4e00}'..='\u{9fff}').contains(&c)),
                     "{kind:?} English text contains CJK characters: {field}"
                 );
             }

@@ -1,3 +1,4 @@
+import { guardService } from '../../utils/requestRuntime';
 import * as _system from './system';
 import * as _tesseract from './tesseract';
 import * as _baidu_ocr from './baidu';
@@ -14,18 +15,22 @@ import * as _volcengine_ocr from './volcengine';
 import * as _volcengine_multi_lang_ocr from './volcengine_multi_lang';
 import * as _qrcode from './qrcode';
 
-export const system = _system;
-export const tesseract = _tesseract;
-export const baidu_ocr = _baidu_ocr;
-export const baidu_accurate_ocr = _baidu_accurate_ocr;
-export const baidu_img_ocr = _baidu_img_ocr;
-export const iflytek_ocr = _iflytek_ocr;
-export const iflytek_intsig_ocr = _iflytek_intsig_ocr;
-export const iflytek_latex_ocr = _iflytek_latex_ocr;
-export const simple_latex_ocr = _simple_latex_ocr;
-export const tencent_ocr = _tencent_ocr;
-export const tencent_accurate_ocr = _tencent_accurate_ocr;
-export const tencent_img_ocr = _tencent_img_ocr;
-export const volcengine_ocr = _volcengine_ocr;
-export const volcengine_multi_lang_ocr = _volcengine_multi_lang_ocr;
-export const qrcode = _qrcode;
+export const system = guardService('recognize', 'system', _system);
+export const tesseract = guardService('recognize', 'tesseract', _tesseract);
+export const baidu_ocr = guardService('recognize', 'baidu_ocr', _baidu_ocr);
+export const baidu_accurate_ocr = guardService('recognize', 'baidu_accurate_ocr', _baidu_accurate_ocr);
+export const baidu_img_ocr = guardService('recognize', 'baidu_img_ocr', _baidu_img_ocr);
+export const iflytek_ocr = guardService('recognize', 'iflytek_ocr', _iflytek_ocr);
+export const iflytek_intsig_ocr = guardService('recognize', 'iflytek_intsig_ocr', _iflytek_intsig_ocr);
+export const iflytek_latex_ocr = guardService('recognize', 'iflytek_latex_ocr', _iflytek_latex_ocr);
+export const simple_latex_ocr = guardService('recognize', 'simple_latex_ocr', _simple_latex_ocr);
+export const tencent_ocr = guardService('recognize', 'tencent_ocr', _tencent_ocr);
+export const tencent_accurate_ocr = guardService('recognize', 'tencent_accurate_ocr', _tencent_accurate_ocr);
+export const tencent_img_ocr = guardService('recognize', 'tencent_img_ocr', _tencent_img_ocr);
+export const volcengine_ocr = guardService('recognize', 'volcengine_ocr', _volcengine_ocr);
+export const volcengine_multi_lang_ocr = guardService(
+    'recognize',
+    'volcengine_multi_lang_ocr',
+    _volcengine_multi_lang_ocr
+);
+export const qrcode = guardService('recognize', 'qrcode', _qrcode);

@@ -8,7 +8,7 @@
     },
     "package": {
         "productName": "cup-translate",
-        "version": "3.0.11"
+        "version": "3.0.12"
     },
     "tauri": {
         "allowlist": {
@@ -76,7 +76,9 @@
             "externalBin": [],
             "resources": [
                 "resources/ocr-aarch64-apple-darwin",
-                "resources/ocr-x86_64-apple-darwin"
+                "resources/ocr-x86_64-apple-darwin",
+                "resources/piper-notices/*",
+                "resources/multilingual-notices/*"
             ],
             "icon": [
                 "icons/32x32.png",

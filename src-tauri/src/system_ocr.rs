@@ -80,7 +80,11 @@ pub fn system_ocr(app_handle: tauri::AppHandle, lang: &str) -> Result<String, St
 /// 注意「空结果」本身是合法的：图片里确实没有文字时输出也为空。
 /// 因此这里**只看退出码**，不把空输出当成错误 —— 真正的歧义由调用方
 /// 在 spawn 之前用文件存在性检查消除（文件不存在时不存在「本来就没字」的解释）。
-fn interpret_ocr_output(status_success: bool, stdout: &[u8], stderr: &[u8]) -> Result<String, String> {
+fn interpret_ocr_output(
+    status_success: bool,
+    stdout: &[u8],
+    stderr: &[u8],
+) -> Result<String, String> {
     if status_success {
         Ok(String::from_utf8_lossy(stdout).into_owned())
     } else {
@@ -240,7 +244,10 @@ mod tests {
     fn successful_empty_output_is_still_ok_not_an_error() {
         let got = interpret_ocr_output(true, b"", b"");
         assert_eq!(got, Ok(String::new()));
-        assert!(got.is_ok(), "an image with no text must not be reported as an error");
+        assert!(
+            got.is_ok(),
+            "an image with no text must not be reported as an error"
+        );
     }
 
     #[test]
@@ -252,7 +259,10 @@ mod tests {
     #[test]
     fn failure_with_empty_stderr_returns_empty_error_not_ok() {
         let got = interpret_ocr_output(false, b"", b"");
-        assert!(got.is_err(), "a nonzero exit must never be reported as success");
+        assert!(
+            got.is_err(),
+            "a nonzero exit must never be reported as success"
+        );
     }
 
     /// 修复前用的是 `String::from_utf8(..).unwrap_or_default()`：遇到非法 UTF-8
@@ -268,8 +278,14 @@ mod tests {
             !got.is_empty(),
             "invalid UTF-8 must not silently collapse the whole result to an empty string"
         );
-        assert!(got.starts_with("你好"), "the valid prefix must be preserved, got {got:?}");
-        assert!(got.contains('\u{FFFD}'), "the bad byte should become U+FFFD, got {got:?}");
+        assert!(
+            got.starts_with("你好"),
+            "the valid prefix must be preserved, got {got:?}"
+        );
+        assert!(
+            got.contains('\u{FFFD}'),
+            "the bad byte should become U+FFFD, got {got:?}"
+        );
 
         // 对照：旧行为（from_utf8 + unwrap_or_default）会得到空串
         let old = String::from_utf8(bytes).unwrap_or_default();
@@ -283,7 +299,10 @@ mod tests {
         let got = interpret_ocr_output(false, b"", &bytes);
         let err = got.expect_err("must be Err");
         assert!(err.starts_with("错误"), "got {err:?}");
-        assert!(!err.is_empty(), "a corrupt stderr must not become an empty error message");
+        assert!(
+            !err.is_empty(),
+            "a corrupt stderr must not become an empty error message"
+        );
     }
 
     /// `ensure_executable` 的语义测试（仅 macOS：该函数只在 macOS 分支存在）。
@@ -336,10 +355,16 @@ mod tests {
             use std::os::unix::fs::PermissionsExt;
             perms.set_mode(0o644);
             std::fs::set_permissions(&path, perms).unwrap();
-            assert!(!is_executable(&path), "precondition: the file must start non-executable");
+            assert!(
+                !is_executable(&path),
+                "precondition: the file must start non-executable"
+            );
 
             ensure_executable(&path).expect("chmod should succeed on our own temp file");
-            assert!(is_executable(&path), "the file must be executable afterwards");
+            assert!(
+                is_executable(&path),
+                "the file must be executable afterwards"
+            );
 
             let _ = std::fs::remove_file(&path);
         }
@@ -360,7 +385,10 @@ mod tests {
             assert!(!path.exists(), "precondition: the path must not exist");
 
             let first = ensure_executable(&path);
-            assert!(first.is_err(), "chmod on a missing file must fail, got {first:?}");
+            assert!(
+                first.is_err(),
+                "chmod on a missing file must fail, got {first:?}"
+            );
 
             // 第二次：若失败被错误地缓存成成功，这里会是 Ok，测试即失败
             let second = ensure_executable(&path);

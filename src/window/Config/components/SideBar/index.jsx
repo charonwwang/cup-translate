@@ -10,6 +10,7 @@ const sections = [
     ['recognize', LuScanLine],
     ['hotkey', LuKeyboard],
     ['service', LuPuzzle],
+    ['models', LuPuzzle],
     ['history', LuHistory],
     ['about', LuInfo],
 ];

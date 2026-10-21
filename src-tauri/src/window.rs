@@ -57,7 +57,14 @@ fn get_daemon_window() -> Option<Window> {
 /// 用 i64 做加法：`position.x + size.width` 在 i32 下可能回绕
 /// （release 静默、debug panic）。现实中多屏坐标远达不到 i32 上限，
 /// 但用 i64 可让回绕在结构上不可能发生，代价为零。
-fn point_in_monitor(x: i32, y: i32, position_x: i32, position_y: i32, width: u32, height: u32) -> bool {
+fn point_in_monitor(
+    x: i32,
+    y: i32,
+    position_x: i32,
+    position_y: i32,
+    width: u32,
+    height: u32,
+) -> bool {
     let left = position_x as i64;
     let top = position_y as i64;
     let right = left + width as i64;
@@ -139,7 +146,10 @@ fn build_window(label: &str, title: &str) -> (Window, bool) {
     let Some(app_handle) = APP.get() else {
         // AppHandle 未初始化时无法创建窗口，返回 daemon 窗口兜底（不会发生于 setup 后）
         warn!("build_window({label}): app not initialized, returning daemon fallback");
-        return (get_daemon_window().expect("daemon window unavailable"), true);
+        return (
+            get_daemon_window().expect("daemon window unavailable"),
+            true,
+        );
     };
     match app_handle.get_window(label) {
         Some(v) => {
@@ -175,7 +185,10 @@ fn build_window(label: &str, title: &str) -> (Window, bool) {
                 Ok(v) => v,
                 Err(e) => {
                     warn!("Failed to build window {label}: {e:?}, returning daemon fallback");
-                    return (get_daemon_window().expect("daemon window unavailable"), true);
+                    return (
+                        get_daemon_window().expect("daemon window unavailable"),
+                        true,
+                    );
                 }
             };
 
@@ -272,9 +285,10 @@ fn translate_window() -> Window {
                 }
             }
 
-            if let Err(e) =
-                window.set_position(tauri::PhysicalPosition::new(mouse_position.x, mouse_position.y))
-            {
+            if let Err(e) = window.set_position(tauri::PhysicalPosition::new(
+                mouse_position.x,
+                mouse_position.y,
+            )) {
                 warn!("Failed to set translate window position: {e:?}");
             }
         }
@@ -299,7 +313,8 @@ fn simulate_copy_with_cg_event() {
     let source =
         CGEventSource::new(CGEventSourceStateID::HIDSystemState).expect("create event source");
     let cmd_key: CGKeyCode = 0x37;
-    let key_down = CGEvent::new_keyboard_event(source.clone(), cmd_key, true).expect("create key down");
+    let key_down =
+        CGEvent::new_keyboard_event(source.clone(), cmd_key, true).expect("create key down");
     key_down.set_flags(core_graphics::event::CGEventFlags::CGEventFlagCommand);
     key_down.post(CGEventTapLocation::HID);
     let c_key: CGKeyCode = 0x08;
@@ -337,20 +352,40 @@ fn copy_selection_via_cgevent() -> Option<String> {
         .map(|c| c.get_text().ok())
         .map(|maybe_text| maybe_text.filter(|s| !s.is_empty()));
 
+    // 必须在模拟 Cmd+C 前清空剪贴板，否则当应用没有辅助功能权限、Cmd+C 没有
+    // 真正执行时，下面读到的仍是用户原来的剪贴板内容，会被误判成选中文本。
+    // 清空失败时也无法区分新旧内容，直接放弃兜底，不做破坏性操作。
+    if saved.is_none() {
+        warn!("selection_translate: cannot read clipboard before CGEvent fallback");
+        return None;
+    }
+    if let Some(c) = clipboard.as_mut() {
+        if let Err(e) = c.clear() {
+            warn!("selection_translate: failed to clear clipboard before CGEvent copy: {e:?}");
+            return None;
+        }
+    } else {
+        return None;
+    }
+
     simulate_copy_with_cg_event();
-    std::thread::sleep(std::time::Duration::from_millis(100));
 
     let mut selection: Option<String> = None;
-    if let Some(c) = clipboard.as_mut() {
-        if let Ok(clip_text) = c.get_text() {
-            if !clip_text.trim().is_empty() {
-                info!("selection_translate: got text via CGEvent copy");
-                selection = Some(clip_text);
+    // 等待目标应用把选区写入刚清空的剪贴板。多轮短轮询比单次固定等待更稳。
+    for _ in 0..4 {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        if let Some(c) = clipboard.as_mut() {
+            if let Ok(clip_text) = c.get_text() {
+                if !clip_text.trim().is_empty() {
+                    info!("selection_translate: got text via CGEvent copy");
+                    selection = Some(clip_text);
+                    break;
+                }
             }
         }
     }
 
-    if let (Some(c), Some(saved)) = (clipboard.as_mut(), saved) {
+    if let (Some(c), Some(saved)) = (clipboard.as_mut(), saved.as_ref()) {
         // saved: Option<String>；包装成 Option<Option<&str>> 以保留三层语义
         match restore_action(Some(saved.as_deref())) {
             RestoreAction::SetText(text) => match c.set_text(text) {
@@ -358,7 +393,9 @@ fn copy_selection_via_cgevent() -> Option<String> {
                 Err(e) => warn!("selection_translate: failed to restore clipboard: {e:?}"),
             },
             RestoreAction::Clear => match c.clear() {
-                Ok(()) => info!("selection_translate: clipboard cleared back to its original empty state"),
+                Ok(()) => {
+                    info!("selection_translate: clipboard cleared back to its original empty state")
+                }
                 Err(e) => warn!("selection_translate: failed to clear clipboard: {e:?}"),
             },
             RestoreAction::Nothing => {}
@@ -401,15 +438,42 @@ fn restore_action(saved: Option<Option<&str>>) -> RestoreAction<'_> {
 }
 
 /// 划词翻译：读取当前选中文本并翻译（不含剪贴板兜底）
+#[cfg(target_os = "macos")]
+fn selected_text() -> String {
+    use accessibility_ng::{AXUIElement, AXUIElementAttributes};
+    let system = AXUIElement::system_wide();
+    let _ = system.set_messaging_timeout(0.25);
+    // Resolve the frontmost application first. AXFocusedUIElement is an
+    // application attribute and is not exposed on the system-wide element by
+    // every macOS/application combination.
+    let application = system.focused_application().ok();
+    if let Some(application) = &application {
+        let _ = application.set_messaging_timeout(0.25);
+    }
+    let element = application
+        .as_ref()
+        .and_then(|application| application.focused_uielement().ok())
+        .or_else(|| system.focused_uielement().ok());
+    let Some(element) = element else { return String::new(); };
+    let _ = element.set_messaging_timeout(0.25);
+    element.selected_text().map(|text| text.to_string()).unwrap_or_default()
+}
+
+#[cfg(not(target_os = "macos"))]
+fn selected_text() -> String {
+    selection::get_text()
+}
+
 pub fn selection_translate() {
-    use selection::get_text;
+    // selection::get_text on macOS also runs an unbounded osascript fallback.
+    // Read AX directly so failure reaches our bounded CGEvent fallback instead.
     // 短暂延迟让 AX API 有时间注册选区
     std::thread::sleep(std::time::Duration::from_millis(50));
-    let mut text = get_text();
+    let mut text = selected_text();
     // 重试一次：首次可能因时序问题读不到
     if text.trim().is_empty() {
         std::thread::sleep(std::time::Duration::from_millis(100));
-        text = get_text();
+        text = selected_text();
     }
 
     // 兜底：用 CGEvent 模拟 Cmd+C 获取选中文本（不需要 Automation 权限）
@@ -428,7 +492,9 @@ pub fn selection_translate() {
             let identifier = handle.config().tauri.bundle.identifier.clone();
             // 文案按 app_language 本地化：修复前这里永远发中文，
             // 把界面切成英文的用户会收到看不懂的通知（见 notification.rs）。
-            let text = crate::notification::text(crate::notification::NotificationKind::SelectionTranslateEmpty);
+            let text = crate::notification::text(
+                crate::notification::NotificationKind::SelectionTranslateEmpty,
+            );
             let _ = tauri::api::notification::Notification::new(&identifier)
                 .title(text.title)
                 .body(text.body)
@@ -440,7 +506,10 @@ pub fn selection_translate() {
     set_text_state(&text);
     let window = translate_window();
     if let Err(error) = window.emit("new_text", text) {
-        log::warn!("Failed to send selected text to translation window: {}", error);
+        log::warn!(
+            "Failed to send selected text to translation window: {}",
+            error
+        );
     }
 }
 
@@ -457,7 +526,9 @@ pub fn clipboard_translate() {
         let app_handle = APP.get();
         if let Some(handle) = app_handle {
             let identifier = handle.config().tauri.bundle.identifier.clone();
-            let text = crate::notification::text(crate::notification::NotificationKind::ClipboardTranslateEmpty);
+            let text = crate::notification::text(
+                crate::notification::NotificationKind::ClipboardTranslateEmpty,
+            );
             let _ = tauri::api::notification::Notification::new(&identifier)
                 .title(text.title)
                 .body(text.body)
@@ -469,7 +540,10 @@ pub fn clipboard_translate() {
     set_text_state(&text);
     let window = translate_window();
     if let Err(error) = window.emit("new_text", text) {
-        log::warn!("Failed to send clipboard text to translation window: {}", error);
+        log::warn!(
+            "Failed to send clipboard text to translation window: {}",
+            error
+        );
     }
 }
 
@@ -775,8 +849,14 @@ mod tests {
         // 副屏常在原点左上（负坐标），半开区间的负值一侧同样要正确。
         // 这块屏起点 -1920、宽 1920，覆盖 [-1920, 0)。
         assert!(point_in_monitor(-500, -500, -1920, -1080, W, H));
-        assert!(point_in_monitor(-1920, -1080, -1920, -1080, W, H), "top-left corner is inside");
-        assert!(point_in_monitor(-1, -500, -1920, -1080, W, H), "last column before 0 is inside");
+        assert!(
+            point_in_monitor(-1920, -1080, -1920, -1080, W, H),
+            "top-left corner is inside"
+        );
+        assert!(
+            point_in_monitor(-1, -500, -1920, -1080, W, H),
+            "last column before 0 is inside"
+        );
         // 右/下边界是开的：x=0 属于原点那块屏，不属于这块
         assert!(!point_in_monitor(0, -500, -1920, -1080, W, H));
         assert!(!point_in_monitor(-1, 0, -1920, -1080, W, H));

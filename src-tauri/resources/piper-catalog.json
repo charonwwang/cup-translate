@@ -1,0 +1,299 @@
+[
+  {
+    "id": "zh_CN-huayan-medium",
+    "name": "华燕",
+    "language": "zh",
+    "locale": "zh_CN",
+    "quality": "medium",
+    "base": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/zh/zh_CN/huayan/medium",
+    "revision": "5041a7a49ae5b3a0f30e6837769eb03fdbb231bd",
+    "files": [
+      {
+        "name": "zh_CN-huayan-medium.onnx",
+        "bytes": 63201294,
+        "sha256": "9929917bf8cabb26fd528ea44d3a6699c11e87317a14765312420be230be0f3d"
+      },
+      {
+        "name": "zh_CN-huayan-medium.onnx.json",
+        "bytes": 4822,
+        "sha256": "d521dc45504a8ccc99e325822b35946dd701840bfb07e3dbb31a40929ed6a82b"
+      },
+      {
+        "name": "MODEL_CARD",
+        "bytes": 276,
+        "sha256": "25d7d8f7a03e9382e629c5c4f074176e7ca84e08be12a873022e91fcac98c2c7"
+      },
+      {
+        "name": "samples/speaker_0.mp3",
+        "bytes": 172501,
+        "sha256": "1c56ade3438fd24f7c4ca0e9794eaa4e0f03b0f5f9859b159a07fcff0bad8322"
+      }
+    ],
+    "sample": "你好，这是本地语音试听。",
+    "modelCard": "# Model card for huayan (medium)\n\n* Language: zh_CN (Chinese, China)\n* Speakers: 1\n* Quality: medium\n* Samplerate: 22,050Hz\n\n## Dataset\n\n* URL: https://github.com/PlayVoice/HuaYan_TTS\n* License: Unknown\n\n## Training\n\nFinetuned from U.S. English lessac voice (medium quality).\n"
+  },
+  {
+    "id": "en_US-lessac-medium",
+    "name": "Lessac",
+    "language": "en",
+    "locale": "en_US",
+    "quality": "medium",
+    "base": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/en/en_US/lessac/medium",
+    "revision": "5041a7a49ae5b3a0f30e6837769eb03fdbb231bd",
+    "files": [
+      {
+        "name": "en_US-lessac-medium.onnx",
+        "bytes": 63201294,
+        "sha256": "5efe09e69902187827af646e1a6e9d269dee769f9877d17b16b1b46eeaaf019f"
+      },
+      {
+        "name": "en_US-lessac-medium.onnx.json",
+        "bytes": 4885,
+        "sha256": "efe19c417bed055f2d69908248c6ba650fa135bc868b0e6abb3da181dab690a0"
+      },
+      {
+        "name": "MODEL_CARD",
+        "bytes": 351,
+        "sha256": "ce49eb457742208166d399a40cdec2c7fa9db77960930031564ab56f12882645"
+      },
+      {
+        "name": "samples/speaker_0.mp3",
+        "bytes": 83453,
+        "sha256": "50952249253e66f8d448ace6a8b1ca32eee1209aa41a81898d83e71979c86c52"
+      }
+    ],
+    "sample": "Hello, this is local speech playback.",
+    "modelCard": "# Model card for lessac (medium)\n\n* Language: en_US (English, United States)\n* Speakers: 1\n* Quality: medium\n* Samplerate: 22,050Hz\n\n## Dataset\n\n* URL: https://www.cstr.ed.ac.uk/projects/blizzard/2013/lessac_blizzard2013/\n* License: https://www.cstr.ed.ac.uk/projects/blizzard/2013/lessac_blizzard2013/license.html\n\n## Training\n\nTrained from scratch.\n"
+  },
+  {
+    "id": "en_GB-alba-medium",
+    "name": "Alba",
+    "language": "en",
+    "locale": "en_GB",
+    "quality": "medium",
+    "base": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/en/en_GB/alba/medium",
+    "revision": "5041a7a49ae5b3a0f30e6837769eb03fdbb231bd",
+    "files": [
+      {
+        "name": "en_GB-alba-medium.onnx",
+        "bytes": 63201294,
+        "sha256": "401369c4a81d09fdd86c32c5c864440811dbdcc66466cde2d64f7133a66ad03b"
+      },
+      {
+        "name": "en_GB-alba-medium.onnx.json",
+        "bytes": 4888,
+        "sha256": "aa965a2f02ecced632c2694e1fc72bbff6d65f265fab567ca945918c73dd89f4"
+      },
+      {
+        "name": "MODEL_CARD",
+        "bytes": 324,
+        "sha256": "fa166b1779404c470b0b6b4ba0238bc4a35bf89d2cd130c6788f697188b737d6"
+      },
+      {
+        "name": "samples/speaker_0.mp3",
+        "bytes": 88476,
+        "sha256": "6df4f047daa0f7e44a6844216b26ceef3e1eabe2e314621b5b5fa28c6eb57d30"
+      }
+    ],
+    "sample": "Hello, this is local speech playback.",
+    "modelCard": "# Model card for alba (medium)\n\n* Language: en_GB (English, Great Britain)\n* Speakers: 1\n* Quality: medium\n* Samplerate: 22,050Hz\n\n## Dataset\n\n* URL: https://datashare.ed.ac.uk/handle/10283/3270\n* License: https://creativecommons.org/licenses/by/4.0/\n\n## Training\n\nFinetuned from U.S. English lessac voice (medium quality).\n"
+  },
+  {
+    "id": "fr_FR-siwis-medium",
+    "name": "Siwis",
+    "language": "fr",
+    "locale": "fr_FR",
+    "quality": "medium",
+    "base": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/fr/fr_FR/siwis/medium",
+    "revision": "5041a7a49ae5b3a0f30e6837769eb03fdbb231bd",
+    "files": [
+      {
+        "name": "fr_FR-siwis-medium.onnx",
+        "bytes": 63201294,
+        "sha256": "641d1ab097da2b81128c076810edb052b385decc8be3381814802a64a73baf99"
+      },
+      {
+        "name": "fr_FR-siwis-medium.onnx.json",
+        "bytes": 4875,
+        "sha256": "39479916c2db192b5ac9764daddd0c744d83e023ad890c6976c0633ae4df8959"
+      },
+      {
+        "name": "MODEL_CARD",
+        "bytes": 284,
+        "sha256": "bd8b8d079d4d3d2c4cc20345889bbcd586d72f021a132f93357a763eb5232cce"
+      },
+      {
+        "name": "samples/speaker_0.mp3",
+        "bytes": 71075,
+        "sha256": "cadc8ec9e157e2644ef9651f9d847ea59e9e6c369d23bbdf6b9cf5bad5013cb1"
+      }
+    ],
+    "sample": "Bonjour, ceci est un essai de voix locale.",
+    "modelCard": "# Model card for siwis (medium)\n\n* Language: fr_FR (French, France)\n* Speakers: 1\n* Quality: medium\n* Samplerate: 22,050Hz\n\n## Dataset\n\n* URL: https://datashare.is.ed.ac.uk/handle/10283/2353\n* License: CC-BY 4.0\n\n## Training\n\nFinetuned from U.S. English lessac voice (medium quality)\n"
+  },
+  {
+    "id": "de_DE-thorsten-medium",
+    "name": "Thorsten",
+    "language": "de",
+    "locale": "de_DE",
+    "quality": "medium",
+    "base": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/de/de_DE/thorsten/medium",
+    "revision": "5041a7a49ae5b3a0f30e6837769eb03fdbb231bd",
+    "files": [
+      {
+        "name": "de_DE-thorsten-medium.onnx",
+        "bytes": 63201294,
+        "sha256": "7e64762d8e5118bb578f2eea6207e1a35a8e0c30595010b666f983fc87bb7819"
+      },
+      {
+        "name": "de_DE-thorsten-medium.onnx.json",
+        "bytes": 4819,
+        "sha256": "974adee790533adb273a1ac88f49027d2a1b8f0f2cf4905954a4791e79264e85"
+      },
+      {
+        "name": "MODEL_CARD",
+        "bytes": 285,
+        "sha256": "5196b5ab0794e6056263a1f37c18bec407b61ac187529bee29d1c366871e5c9e"
+      },
+      {
+        "name": "samples/speaker_0.mp3",
+        "bytes": 76707,
+        "sha256": "282b0c31601184c1e546951c8ded2f71e262f586211f64fc390fce5df2804ee5"
+      }
+    ],
+    "sample": "Hallo, dies ist eine lokale Sprachprobe.",
+    "modelCard": "# Model card for thorsten (medium)\n\n* Language: de_DE (German, Germany)\n* Speakers: 1\n* Quality: medium\n* Samplerate: 22,050Hz\n\n## Dataset\n\n* URL: https://github.com/thorstenMueller/Thorsten-Voice\n* License: CC0\n\n## Training\n\nFinetuned from U.S. English lessac voice (medium quality).\n"
+  },
+  {
+    "id": "es_ES-davefx-medium",
+    "name": "DaveFX",
+    "language": "es",
+    "locale": "es_ES",
+    "quality": "medium",
+    "base": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/es/es_ES/davefx/medium",
+    "revision": "5041a7a49ae5b3a0f30e6837769eb03fdbb231bd",
+    "files": [
+      {
+        "name": "es_ES-davefx-medium.onnx",
+        "bytes": 63201294,
+        "sha256": "6658b03b1a6c316ee4c265a9896abc1393353c2d9e1bca7d66c2c442e222a917"
+      },
+      {
+        "name": "es_ES-davefx-medium.onnx.json",
+        "bytes": 4817,
+        "sha256": "0e0dda87c732f6f38771ff274a6380d9252f327dca77aa2963d5fbdf9ec54842"
+      },
+      {
+        "name": "MODEL_CARD",
+        "bytes": 276,
+        "sha256": "420703b5d8ea239b729f13d83f31eea9bae5fcb89447de23ebc94aa8a4768f95"
+      },
+      {
+        "name": "samples/speaker_0.mp3",
+        "bytes": 191084,
+        "sha256": "00740c7094a7464d5d085c8057e5299314d0f7d1930df6751ff97c483e5b3d9a"
+      }
+    ],
+    "sample": "Hola, esta es una prueba de voz local.",
+    "modelCard": "# Model card for davefx (medium)\n\n* Language: es_ES (Spanish, Spain)\n* Speakers: 1\n* Quality: medium\n* Samplerate: 22,050Hz\n\n## Dataset\n\n* URL: https://github.com/OHF-Voice/voice-datasets\n* License: CC0\n\n## Training\n\nFinetuned from U.S. English lessac voice (medium quality).\n"
+  },
+  {
+    "id": "pt_BR-faber-medium",
+    "name": "Faber",
+    "language": "pt",
+    "locale": "pt_BR",
+    "quality": "medium",
+    "base": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/pt/pt_BR/faber/medium",
+    "revision": "5041a7a49ae5b3a0f30e6837769eb03fdbb231bd",
+    "files": [
+      {
+        "name": "pt_BR-faber-medium.onnx",
+        "bytes": 63201294,
+        "sha256": "858555e3a064209c57088fe6bd70c4c3dc54d03eaa00c45d5ecaf43a33f95aa7"
+      },
+      {
+        "name": "pt_BR-faber-medium.onnx.json",
+        "bytes": 4855,
+        "sha256": "7e694de195ae3fc36dd732c445eb04fb49b649854893cb5506b978f0d50a1d6f"
+      },
+      {
+        "name": "MODEL_CARD",
+        "bytes": 279,
+        "sha256": "01f1a5bcfd0538782726059ae407eae9c2dd1b5b35f7298fd53a68de91afe563"
+      },
+      {
+        "name": "samples/speaker_0.mp3",
+        "bytes": 96349,
+        "sha256": "e85c41672e4dae083b994cc3ec00b9fc206f0b5de3c29a65faf7ac81db8c489b"
+      }
+    ],
+    "sample": "Olá, este é um teste de voz local.",
+    "modelCard": "# Model card for faber (medium)\n\n* Language: pt_BR (Portuguese, Brazil)\n* Speakers: 1\n* Quality: medium\n* Samplerate: 22,050Hz\n\n## Dataset\n\n* URL: https://github.com/OHF-Voice/voice-datasets\n* License: CC0\n\n## Training\n\nFinetuned from U.S. English lessac voice (medium quality).\n"
+  },
+  {
+    "id": "it_IT-paola-medium",
+    "name": "Paola",
+    "language": "it",
+    "locale": "it_IT",
+    "quality": "medium",
+    "base": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/it/it_IT/paola/medium",
+    "revision": "5041a7a49ae5b3a0f30e6837769eb03fdbb231bd",
+    "files": [
+      {
+        "name": "it_IT-paola-medium.onnx",
+        "bytes": 63511038,
+        "sha256": "6fc918b5a0ea6137382833dddfa567bffbe6a5060c02043c87192ee59c04210c"
+      },
+      {
+        "name": "it_IT-paola-medium.onnx.json",
+        "bytes": 7099,
+        "sha256": "aea19c0a7fce29fbc359b93f10e7902854401e4c95ae2ea328ae516b15d296cf"
+      },
+      {
+        "name": "MODEL_CARD",
+        "bytes": 303,
+        "sha256": "c53fd0070dc93b438edbce06728eb83759ba030fff0cce523209ee4a0a6363c0"
+      },
+      {
+        "name": "samples/speaker_0.mp3",
+        "bytes": 119875,
+        "sha256": "946c130cf6da5c042125131db3a4e7cf3eb973168ef314e02098c23098e4c30a"
+      }
+    ],
+    "sample": "Ciao, questa è una prova vocale locale.",
+    "modelCard": "# Model card for paola (medium)\n\n* Language: it_IT (Italian, Italy)\n* Speakers: 1\n* Quality: medium\n* Samplerate: 22,050Hz\n\n## Dataset\n\n* URL: https://huggingface.co/datasets/paolapersico1/Voice-Dataset-Italian\n* License: See URL\n\n## Training\n\nFinetuned from U.S. English lessac voice (medium quality).\n"
+  },
+  {
+    "id": "ru_RU-irina-medium",
+    "name": "Irina",
+    "language": "ru",
+    "locale": "ru_RU",
+    "quality": "medium",
+    "base": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/ru/ru_RU/irina/medium",
+    "revision": "5041a7a49ae5b3a0f30e6837769eb03fdbb231bd",
+    "files": [
+      {
+        "name": "ru_RU-irina-medium.onnx",
+        "bytes": 63201294,
+        "sha256": "8ff38212d23da300bbe3705c645e6e5b9475f0bfde01558eb17813e22acaaaaa"
+      },
+      {
+        "name": "ru_RU-irina-medium.onnx.json",
+        "bytes": 4765,
+        "sha256": "c2ec28bb38e2b59e93b959b3e40348c1afebbd272f30fed5d41205d08e98a9d7"
+      },
+      {
+        "name": "MODEL_CARD",
+        "bytes": 271,
+        "sha256": "f4fc2deb0e8c6219f29202b8dd06c9638c5ffd50ad5c6b2c90cf1aa59d507593"
+      },
+      {
+        "name": "samples/speaker_0.mp3",
+        "bytes": 85490,
+        "sha256": "e5ed95a2eeee586f2c8d3c291307d72263de82801b5c80534df8ff26e3b6229d"
+      }
+    ],
+    "sample": "Здравствуйте, это пример местного голоса.",
+    "modelCard": "# Model card for irina (medium)\n\n* Language: ru_RU (Russian, Russia)\n* Speakers: 1\n* Quality: medium\n* Samplerate: 22,050Hz\n\n## Dataset\n\n* URL: https://github.com/RHVoice/RHVoice\n* License: Unknown\n\n## Training\n\nFinetuned from U.S. English lessac voice (medium quality).\n"
+  }
+]

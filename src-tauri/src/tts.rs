@@ -94,10 +94,17 @@ fn temp_wav_path() -> std::path::PathBuf {
 
 #[tauri::command]
 pub async fn tts_speak(text: String, lang: String) -> Result<Vec<u8>, String> {
+    if crate::config::get_str("privacy_mode").as_deref() == Some("device_only") {
+        let inventory = tts_inventory().await?;
+        if inventory["offline"] != true || inventory["supported"] != true {
+            return Err("Verified offline system speech unavailable".into());
+        }
+    }
     #[cfg(target_os = "macos")]
     {
         return tauri::async_runtime::spawn_blocking(move || macos_synthesize(&text, &lang))
-            .await.map_err(|e| format!("Speech task failed: {e}"))?;
+            .await
+            .map_err(|e| format!("Speech task failed: {e}"))?;
     }
     #[cfg(not(target_os = "macos"))]
     synthesize_portable(text, lang)
@@ -105,14 +112,17 @@ pub async fn tts_speak(text: String, lang: String) -> Result<Vec<u8>, String> {
 
 #[cfg(target_os = "macos")]
 fn macos_synthesize(text: &str, lang: &str) -> Result<Vec<u8>, String> {
-    if text.trim().is_empty() { return Ok(Vec::new()); }
-    let voices = Command::new("/usr/bin/say").args(["-v", "?"]).output()
+    if text.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+    let voices = Command::new("/usr/bin/say")
+        .args(["-v", "?"])
+        .output()
         .map_err(|e| format!("System speech unavailable: {e}"))?;
     let primary = lang.split(['_', '-']).next().unwrap_or("en");
     let inventory = String::from_utf8_lossy(&voices.stdout);
     let voice = inventory.lines().find_map(|line| {
-        let (name, rest) = line.split_once("  ")?;
-        let locale = rest.split_whitespace().next()?;
+        let (name, locale) = parse_voice_line(line)?;
         (locale.split('_').next() == Some(primary)).then_some(name.trim())
     }).ok_or_else(|| format!("No installed system voice for {lang}. Add a voice in macOS Accessibility > Spoken Content, or select Google TTS in Settings."))?;
     let path = temp_wav_path();
@@ -120,14 +130,26 @@ fn macos_synthesize(text: &str, lang: &str) -> Result<Vec<u8>, String> {
     use std::io::Write;
     let result = (|| {
         let mut child = Command::new("/usr/bin/say")
-            .args(["-v", voice, "-o"]).arg(&path)
+            .args(["-v", voice, "-o"])
+            .arg(&path)
             .args(["--file-format=WAVE", "--data-format=LEI16@22050"])
-            .stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::piped()).spawn()
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
             .map_err(|e| format!("System speech unavailable: {e}"))?;
-        child.stdin.take().unwrap().write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(text.as_bytes())
+            .map_err(|e| e.to_string())?;
         let output = child.wait_with_output().map_err(|e| e.to_string())?;
-        if !output.status.success() { return Err("System speech synthesis failed. Check installed voices in macOS Settings.".into()); }
+        if !output.status.success() {
+            return Err(
+                "System speech synthesis failed. Check installed voices in macOS Settings.".into(),
+            );
+        }
         std::fs::read(&path).map_err(|e| e.to_string())
     })();
     let _ = std::fs::remove_file(path);
@@ -163,7 +185,8 @@ fn synthesize_portable(text: String, lang: String) -> Result<Vec<u8>, String> {
                     status.code()
                 ));
             }
-            let bytes = std::fs::read(&wav_path).map_err(|e| format!("Failed to read the synthesized audio: {e}"))?;
+            let bytes = std::fs::read(&wav_path)
+                .map_err(|e| format!("Failed to read the synthesized audio: {e}"))?;
             let _ = std::fs::remove_file(&wav_path);
             Ok(bytes)
         }
@@ -246,7 +269,9 @@ mod tests {
     #[test]
     fn engine_probe_requires_a_zero_exit_status() {
         // 先确认反例命令在本机确实存在且以非 0 退出，否则测试本身不成立
-        let probe = std::process::Command::new("false").arg("--version").output();
+        let probe = std::process::Command::new("false")
+            .arg("--version")
+            .output();
         let (old_criterion, new_criterion) = match probe {
             Ok(output) => (true, output.status.success()),
             Err(_) => panic!("'false' must exist on this platform; test precondition"),
@@ -311,4 +336,38 @@ mod tests {
             ));
         }
     }
+}
+
+#[cfg(target_os = "macos")]
+fn parse_voice_line(line: &str) -> Option<(&str, &str)> {
+    let (name, locale) = line
+        .split('#')
+        .next()?
+        .trim()
+        .rsplit_once(char::is_whitespace)?;
+    (locale.contains('_') && !name.trim().is_empty()).then_some((name.trim(), locale))
+}
+
+#[tauri::command]
+pub async fn tts_inventory() -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        #[cfg(target_os="macos")]
+        {
+            let output=Command::new("/usr/bin/say").args(["-v","?"]).output().map_err(|_| "System speech unavailable")?;
+            if !output.status.success() { return Err("System speech probe failed".into()); }
+            let voices:Vec<_>=String::from_utf8_lossy(&output.stdout).lines().filter_map(|line| {
+                let (name,locale)=parse_voice_line(line)?;
+                Some(serde_json::json!({"name":name.trim(),"locale":locale}))
+            }).collect();
+            return Ok(serde_json::json!({"supported":!voices.is_empty(),"offline":true,"engine":"macOS say","voices":voices}));
+        }
+        #[cfg(target_os="linux")]
+        {
+            let engine=detect_engine();
+            let offline=matches!(engine,Some(TtsEngine::EspeakNg|TtsEngine::Espeak));
+            Ok(serde_json::json!({"supported":engine.is_some(),"offline":offline,"engine":format!("{:?}",engine),"voices":[],"reason":if offline {""} else {"Install espeak-ng for verified offline speech; speech-dispatcher is unverified"}}))
+        }
+        #[cfg(not(any(target_os="macos",target_os="linux")))]
+        { Ok(serde_json::json!({"supported":false,"offline":false,"voices":[],"reason":"System speech is not implemented on this platform"})) }
+    }).await.map_err(|_| "Speech inventory worker failed")?
 }

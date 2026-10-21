@@ -14,6 +14,8 @@ on:
             - '.github/actions/**'
             - '.github/workflows/build-desktop.yml'
     workflow_dispatch:
+env:
+    ESPEAK_STATIC_CRT: '1'
 permissions:
     contents: read
 concurrency:
@@ -50,12 +52,20 @@ jobs:
                   path: src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
                   if-no-files-found: error
     linux:
-        runs-on: ubuntu-latest
-        timeout-minutes: 60
+        runs-on: ${{ matrix.os }}
+        timeout-minutes: 90
         strategy:
             fail-fast: false
             matrix:
-                target: [x86_64-unknown-linux-gnu, i686-unknown-linux-gnu, aarch64-unknown-linux-gnu, armv7-unknown-linux-gnueabihf]
+                include:
+                    - target: x86_64-unknown-linux-gnu
+                      os: ubuntu-latest
+                    - target: i686-unknown-linux-gnu
+                      os: ubuntu-latest
+                    - target: aarch64-unknown-linux-gnu
+                      os: ubuntu-24.04-arm
+                    - target: armv7-unknown-linux-gnueabihf
+                      os: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
             - name: Build Debian and RPM packages without publishing

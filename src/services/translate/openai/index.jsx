@@ -1,23 +1,20 @@
+import { wordDetailsPrompt, parseWordDetails } from '../../../utils/wordDetails';
+import { connectionUrl } from '../../../utils/connection';
+import { checkPolicy } from '../../../utils/requestRuntime';
+import { resolveSecrets } from '../../../utils/credentials';
+import { glossaryHint } from '../../../utils/glossary';
 import { fetchWithTimeout as fetch, Body } from '../../../utils/fetchWithTimeout';
 import { Language } from './info';
 import { defaultRequestArguments } from './Config';
 
 export async function translate(text, from, to, options) {
-    const { config, setResult, detect } = options;
+    await checkPolicy('translate', 'openai');
+    const { setResult, detect, signal, matches = [], style = '' } = options;
+    const config = await resolveSecrets(options.config);
 
     let { service, requestPath, model, apiKey, stream, promptList, requestArguments } = config;
 
-    if (!/https?:\/\/.+/.test(requestPath)) {
-        requestPath = `https://${requestPath}`;
-    }
-    const apiUrl = new URL(requestPath);
-
-    // in openai like api, /v1 is not required
-    if (service === 'openai' && !apiUrl.pathname.endsWith('/chat/completions')) {
-        // not openai like, populate completion endpoint
-        apiUrl.pathname += apiUrl.pathname.endsWith('/') ? '' : '/';
-        apiUrl.pathname += 'v1/chat/completions';
-    }
+    const apiUrl = new URL(connectionUrl(requestPath, service));
 
     // 兼容旧版
     if (promptList === undefined) {
@@ -42,11 +39,18 @@ export async function translate(text, from, to, options) {
         };
     });
 
+    const dictionaryPrompt = wordDetailsPrompt(text, from, detect);
+    if (dictionaryPrompt) {
+        promptList.push(dictionaryPrompt);
+        stream = false;
+    }
+    const hint = glossaryHint(matches, style);
+    if (hint.message) promptList.push(hint.message);
     const headers =
         service === 'openai'
             ? {
                   'Content-Type': 'application/json',
-                  Authorization: `Bearer ${apiKey}`,
+                  ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
               }
             : {
                   'Content-Type': 'application/json',
@@ -63,21 +67,24 @@ export async function translate(text, from, to, options) {
     if (stream) {
         const res = await window.fetch(apiUrl.href, {
             method: 'POST',
-            headers: headers,
+            signal: signal ?? AbortSignal.timeout(30000),
+            redirect: 'error',
+            headers: { ...config.headers, ...headers },
             body: JSON.stringify(body),
         });
         if (res.ok) {
             let target = '';
             const reader = res.body.getReader();
+            const decoder = new TextDecoder();
             try {
                 let temp = '';
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) {
-                        setResult(target.trim());
-                        return target.trim();
+                        setResult?.(target.trim());
+                        return parseWordDetails(target.trim(), dictionaryPrompt);
                     }
-                    const str = new TextDecoder().decode(value);
+                    const str = decoder.decode(value, { stream: true });
                     let datas = str.split('data:');
                     for (let data of datas) {
                         if (data.trim() !== '' && data.trim() !== '[DONE]') {
@@ -113,17 +120,21 @@ export async function translate(text, from, to, options) {
                     }
                 }
             } finally {
+                await reader.cancel().catch(() => {});
                 reader.releaseLock();
             }
         } else {
-            throw `Http Request Error\nHttp Status: ${res.status}\n${JSON.stringify(res.data)}`;
+            throw new Error(`HTTP ${res.status}`);
         }
     } else {
-        let res = await fetch(apiUrl.href, {
+        const response = await window.fetch(apiUrl.href, {
             method: 'POST',
-            headers: headers,
-            body: Body.json(body),
+            headers: { ...config.headers, ...headers },
+            body: JSON.stringify(body),
+            signal: signal ?? AbortSignal.timeout(30000),
+            redirect: 'error',
         });
+        const res = { ok: response.ok, status: response.status, data: await response.json() };
         if (res.ok) {
             let result = res.data;
             const { choices } = result;
@@ -136,15 +147,15 @@ export async function translate(text, from, to, options) {
                     if (target.endsWith('"')) {
                         target = target.slice(0, -1);
                     }
-                    return target.trim();
+                    return parseWordDetails(target.trim(), dictionaryPrompt);
                 } else {
-                    throw JSON.stringify(choices);
+                    throw new Error('Empty translation response');
                 }
             } else {
-                throw JSON.stringify(result);
+                throw new Error('Invalid translation response');
             }
         } else {
-            throw `Http Request Error\nHttp Status: ${res.status}\n${JSON.stringify(res.data)}`;
+            throw new Error(`HTTP ${res.status}`);
         }
     }
 }

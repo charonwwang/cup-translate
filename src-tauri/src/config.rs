@@ -282,7 +282,13 @@ pub fn check_service_available() -> Result<(), Error> {
         "yandex",
         "youdao",
     ];
-    let builtin_tts_list: Vec<&str> = vec!["google_tts", "lingva_tts", "local_tts"];
+    let builtin_tts_list: Vec<&str> = vec![
+        "google_tts",
+        "lingva_tts",
+        "local_tts",
+        "piper_tts",
+        "kokoro_tts",
+    ];
     let builtin_collection_list: Vec<&str> = vec!["anki", "eudic"];
 
     let plugin_recognize_list: Vec<String> = get_plugin_list("recognize").unwrap_or_default();
@@ -318,7 +324,10 @@ pub fn check_service_available() -> Result<(), Error> {
         match serde_json::from_value::<Vec<String>>(value) {
             Ok(list) => check_available(list, builtin.to_vec(), plugin.clone(), key),
             Err(e) => {
-                warn!("Skipping service check for {}: invalid value ({:?})", key, e);
+                warn!(
+                    "Skipping service check for {}: invalid value ({:?})",
+                    key, e
+                );
             }
         }
     }
@@ -417,7 +426,8 @@ fn coerce_bool(v: &Value) -> Option<bool> {
 
 /// 纯函数版本的整数强转，兼容 JSON number 与数字字符串。
 fn coerce_i64(v: &Value) -> Option<i64> {
-    v.as_i64().or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+    v.as_i64()
+        .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
 }
 
 pub fn set<T: serde::ser::Serialize>(key: &str, value: T) {
@@ -457,8 +467,8 @@ pub fn is_first_run() -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        coerce_bool, coerce_i64, coerce_str, copy_dir_all, migrate_config_dir, should_remove_plugin_dir,
-        staging_dir_for,
+        coerce_bool, coerce_i64, coerce_str, copy_dir_all, migrate_config_dir,
+        should_remove_plugin_dir, staging_dir_for,
     };
 
     /// 生成唯一临时目录，避免并行测试互踩。
@@ -516,7 +526,10 @@ mod tests {
     /// 若哪天有人把它改成大小写不敏感，这条会失败——那正是需要显式决策的点。
     #[test]
     fn the_plugin_prefix_check_is_case_sensitive() {
-        assert!(should_remove_plugin_dir("Plugin-demo"), "capital P is not the plugin prefix");
+        assert!(
+            should_remove_plugin_dir("Plugin-demo"),
+            "capital P is not the plugin prefix"
+        );
         assert!(should_remove_plugin_dir("PLUGIN-demo"));
         assert!(!should_remove_plugin_dir("plugin-demo"));
         assert!(!should_remove_plugin_dir("plugindemo"));
@@ -556,7 +569,9 @@ mod tests {
     #[test]
     fn removing_a_user_directory_always_logs_it() {
         let source = include_str!("config.rs");
-        let start = source.find("if should_remove_plugin_dir(&name) {").expect("the branch must exist");
+        let start = source
+            .find("if should_remove_plugin_dir(&name) {")
+            .expect("the branch must exist");
         let rest = &source[start..];
         // 分支体到 `} else {` 为止（该 else 属于同一个 if）
         let end = rest.find("} else {").expect("the branch must have an else") + "} else {".len();
@@ -568,7 +583,9 @@ mod tests {
             "the branch must actually remove the directory"
         );
         // 删除之前必须先记日志（否则用户目录消失时无从排查）
-        let remove_at = branch.find("std::fs::remove_dir_all(entry.path())").unwrap();
+        let remove_at = branch
+            .find("std::fs::remove_dir_all(entry.path())")
+            .unwrap();
         let before = &branch[..remove_at];
         assert!(
             before.contains("warn!") && before.contains("Removing unrecognized directory"),
@@ -608,7 +625,11 @@ mod tests {
         let dst = base.join("dst");
         std::fs::create_dir_all(src.join("plugins/translate/demo")).unwrap();
         std::fs::write(src.join("config.json"), br#"{"app_language":"zh_cn"}"#).unwrap();
-        std::fs::write(src.join("plugins/translate/demo/main.js"), b"export default 1;").unwrap();
+        std::fs::write(
+            src.join("plugins/translate/demo/main.js"),
+            b"export default 1;",
+        )
+        .unwrap();
 
         copy_dir_all(&src, &dst).unwrap();
 
@@ -636,7 +657,10 @@ mod tests {
             std::os::unix::fs::symlink("/nonexistent/nope", src.join("zz_broken")).unwrap();
 
             let result = copy_dir_all(&src, &dst);
-            assert!(result.is_err(), "a broken symlink must surface as an error, not be skipped");
+            assert!(
+                result.is_err(),
+                "a broken symlink must surface as an error, not be skipped"
+            );
             let _ = std::fs::remove_dir_all(base);
         }
     }
@@ -698,8 +722,14 @@ mod tests {
             std::fs::read_to_string(target.join("config.json")).unwrap(),
             r#"{"app_language":"zh_cn"}"#
         );
-        assert_eq!(std::fs::read(target.join("plugins/demo/main.js")).unwrap(), b"x");
-        assert!(!staging_dir_for(&target).exists(), "staging must be gone after success");
+        assert_eq!(
+            std::fs::read(target.join("plugins/demo/main.js")).unwrap(),
+            b"x"
+        );
+        assert!(
+            !staging_dir_for(&target).exists(),
+            "staging must be gone after success"
+        );
         let _ = std::fs::remove_dir_all(base);
     }
 
@@ -722,7 +752,10 @@ mod tests {
         );
         // 与旧 identifier 的 staging 不能相撞
         let other = staging_dir_for(&std::path::PathBuf::from("/base/com.pot-app.desktop"));
-        assert_ne!(staging, other, "staging dirs for different identifiers must differ");
+        assert_ne!(
+            staging, other,
+            "staging dirs for different identifiers must differ"
+        );
     }
 
     /// 残留的 staging 目录（上次崩溃留下）不该影响本次迁移。
@@ -740,8 +773,14 @@ mod tests {
         let ok = migrate_config_dir(&legacy, &target);
 
         assert!(ok, "migration should succeed despite leftover staging");
-        assert!(!target.join("stale.txt").exists(), "stale staging content must not survive");
-        assert_eq!(std::fs::read_to_string(target.join("config.json")).unwrap(), r#"{"a":1}"#);
+        assert!(
+            !target.join("stale.txt").exists(),
+            "stale staging content must not survive"
+        );
+        assert_eq!(
+            std::fs::read_to_string(target.join("config.json")).unwrap(),
+            r#"{"a":1}"#
+        );
         let _ = std::fs::remove_dir_all(base);
     }
 
@@ -778,7 +817,6 @@ mod tests {
         );
         let _ = std::fs::remove_dir_all(base);
     }
-
 
     use serde_json::json;
 
@@ -913,7 +951,10 @@ mod tests {
     #[test]
     fn a_user_configured_deepl_is_never_pruned() {
         // 用户填了密钥 -> 必须保留，否则升级一次配置就没了
-        for cfg in [json!({"authKey": "k"}), json!({"type": "api", "authKey": "k"})] {
+        for cfg in [
+            json!({"authKey": "k"}),
+            json!({"type": "api", "authKey": "k"}),
+        ] {
             assert!(
                 should_keep_instance("deepl", UNUSABLE_TRANSLATE_BUILTIN, Some(&cfg)),
                 "a deepl instance with a real config must survive pruning"
@@ -930,7 +971,11 @@ mod tests {
             Some(&json!({}))
         ));
         // 配置根本不存在（从未落盘）-> 清掉
-        assert!(!should_keep_instance("deepl", UNUSABLE_TRANSLATE_BUILTIN, None));
+        assert!(!should_keep_instance(
+            "deepl",
+            UNUSABLE_TRANSLATE_BUILTIN,
+            None
+        ));
     }
 
     /// 非对象配置值一律**保留**——这是 `as_object().is_none_or(..)` 的实际语义，
@@ -990,7 +1035,10 @@ mod tests {
         // 上一条「@ 判定冗余」的论证依赖这个前提：名单里的项都是裸服务名。
         // 谁要是往名单里加了一条含 @ 的项，冗余性就不成立了，
         // 这条测试会先失败，提醒重新审视那段注释。
-        for name in UNUSABLE_TRANSLATE_BUILTIN.iter().chain(UNUSABLE_TTS_BUILTIN) {
+        for name in UNUSABLE_TRANSLATE_BUILTIN
+            .iter()
+            .chain(UNUSABLE_TTS_BUILTIN)
+        {
             assert!(
                 !name.contains('@'),
                 "'{name}' contains '@', which invalidates the documented reasoning that \
@@ -1018,7 +1066,10 @@ mod tests {
         // 若有人把仍在正常工作的服务加进来，用户配置会被静默清掉。
         let intentionally_gated: &[&str] = &["deepl", "lingva_tts"];
         let code_removed: &[&str] = &["bing", "ecdict", "lingva"];
-        for name in UNUSABLE_TRANSLATE_BUILTIN.iter().chain(UNUSABLE_TTS_BUILTIN) {
+        for name in UNUSABLE_TRANSLATE_BUILTIN
+            .iter()
+            .chain(UNUSABLE_TTS_BUILTIN)
+        {
             assert!(
                 intentionally_gated.contains(name) || code_removed.contains(name),
                 "'{name}' is on a pruning list but is neither removed from the code nor                  explicitly gated on user configuration — pruning it would silently                  delete working services from user config"
@@ -1036,7 +1087,11 @@ mod tests {
             UNUSABLE_TTS_BUILTIN,
             Some(&json!({"requestPath": "http://my-lingva"}))
         ));
-        assert!(!should_keep_instance("lingva_tts", UNUSABLE_TTS_BUILTIN, Some(&json!({}))));
+        assert!(!should_keep_instance(
+            "lingva_tts",
+            UNUSABLE_TTS_BUILTIN,
+            Some(&json!({}))
+        ));
     }
 
     #[test]

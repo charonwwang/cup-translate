@@ -3,3 +3,6 @@
 *.png binary
 *.ico binary
 *.icns binary
+
+# Preserve upstream license text verbatim, including its original line endings.
+src-tauri/resources/hy-mt-license.txt -text whitespace=-blank-at-eol

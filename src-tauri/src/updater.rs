@@ -19,7 +19,8 @@ pub fn check_update(app_handle: tauri::AppHandle) {
             match tauri::updater::builder(app_handle)
                 .timeout(std::time::Duration::from_secs(30))
                 .check()
-                .await {
+                .await
+            {
                 Ok(update) => {
                     if update.is_update_available() {
                         info!("New version available");

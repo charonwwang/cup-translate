@@ -1,3 +1,4 @@
+import { store } from '../../../utils/store';
 import { Button, Input, Select, SelectItem } from '@nextui-org/react';
 import toast, { Toaster } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
@@ -30,7 +31,11 @@ export function Config(props) {
 
     const refreshStatus = async () => {
         const next = {};
-        for (const pair of PAIRS) {
+        for (const pair of config?.model === 'hymt'
+            ? [config.variant || 'hymt-q4']
+            : config?.model === 'm2m100'
+              ? ['m2m100']
+              : PAIRS) {
             try {
                 next[pair] = await invoke('local_mt_model_status', { pair });
             } catch (e) {
@@ -42,7 +47,7 @@ export function Config(props) {
 
     useEffect(() => {
         refreshStatus();
-    }, []);
+    }, [config?.model]);
 
     return (
         config !== null && (
@@ -89,20 +94,27 @@ export function Config(props) {
                         }}
                     />
                 </div>
-                <div className='config-item'>
-                    <Select
-                        aria-label={t('services.translate.local_mt.search_mode')}
-                        label={t('services.translate.local_mt.search_mode')}
-                        selectedKeys={[config.quality ?? 'balanced']}
-                        onSelectionChange={(keys) => setConfig({ ...config, quality: [...keys][0] ?? 'balanced' })}
-                    >
-                        {['fast', 'balanced', 'thorough'].map((mode) => (
-                            <SelectItem key={mode}>{t(`services.translate.local_mt.mode_${mode}`)}</SelectItem>
-                        ))}
-                    </Select>
-                </div>
+                {config.model !== 'hymt' && (
+                    <div className='config-item'>
+                        <Select
+                            aria-label={t('services.translate.local_mt.search_mode')}
+                            label={t('services.translate.local_mt.search_mode')}
+                            selectedKeys={[config.quality ?? 'balanced']}
+                            onSelectionChange={(keys) => setConfig({ ...config, quality: [...keys][0] ?? 'balanced' })}
+                        >
+                            {['fast', 'balanced', 'thorough'].map((mode) => (
+                                <SelectItem key={mode}>{t(`services.translate.local_mt.mode_${mode}`)}</SelectItem>
+                            ))}
+                        </Select>
+                    </div>
+                )}
                 <p className='text-xs text-default-500'>{t('services.translate.local_mt.memory_hint')}</p>
-                {PAIRS.map((pair) => {
+                {(config?.model === 'hymt'
+                    ? [config.variant || 'hymt-q4']
+                    : config?.model === 'm2m100'
+                      ? ['m2m100']
+                      : PAIRS
+                ).map((pair) => {
                     const status = statusMap[pair];
                     return (
                         <div
@@ -110,7 +122,11 @@ export function Config(props) {
                             key={pair}
                         >
                             <h3 className='my-auto mx-0'>
-                                {pair}（{t(`services.translate.local_mt.license_${pair}`)}）
+                                {pair.startsWith('hymt-')
+                                    ? `HY-MT1.5 · ${pair === 'hymt-q8' ? 'Q8_0' : 'Q4_K_M'}`
+                                    : pair === 'm2m100'
+                                      ? 'M2M-100 · MIT'
+                                      : `${pair}（${t(`services.translate.local_mt.license_${pair}`)}）`}
                             </h3>
                             <div className='my-auto mx-0'>
                                 {status === undefined
@@ -191,9 +207,15 @@ export function Config(props) {
                     <Button
                         fullWidth
                         color='primary'
-                        onPress={() => {
-                            updateServiceList(instanceKey);
-                            onClose();
+                        onPress={async () => {
+                            try {
+                                await store.set(instanceKey, config);
+                                await store.save();
+                                updateServiceList(instanceKey);
+                                onClose();
+                            } catch {
+                                toast.error(t('models.save_failed'), { style: toastStyle });
+                            }
                         }}
                     >
                         {t('common.save')}

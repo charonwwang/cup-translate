@@ -1,0 +1,59 @@
+{
+    "schemaVersion": 2,
+    "name": "技术研发",
+    "sourceLanguage": "en",
+    "targetLanguage": "zh-CN",
+    "description": "后端、基础架构与研发协作术语",
+    "entries": [
+        {
+            "source": "worker threads",
+            "target": "工作线程",
+            "mode": "suggest",
+            "caseSensitive": false,
+            "priority": 100,
+            "comment": "区别于“工人线”",
+            "tags": [
+                "backend",
+                "runtime"
+            ],
+            "id": "tech-001"
+        },
+        {
+            "source": "memory leak",
+            "target": "内存泄漏",
+            "mode": "suggest",
+            "caseSensitive": false,
+            "priority": 100,
+            "comment": "团队统一使用“泄漏”，不使用“泄露”",
+            "tags": [
+                "debugging"
+            ],
+            "id": "tech-002"
+        },
+        {
+            "source": "request context",
+            "target": "请求上下文",
+            "mode": "suggest",
+            "caseSensitive": false,
+            "priority": 90,
+            "comment": "后端请求处理上下文",
+            "tags": [
+                "backend"
+            ],
+            "id": "tech-003"
+        },
+        {
+            "source": "shutdown",
+            "target": "关闭",
+            "mode": "suggest",
+            "caseSensitive": false,
+            "priority": 50,
+            "comment": "按语境也可使用“停机”",
+            "tags": [
+                "operations"
+            ],
+            "id": "tech-004"
+        }
+    ],
+    "id": "tech-en-zh-cn"
+}

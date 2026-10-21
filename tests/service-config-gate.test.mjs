@@ -187,6 +187,7 @@ test('the special-config engines the gate knows about are derived from the sourc
     // 逐个用该引擎的真实配置形状构造「全是空白」的对象。
     const blanks = [' ', '   ', '\t', '\n', ' \t\n '];
     const blankShape = {
+        openai: () => ({ requestPath: '   ', apiKey: '   ' }),
         // "id.secret" 两段式：两段都是空白，仍应判为未配置
         chatglm: () => ({ apiKey: '   .   ' }),
         deepl: () => ({ type: 'api', authKey: '   ' }),

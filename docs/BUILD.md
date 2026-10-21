@@ -456,3 +456,12 @@ DMGBUILD=.venv-dmg/bin/dmgbuild pnpm package:macos:dmg
 ```
 
 双架构 GitHub Release、更新签名校验、公开下载仓库及 Apple 证书配置见 [MACOS_RELEASE.md](MACOS_RELEASE.md)。无 Apple Developer 账号时使用 ad-hoc 签名；这不等同于 Developer ID 或 Apple 公证。
+
+
+### 2026-10-21 · 3.0.12 全平台发布构建
+
+统一入口为 `.github/workflows/release-desktop.yml`，版本取稳定 `v*` 标签，发布前同步 package.json、Cargo.toml、Cargo.lock 和 Tauri 配置。macOS 两个架构、Windows 三个架构、Linux x64/ARM64 全部成功后才发布安装包及签名更新清单。
+
+Piper/eSpeak 构建需要 CMake、C/C++ 和 libclang；Linux 容器显式安装 clang/libclang-dev，Node 依构建宿主选择 x64/ARM64。Linux ARM64 发布使用 `ubuntu-24.04-arm` 原生宿主，避免构建词典时尝试在 x64 执行 ARM64 的 eSpeak 工具。Windows 设置 `ESPEAK_STATIC_CRT=1`，与仓库 MSVC 静态 CRT 保持一致。macOS 及 Windows x64、原生 Linux 宿主在打包后运行 Rust 回归；跨架构 Windows 包不在 x64 宿主执行。
+
+macOS 使用 ad-hoc 签名和经过校验的 Tauri 更新签名，Developer ID/公证仍需独立证书配置。Linux ARM64 当前没有自动更新条目，使用 deb/rpm 安装包升级。CI 构建成功不等同于其他平台已完成真实桌面划词、截图或全部模型的人工验收。

@@ -8,11 +8,17 @@ const UNSUPPORTED: &str = "Embedded local translation requires x64 Windows or x6
 
 #[tauri::command]
 pub async fn local_mt_model_status(app_handle: AppHandle, pair: String) -> Result<Value, String> {
-    Ok(json!({"pair":pair,"supported":false,"installed":false,"loaded":false,"missing":[],"reason":UNSUPPORTED}))
+    Ok(
+        json!({"pair":pair,"supported":false,"installed":false,"loaded":false,"missing":[],"reason":UNSUPPORTED}),
+    )
 }
 
 #[tauri::command]
-pub async fn local_mt_download_model(app_handle: AppHandle, pair: String) -> Result<(), String> {
+pub async fn local_mt_download_model(
+    app_handle: AppHandle,
+    pair: String,
+    download_base: Option<String>,
+) -> Result<(), String> {
     Err(UNSUPPORTED.into())
 }
 
@@ -33,6 +39,34 @@ pub async fn local_mt_translate(
     text: String,
     threads: Option<u32>,
     quality: Option<String>,
+    source: Option<String>,
+    target: Option<String>,
+    request_id: Option<String>,
 ) -> Result<String, String> {
+    Err(UNSUPPORTED.into())
+}
+
+#[tauri::command]
+pub async fn local_mt_install_control(
+    app_handle: AppHandle,
+    pair: String,
+    action: String,
+) -> Result<(), String> {
+    Err(UNSUPPORTED.into())
+}
+#[tauri::command]
+pub async fn local_mt_device_check(
+    app_handle: AppHandle,
+    model: Option<String>,
+) -> Result<Value, String> {
+    Ok(json!({"supported":false,"reason":UNSUPPORTED}))
+}
+
+#[tauri::command]
+pub async fn local_mt_import_model(
+    app_handle: AppHandle,
+    pair: String,
+    source_dir: String,
+) -> Result<(), String> {
     Err(UNSUPPORTED.into())
 }

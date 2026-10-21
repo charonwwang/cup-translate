@@ -1,6 +1,10 @@
+import SpeechPreference from '../../../../components/SpeechPreference';
+import { checkGlossary, matchGlossary, glossaryHint } from '../../../../utils/glossary';
+import { checkPolicy } from '../../../../utils/requestRuntime';
 import { resolveSpeechService, speechText } from '../../../../utils/speechService';
 import { useSpeech } from '../../../../hooks/useSpeech';
-import { resolveLocalPair } from '../../../../services/translate/local_mt/options';
+import { resolveLocalModel } from '../../../../services/translate/local_mt/options';
+import { supplementTranslation } from '../../../../utils/supplementTranslation';
 import { Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Tooltip } from '@nextui-org/react';
 import { LuChevronDown, LuChevronUp, LuGripVertical, LuRotateCcw } from 'react-icons/lu';
 import { BaseDirectory, readTextFile } from '@tauri-apps/api/fs';
@@ -69,6 +73,9 @@ function highlightTerm(text, term) {
 export default function TargetArea(props) {
     const {
         index,
+        requestRevision,
+        privacyMode,
+        glossary,
         primary = index === 0,
         name,
         translateServiceInstanceList,
@@ -88,16 +95,30 @@ export default function TargetArea(props) {
     const [ttsServiceList] = useConfig('tts_service_list', ['google_tts']);
     const [speechPolicy] = useConfig('speech_policy', 'engine');
     const [speechOverride, setSpeechOverride] = useState('');
+    const [dictionarySupplement, setDictionarySupplement] = useState(null);
+    const [dictionaryLoading, setDictionaryLoading] = useState(false);
+    const dictionaryRequest = useRef(null);
+    const resolvedSpeechService =
+        (speechOverride === 'off' ? null : speechOverride) ||
+        (speechOverride === 'off'
+            ? null
+            : resolveSpeechService(getServiceName(currentTranslateServiceInstanceKey), speechPolicy, ttsServiceList));
     const speechService =
-        speechOverride ||
-        resolveSpeechService(getServiceName(currentTranslateServiceInstanceKey), speechPolicy, ttsServiceList);
+        privacyMode === 'device_only' &&
+        !['local_tts', 'piper_tts', 'kokoro_tts'].includes(getServiceName(resolvedSpeechService ?? ''))
+            ? null
+            : resolvedSpeechService;
+    useEffect(() => {
+        setSpeechOverride('');
+    }, [speechPolicy]);
     const effectiveTtsList = speechService ? [speechService] : [];
-    const [translateSecondLanguage] = useConfig('translate_second_language', 'en');
     const [historyDisable] = useConfig('history_disable', false);
     const [isLoading, setIsLoading] = useState(false);
     const [hide, setHide] = useState(true);
 
     const [result, setResult] = useState('');
+    const [termChecks, setTermChecks] = useState([]);
+    const requestController = useRef(null);
     const [backTranslation, setBackTranslation] = useState(null);
     const [showBack, setShowBack] = useState(false);
     const [backLoading, setBackLoading] = useState(false);
@@ -126,12 +147,26 @@ export default function TargetArea(props) {
         return () => {
             backRequest.current += 1;
         };
-    }, [result, sourceText, sourceLanguage, targetLanguage, currentTranslateServiceInstanceKey]);
+    }, [
+        result,
+        sourceText,
+        sourceLanguage,
+        targetLanguage,
+        currentTranslateServiceInstanceKey,
+        privacyMode,
+        requestRevision,
+        glossary,
+    ]);
     const [ttsPluginInfo, setTtsPluginInfo] = useState();
     const { t } = useTranslation();
     const toastStyle = useToastStyle();
     const speak = useVoice();
     const speech = useSpeech(displayResult);
+    useEffect(() => {
+        speech.stop();
+        exampleSpeech.stop();
+        sourceWordSpeech.stop();
+    }, [sourceLanguage, targetLanguage, speechService]);
     const exampleSpeech = useSpeech('dictionary-example');
     const sourceWordSpeech = useSpeech('source-word');
     const [activeExample, setActiveExample] = useState('');
@@ -171,7 +206,7 @@ export default function TargetArea(props) {
 
     useEffect(() => {
         if (error) {
-            logError(`[${currentTranslateServiceInstanceKey}]happened error: ` + error);
+            logError(`[${currentTranslateServiceInstanceKey}]failed`);
             // 出错时自动展开卡片，避免失败被静默折叠、用户看不到任何反馈
             setHide(false);
         }
@@ -180,26 +215,34 @@ export default function TargetArea(props) {
     // listen to translation
     useEffect(() => {
         setResult('');
+        setTermChecks([]);
+        dictionaryRequest.current?.abort();
+        setDictionarySupplement(null);
+        setDictionaryLoading(false);
         if (!sourceText.trim()) setHide(true);
         setError('');
         setSkipped(false);
         if (
             sourceText.trim() !== '' &&
             sourceLanguage &&
+            activeSourceLanguage &&
             targetLanguage &&
             autoCopy !== null &&
             hideWindow !== null &&
             clipboardMonitor !== null
         ) {
-            if (autoCopy === 'source' && !clipboardMonitor) {
+            if (primary && autoCopy === 'source' && !clipboardMonitor) {
                 copyToClipboard(sourceText, hideWindow ? 'notification' : 'toast');
             }
             translate();
         }
         return () => {
             activeRequest.current = null;
+            requestController.current?.abort();
+            dictionaryRequest.current?.abort();
         };
     }, [
+        primary,
         sourceText,
         sourceLanguage,
         targetLanguage,
@@ -207,15 +250,36 @@ export default function TargetArea(props) {
         hideWindow,
         currentTranslateServiceInstanceKey,
         clipboardMonitor,
+        activeSourceLanguage,
+        requestRevision,
+        privacyMode,
+        glossary,
+        serviceInstanceConfigMap,
     ]);
 
-    const addToHistory = async (text, source, target, serviceInstanceKey, result, isRetry = false) => {
+    const addToHistory = async (
+        text,
+        source,
+        target,
+        serviceInstanceKey,
+        result,
+        isRetry = false,
+        requestId = activeRequest.current
+    ) => {
         let db;
         try {
             db = await Database.load('sqlite:history.db');
+            if (activeRequest.current !== requestId || requestController.current?.signal.aborted) return;
             await db.execute(
                 'INSERT into history (text, source, target, service, result, timestamp) VALUES ($1, $2, $3, $4, $5, $6)',
-                [text, source, target, serviceInstanceKey, result, Date.now()]
+                [
+                    text,
+                    source,
+                    target,
+                    serviceInstanceKey,
+                    typeof result === 'string' ? result : JSON.stringify(result),
+                    Date.now(),
+                ]
             );
         } catch (e) {
             // 首次失败可能是表不存在，建表后重试一次；再失败则放弃（防止无限递归）
@@ -224,12 +288,12 @@ export default function TargetArea(props) {
                     await db.execute(
                         'CREATE TABLE IF NOT EXISTS history(id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT NOT NULL,source TEXT NOT NULL,target TEXT NOT NULL,service TEXT NOT NULL, result TEXT NOT NULL,timestamp INTEGER NOT NULL)'
                     );
-                    await addToHistory(text, source, target, serviceInstanceKey, result, true);
+                    await addToHistory(text, source, target, serviceInstanceKey, result, true, requestId);
                 } catch (e2) {
-                    console.error('[history] create table failed:', e2);
+                    console.error('[history] create table failed');
                 }
             } else {
-                console.error('[history] insert failed after retry:', e);
+                console.error('[history] insert failed after retry');
             }
         } finally {
             if (db) {
@@ -256,8 +320,36 @@ export default function TargetArea(props) {
     }
 
     const translate = async () => {
+        activeRequest.current = null;
+        requestController.current?.abort();
+        setError('');
+        requestController.current = new AbortController();
+        const signal = requestController.current.signal;
+        const currentController = requestController.current;
+        const localMultilingual =
+            serviceInstanceConfigMap[currentTranslateServiceInstanceKey]?.model === 'm2m100' &&
+            currentTranslateServiceInstanceKey.split('@')[0] === 'local_mt';
+        const timeout = setTimeout(() => currentController.abort(), localMultilingual ? 120000 : 30000);
+        signal.addEventListener('abort', () => clearTimeout(timeout), { once: true });
         let id = nanoid();
         activeRequest.current = id;
+        signal.addEventListener(
+            'abort',
+            () => {
+                if (activeRequest.current === id) {
+                    setIsLoading(false);
+                    setError('Request cancelled or timed out');
+                }
+            },
+            { once: true }
+        );
+        const target = targetLanguage;
+        const matches = matchGlossary(sourceText, activeSourceLanguage, target, glossary);
+        const finalize = (value) => {
+            const final = typeof value === 'string' ? value.trim() : value;
+            setTermChecks(checkGlossary(translationResultToText(final), matches));
+            return final;
+        };
 
         const translateServiceName = getServiceName(currentTranslateServiceInstanceKey);
 
@@ -276,13 +368,14 @@ export default function TargetArea(props) {
             // local_mt 需要先下载模型：未下载时优雅跳过（显示提示），不报错
             if (translateServiceName === 'local_mt') {
                 try {
-                    const effectiveTarget =
-                        sourceLanguage === 'auto' && targetLanguage === detectLanguage
-                            ? translateSecondLanguage
-                            : targetLanguage;
-                    const pair = resolveLocalPair(activeSourceLanguage, effectiveTarget);
-                    const status = pair ? await invoke('local_mt_model_status', { pair }) : { installed: true };
-                    if (activeRequest.current !== id) return;
+                    const effectiveTarget = targetLanguage;
+                    const pair = resolveLocalModel(
+                        serviceInstanceConfigMap[currentTranslateServiceInstanceKey],
+                        activeSourceLanguage,
+                        effectiveTarget
+                    );
+                    const status = pair ? await invoke('local_mt_model_status', { pair }) : { installed: false };
+                    if (activeRequest.current !== id || signal.aborted) return;
                     if (!status.installed) {
                         info(`[${currentTranslateServiceInstanceKey}]skipped: local_mt model not downloaded`);
                         setIsLoading(false);
@@ -299,40 +392,45 @@ export default function TargetArea(props) {
         if (whetherPluginService(currentTranslateServiceInstanceKey)) {
             const pluginInfo = pluginList['translate'][translateServiceName];
             if (sourceLanguage in pluginInfo.language && targetLanguage in pluginInfo.language) {
-                let newTargetLanguage = targetLanguage;
-                if (sourceLanguage === 'auto' && targetLanguage === detectLanguage) {
-                    newTargetLanguage = translateSecondLanguage;
-                }
+                const newTargetLanguage = targetLanguage;
                 setIsLoading(true);
                 setHide(true);
                 const instanceConfig = serviceInstanceConfigMap[currentTranslateServiceInstanceKey];
-                instanceConfig['enable'] = 'true';
+                // Keep the captured configuration immutable.
                 const setHideOnce = invokeOnce((value) => setHide(primary ? value : true));
                 let func, utils;
                 try {
                     [func, utils] = await invoke_plugin('translate', translateServiceName);
                 } catch (e) {
-                    info(`[${currentTranslateServiceInstanceKey}]plugin load failed:` + e);
-                    if (activeRequest.current !== id) return;
+                    info(`[${currentTranslateServiceInstanceKey}]failed`);
+                    if (activeRequest.current !== id || signal.aborted) return;
                     setError(e.toString());
                     setIsLoading(false);
                     setHide(false);
                     return;
                 }
-                func(sourceText.trim(), pluginInfo.language[sourceLanguage], pluginInfo.language[newTargetLanguage], {
-                    config: instanceConfig,
-                    detect: detectLanguage,
-                    setResult: (v) => {
-                        if (activeRequest.current !== id) return;
-                        setResult(v);
-                        setHideOnce(false);
-                    },
-                    utils,
-                }).then(
+                func(
+                    sourceText.trim(),
+                    pluginInfo.language[activeSourceLanguage] ?? pluginInfo.language[sourceLanguage],
+                    pluginInfo.language[newTargetLanguage],
+                    {
+                        signal,
+                        config: structuredClone(instanceConfig),
+                        detect: activeSourceLanguage,
+                        setResult: (v) => {
+                            if (activeRequest.current !== id || signal.aborted) return;
+                            setResult(v);
+                            setHideOnce(false);
+                        },
+                        utils,
+                    }
+                ).then(
                     (v) => {
-                        info(`[${currentTranslateServiceInstanceKey}]resolve:` + v);
-                        if (activeRequest.current !== id) return;
-                        setResult(typeof v === 'string' ? v.trim() : v);
+                        clearTimeout(timeout);
+                        info(`[${currentTranslateServiceInstanceKey}]completed`);
+                        if (activeRequest.current !== id || signal.aborted) return;
+                        v = finalize(v);
+                        setResult(v);
                         setIsLoading(false);
                         if (v !== '') {
                             setHideOnce(false);
@@ -340,7 +438,7 @@ export default function TargetArea(props) {
                         if (!historyDisable) {
                             addToHistory(
                                 sourceText.trim(),
-                                detectLanguage,
+                                activeSourceLanguage,
                                 newTargetLanguage,
                                 currentTranslateServiceInstanceKey,
                                 typeof v === 'string' ? v.trim() : v
@@ -363,8 +461,10 @@ export default function TargetArea(props) {
                         }
                     },
                     (e) => {
-                        info(`[${currentTranslateServiceInstanceKey}]reject:` + e);
-                        if (activeRequest.current !== id) return;
+                        clearTimeout(timeout);
+                        if (e?.name === 'AbortError') return;
+                        info(`[${currentTranslateServiceInstanceKey}]failed`);
+                        if (activeRequest.current !== id || signal.aborted) return;
                         setError(e.toString());
                         setIsLoading(false);
                     }
@@ -375,37 +475,54 @@ export default function TargetArea(props) {
         } else {
             const LanguageEnum = builtinServices[translateServiceName].Language;
             if (sourceLanguage in LanguageEnum && targetLanguage in LanguageEnum) {
-                let newTargetLanguage = targetLanguage;
-                if (sourceLanguage === 'auto' && targetLanguage === detectLanguage) {
-                    newTargetLanguage = translateSecondLanguage;
-                }
+                const newTargetLanguage = targetLanguage;
                 setIsLoading(true);
                 setHide(true);
                 const instanceConfig = serviceInstanceConfigMap[currentTranslateServiceInstanceKey];
                 const setHideOnce = invokeOnce((value) => setHide(primary ? value : true));
                 builtinServices[translateServiceName]
-                    .translate(sourceText.trim(), LanguageEnum[sourceLanguage], LanguageEnum[newTargetLanguage], {
-                        config: instanceConfig,
-                        detect: detectLanguage,
-                        setResult: (v) => {
-                            if (activeRequest.current !== id) return;
-                            setResult(v);
-                            setHideOnce(false);
-                        },
-                    })
+                    .translate(
+                        sourceText.trim(),
+                        LanguageEnum[activeSourceLanguage] ?? LanguageEnum[sourceLanguage],
+                        LanguageEnum[newTargetLanguage],
+                        {
+                            signal,
+                            matches,
+                            style: glossary?.style,
+                            config: structuredClone(instanceConfig),
+                            detect: activeSourceLanguage,
+                            setResult: (v) => {
+                                if (activeRequest.current !== id || signal.aborted) return;
+                                setResult(v);
+                                setHideOnce(false);
+                            },
+                        }
+                    )
                     .then(
                         (v) => {
-                            info(`[${currentTranslateServiceInstanceKey}]resolve:` + v);
-                            if (activeRequest.current !== id) return;
-                            setResult(typeof v === 'string' ? v.trim() : v);
+                            clearTimeout(timeout);
+                            info(`[${currentTranslateServiceInstanceKey}]completed`);
+                            if (activeRequest.current !== id || signal.aborted) return;
+                            v = finalize(v);
+                            setResult(v);
                             setIsLoading(false);
+                            void supplementTranslation(
+                                builtinServices[translateServiceName],
+                                v,
+                                LanguageEnum[activeSourceLanguage] ?? LanguageEnum[sourceLanguage],
+                                LanguageEnum[newTargetLanguage],
+                                { config: structuredClone(instanceConfig), signal },
+                                (value) => {
+                                    if (activeRequest.current === id && !signal.aborted) setResult(value);
+                                }
+                            );
                             if (v !== '') {
                                 setHideOnce(false);
                             }
                             if (!historyDisable) {
                                 addToHistory(
                                     sourceText.trim(),
-                                    detectLanguage,
+                                    activeSourceLanguage,
                                     newTargetLanguage,
                                     currentTranslateServiceInstanceKey,
                                     typeof v === 'string' ? v.trim() : v
@@ -431,8 +548,10 @@ export default function TargetArea(props) {
                             }
                         },
                         (e) => {
-                            info(`[${currentTranslateServiceInstanceKey}]reject:` + e);
-                            if (activeRequest.current !== id) return;
+                            clearTimeout(timeout);
+                            if (e?.name === 'AbortError') return;
+                            info(`[${currentTranslateServiceInstanceKey}]failed`);
+                            if (activeRequest.current !== id || signal.aborted) return;
                             setError(e.toString());
                             setIsLoading(false);
                         }
@@ -466,7 +585,16 @@ export default function TargetArea(props) {
     // handle tts speak for any text, not just the main translation
     const speakWithService = async (text, language) => {
         const instanceKey = speechService;
-        if (!instanceKey || !text?.trim()) throw new Error(t('translate.speech_failed'));
+        if (!instanceKey || !text?.trim())
+            throw new Error(
+                t(
+                    speechService === 'piper_tts'
+                        ? 'models.piper_speech_failed'
+                        : speechService === 'kokoro_tts'
+                          ? 'models.kokoro_speech_failed'
+                          : 'translate.speech_failed'
+                )
+            );
         if (getServiceSouceType(instanceKey) === ServiceSourceType.PLUGIN) {
             const pluginConfig = serviceInstanceConfigMap[instanceKey];
             if (!(language in ttsPluginInfo.language)) {
@@ -508,16 +636,24 @@ export default function TargetArea(props) {
         exampleSpeech
             .toggle(() => speakWithService(text, language))
             .catch((e) => {
-                logError(`[speech] ${e}`);
-                toast.error(t('translate.speech_failed'), { style: toastStyle });
+                logError('[speech] failed');
+                toast.error(
+                    t(
+                        speechService === 'piper_tts'
+                            ? 'models.piper_speech_failed'
+                            : speechService === 'kokoro_tts'
+                              ? 'models.kokoro_speech_failed'
+                              : 'translate.speech_failed'
+                    ),
+                    { style: toastStyle }
+                );
             });
     };
 
     const isSingleWord = sourceText.trim() !== '' && !/\s/.test(sourceText.trim());
     const serviceModule = builtinServices[getServiceName(currentTranslateServiceInstanceKey)];
     const serviceLanguage = serviceModule?.Language;
-    const effectiveTargetLanguage =
-        sourceLanguage === 'auto' && targetLanguage === detectLanguage ? translateSecondLanguage : targetLanguage;
+    const effectiveTargetLanguage = targetLanguage;
     const singleWordPronunciation = isSingleWord
         ? serviceModule?.translate?.pronunciationFor?.(
               sourceText.trim(),
@@ -530,8 +666,17 @@ export default function TargetArea(props) {
         sourceWordSpeech
             .toggle(() => speakWithService(sourceText.trim(), activeSourceLanguage))
             .catch((e) => {
-                logError(`[speech] ${e}`);
-                toast.error(t('translate.speech_failed'), { style: toastStyle });
+                logError('[speech] failed');
+                toast.error(
+                    t(
+                        speechService === 'piper_tts'
+                            ? 'models.piper_speech_failed'
+                            : speechService === 'kokoro_tts'
+                              ? 'models.kokoro_speech_failed'
+                              : 'translate.speech_failed'
+                    ),
+                    { style: toastStyle }
+                );
             });
     };
 
@@ -546,10 +691,66 @@ export default function TargetArea(props) {
     };
 
     const resultMode = classifySourceText(sourceText);
-    const wordEntry = useMemo(
-        () => buildWordEntry(result, sourceText, singleWordPronunciation),
-        [result, sourceText, singleWordPronunciation]
-    );
+    const wordEntry = useMemo(() => {
+        const base = buildWordEntry(result, sourceText, singleWordPronunciation);
+        if (!dictionarySupplement) return base;
+        const extra = buildWordEntry(
+            dictionarySupplement,
+            sourceText,
+            builtinServices.google.translate.pronunciationFor?.(
+                sourceText.trim(),
+                builtinServices.google.Language[activeSourceLanguage],
+                builtinServices.google.Language[effectiveTargetLanguage]
+            ) ?? ''
+        );
+        return {
+            ...base,
+            pronunciations: extra.pronunciations,
+            examples: extra.examples,
+            senses: [...base.senses, ...extra.senses],
+        };
+    }, [
+        result,
+        sourceText,
+        singleWordPronunciation,
+        dictionarySupplement,
+        activeSourceLanguage,
+        effectiveTargetLanguage,
+    ]);
+    const supplementDictionary = async () => {
+        dictionaryRequest.current?.abort();
+        const controller = new AbortController();
+        dictionaryRequest.current = controller;
+        const requestId = activeRequest.current;
+        setDictionaryLoading(true);
+        try {
+            await checkPolicy('translate', 'google');
+            const language = builtinServices.google.Language;
+            const extra = await builtinServices.google.translate(
+                sourceText.trim(),
+                language[activeSourceLanguage] ?? 'auto',
+                language[effectiveTargetLanguage],
+                { config: serviceInstanceConfigMap.google ?? {}, signal: controller.signal }
+            );
+            if (controller.signal.aborted || requestId !== activeRequest.current) return;
+            setDictionarySupplement(extra);
+            void supplementTranslation(
+                builtinServices.google,
+                extra,
+                language[activeSourceLanguage] ?? 'auto',
+                language[effectiveTargetLanguage],
+                { config: serviceInstanceConfigMap.google ?? {}, signal: controller.signal },
+                (value) => {
+                    if (!controller.signal.aborted && requestId === activeRequest.current)
+                        setDictionarySupplement(value);
+                }
+            );
+        } catch (error) {
+            if (!controller.signal.aborted) toast.error(t('models.dictionary_failed'), { style: toastStyle });
+        } finally {
+            if (!controller.signal.aborted) setDictionaryLoading(false);
+        }
+    };
     const phraseEntry = useMemo(
         () =>
             showBack
@@ -564,7 +765,11 @@ export default function TargetArea(props) {
     );
     const modeLabel =
         resultMode === 'word'
-            ? t('translate.dictionary_mode')
+            ? t(
+                  wordEntry.senses.some((sense) => sense.pos) || wordEntry.pronunciations.length
+                      ? 'translate.dictionary_mode'
+                      : 'translate.mode_word'
+              )
             : resultMode === 'paragraph'
               ? t('translate.mode_paragraph')
               : t('translate.mode_phrase');
@@ -572,7 +777,11 @@ export default function TargetArea(props) {
         resultMode === 'word'
             ? wordEntry.senses.length > 0 && wordEntry.examples.length >= 2
                 ? t('translate.entry_complete')
-                : t('translate.pos_count', { count: wordEntry.senses.length })
+                : t(wordEntry.senses.some((sense) => sense.pos) ? 'translate.pos_count' : 'models.meaning_count', {
+                      count: wordEntry.senses.some((sense) => sense.pos)
+                          ? new Set(wordEntry.senses.filter((sense) => sense.pos).map((sense) => sense.pos)).size
+                          : wordEntry.senses.length,
+                  })
             : resultMode === 'paragraph'
               ? t('translate.sentence_count', { count: sentencePairs.length })
               : phraseEntry.alternatives.length
@@ -757,7 +966,19 @@ export default function TargetArea(props) {
                     <>
                         <div className='cup-word-heading'>
                             <div>
-                                <h3>{wordEntry.word}</h3>
+                                <h3 className='flex items-center gap-2'>
+                                    {wordEntry.word}
+                                    {speechService && !wordEntry.pronunciations.length && (
+                                        <button
+                                            type='button'
+                                            className='cup-speak-button'
+                                            aria-label={sourceWordSpeechLabel}
+                                            onClick={speakSourceWord}
+                                        >
+                                            <LuVolume2 size={13} />
+                                        </button>
+                                    )}
+                                </h3>
                                 {wordEntry.pronunciations.length > 0 && (
                                     <div className='cup-phonetics'>
                                         {wordEntry.pronunciations.map((pronunciation, index) => (
@@ -802,12 +1023,51 @@ export default function TargetArea(props) {
                             </span>
                         </div>
 
+                        {result?.metadataSource === 'model' && (
+                            <p className='cup-lexical-note'>{t('models.model_dictionary_note')}</p>
+                        )}
+                        {!wordEntry.pronunciations.length && !isLoading && (
+                            <div className='cup-dictionary-tools'>
+                                <span>{t('models.no_phonetics')}</span>
+                                {translateServiceName !== 'google' && (
+                                    <button
+                                        type='button'
+                                        disabled={privacyMode === 'device_only' || dictionaryLoading}
+                                        title={
+                                            privacyMode === 'device_only'
+                                                ? t('models.google_blocked')
+                                                : t('models.dictionary_network_hint')
+                                        }
+                                        onClick={supplementDictionary}
+                                    >
+                                        {dictionaryLoading ? t('models.checking') : t('models.get_google_dictionary')}
+                                    </button>
+                                )}
+                                {privacyMode === 'device_only' && <span>{t('models.no_offline_dictionary')}</span>}
+                            </div>
+                        )}
+                        {dictionarySupplement && (
+                            <p className='cup-lexical-note'>{t('models.google_dictionary_note')}</p>
+                        )}
                         {wordEntry.senses.length > 0 && (
                             <>
                                 <div className='cup-section-label'>
                                     <span>{t('translate.dictionary')}</span>
                                     <span className='cup-section-count'>
-                                        {t('translate.pos_count', { count: wordEntry.senses.length })}
+                                        {t(
+                                            wordEntry.senses.some((sense) => sense.pos)
+                                                ? 'translate.pos_count'
+                                                : 'models.meaning_count',
+                                            {
+                                                count: wordEntry.senses.some((sense) => sense.pos)
+                                                    ? new Set(
+                                                          wordEntry.senses
+                                                              .filter((sense) => sense.pos)
+                                                              .map((sense) => sense.pos)
+                                                      ).size
+                                                    : wordEntry.senses.length,
+                                            }
+                                        )}
                                     </span>
                                 </div>
                                 <div className='cup-senses'>
@@ -943,8 +1203,17 @@ export default function TargetArea(props) {
                                         disabled={!speechText(displayResult)}
                                         onClick={() =>
                                             speech.toggle(handleSpeak).catch((e) => {
-                                                logError(`[speech] ${e}`);
-                                                toast.error(t('translate.speech_failed'), { style: toastStyle });
+                                                logError('[speech] failed');
+                                                toast.error(
+                                                    t(
+                                                        speechService === 'piper_tts'
+                                                            ? 'models.piper_speech_failed'
+                                                            : speechService === 'kokoro_tts'
+                                                              ? 'models.kokoro_speech_failed'
+                                                              : 'translate.speech_failed'
+                                                    ),
+                                                    { style: toastStyle }
+                                                );
                                             })
                                         }
                                     >
@@ -1041,8 +1310,17 @@ export default function TargetArea(props) {
                                     className='cup-read-all'
                                     onClick={() =>
                                         speech.toggle(handleSpeak).catch((e) => {
-                                            logError(`[speech] ${e}`);
-                                            toast.error(t('translate.speech_failed'), { style: toastStyle });
+                                            logError('[speech] failed');
+                                            toast.error(
+                                                t(
+                                                    speechService === 'piper_tts'
+                                                        ? 'models.piper_speech_failed'
+                                                        : speechService === 'kokoro_tts'
+                                                          ? 'models.kokoro_speech_failed'
+                                                          : 'translate.speech_failed'
+                                                ),
+                                                { style: toastStyle }
+                                            );
                                         })
                                     }
                                 >
@@ -1106,6 +1384,20 @@ export default function TargetArea(props) {
                     </>
                 )}
 
+                {termChecks.length > 0 && (
+                    <div
+                        className='p-2 text-xs text-default-500'
+                        role='status'
+                    >
+                        {termChecks.map((check, i) => (
+                            <p key={`${check.id}-${i}`}>
+                                {check.source}: {t('models.source_match')} · {t(`models.term_${check.status}`)}
+                                {check.unsupportedConstraint ? ` · ${t('models.no_constraint')}` : ''}
+                            </p>
+                        ))}
+                        {glossaryHint(termChecks).truncated && <p>{t('models.hint_limit')}</p>}
+                    </div>
+                )}
                 {skipped && <p className='cup-skipped'>{t('translate.unconfigured_skip')}</p>}
                 {error && (
                     <div
@@ -1136,9 +1428,7 @@ export default function TargetArea(props) {
                         {t('translate.retry')}
                     </button>
                 )}
-                {translateServiceName === 'local_mt' && !hide && copyableResult && !speechService && (
-                    <p className='cup-speech-note'>{t('translate.local_speech_hint')}</p>
-                )}
+                {!hide && copyableResult && !speechService && <SpeechPreference compact />}
             </div>
 
             <footer className={`cup-result-foot ${hide || (!copyableResult && !error) ? 'is-hidden' : ''}`}>
@@ -1148,14 +1438,20 @@ export default function TargetArea(props) {
                             type='button'
                             className='cup-foot-engine'
                         >
-                            <span className='cup-provider-mark'>G</span>
+                            <span className='cup-provider-mark'>
+                                {speechService === 'google_tts' ? 'G' : speechService ? '◉' : '·'}
+                            </span>
                             {speechService === 'google_tts'
                                 ? 'Google'
                                 : speechService === 'lingva_tts'
                                   ? 'Lingva'
-                                  : speechService
-                                    ? t('translate.local_speech')
-                                    : t('translate.speech_service')}
+                                  : speechService === 'kokoro_tts'
+                                    ? 'Kokoro'
+                                    : speechService === 'piper_tts'
+                                      ? 'Piper'
+                                      : speechService
+                                        ? t('translate.local_speech')
+                                        : t('translate.speech_service')}
                         </button>
                     </DropdownTrigger>
                     <DropdownMenu
@@ -1176,6 +1472,7 @@ export default function TargetArea(props) {
                         </DropdownItem>
                         <DropdownItem
                             key='google_tts'
+                            isDisabled={privacyMode === 'device_only'}
                             description={t('translate.google_speech_short')}
                         >
                             Google
@@ -1186,6 +1483,9 @@ export default function TargetArea(props) {
                         >
                             {t('translate.local_speech')}
                         </DropdownItem>
+                        <DropdownItem key='piper_tts'>Piper · {t('models.offline_short')}</DropdownItem>
+                        <DropdownItem key='kokoro_tts'>Kokoro · {t('models.offline_short')}</DropdownItem>
+                        <DropdownItem key='off'>{t('models.no_speech')}</DropdownItem>
                     </DropdownMenu>
                 </Dropdown>
                 <div className='cup-foot-actions'>

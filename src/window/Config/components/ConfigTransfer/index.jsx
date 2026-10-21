@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Button, Checkbox, Card, CardBody, CardHeader } from '@nextui-org/react';
+import { Button, Card, CardBody, CardHeader } from '@nextui-org/react';
 import { LuDownload, LuUpload } from 'react-icons/lu';
 import { open, save } from '@tauri-apps/api/dialog';
 import { readTextFile, writeTextFile } from '@tauri-apps/api/fs';
@@ -9,7 +9,6 @@ import { store } from '../../../../utils/store';
 import { createConfigTransfer, parseConfigTransfer, applyConfigTransfer } from '../../../../utils/configTransfer';
 export default function ConfigTransfer() {
     const { t } = useTranslation();
-    const [includeSecrets, setIncludeSecrets] = useState(false);
     const [pending, setPending] = useState(null);
     const [busy, setBusy] = useState(false);
     const [status, setStatus] = useState('');
@@ -36,13 +35,7 @@ export default function ConfigTransfer() {
             <CardHeader data-cup-header>{t('config.transfer.title')}</CardHeader>
             <CardBody data-cup-body>
                 <p className='settings-description'>{t('config.transfer.description')}</p>
-                <Checkbox
-                    size='sm'
-                    isSelected={includeSecrets}
-                    onValueChange={setIncludeSecrets}
-                >
-                    {t('config.transfer.secrets')}
-                </Checkbox>
+                <p className='text-xs text-default-500'>{t('models.export_safe')}</p>
                 <div className='settings-actions'>
                     <Button
                         variant='bordered'
@@ -57,7 +50,7 @@ export default function ConfigTransfer() {
                                 if (!path) return;
                                 await writeTextFile(
                                     path,
-                                    createConfigTransfer(Object.fromEntries(await store.entries()), includeSecrets)
+                                    createConfigTransfer(Object.fromEntries(await store.entries()))
                                 );
                                 setStatus(t('config.transfer.exported'));
                             })

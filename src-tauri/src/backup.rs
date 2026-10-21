@@ -3,8 +3,8 @@ use dirs::config_dir;
 use log::info;
 use reqwest_dav::{Auth, ClientBuilder, Depth};
 use std::io::{Cursor, Read, Seek, Write};
-use std::time::Duration;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use walkdir::WalkDir;
 use zip::read::ZipArchive;
 use zip::write::SimpleFileOptions;
@@ -118,7 +118,10 @@ fn restore_archive<R: Read + Seek>(
         // 若恢复目标目录里预先被放了指向外部的 symlink，解压仍会覆写目录之外的文件。
         // 因此还要检查每个条目在**落盘位置**上是否已被 symlink 占位
         //（与 cmd.rs::install_plugin 的处理对称）。
-        if destination.join(&normalized).symlink_metadata().is_ok_and(|meta| meta.file_type().is_symlink())
+        if destination
+            .join(&normalized)
+            .symlink_metadata()
+            .is_ok_and(|meta| meta.file_type().is_symlink())
         {
             return Err(Error::Error(
                 "Backup target is occupied by a symbolic link".into(),
@@ -126,7 +129,46 @@ fn restore_archive<R: Read + Seek>(
         }
     }
 
-    archive.extract(destination)?;
+    // Never extract the legacy plaintext config, even temporarily.
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index)?;
+        let path = normalize_components(
+            &entry
+                .enclosed_name()
+                .ok_or_else(|| Error::Error("Invalid archive path".into()))?,
+        );
+        if path == Path::new("config.json") {
+            continue;
+        }
+        let target = destination.join(path);
+        let mut parent = target.parent();
+        while let Some(directory) = parent {
+            if !directory.starts_with(destination) {
+                break;
+            }
+            if directory
+                .symlink_metadata()
+                .is_ok_and(|m| m.file_type().is_symlink())
+            {
+                return Err(Error::Error("Backup ancestor is a symbolic link".into()));
+            }
+            parent = directory.parent();
+        }
+        if entry.is_dir() {
+            std::fs::create_dir_all(&target)?;
+        } else {
+            if let Some(parent) = target.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::io::copy(&mut entry, &mut std::fs::File::create(&target)?)?;
+        }
+    }
+    let mut restored: serde_json::Value = serde_json::from_str(&config)?;
+    crate::credentials::scrub(&mut restored);
+    std::fs::write(
+        destination.join("config.json"),
+        serde_json::to_vec(&restored)?,
+    )?;
     Ok(())
 }
 
@@ -134,10 +176,10 @@ fn make_archive<W: Write + Seek>(writer: W, config_dir_path: &Path) -> Result<W,
     let mut zip = zip::ZipWriter::new(writer);
     let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
     zip.start_file("config.json", options)?;
-    std::io::copy(
-        &mut std::fs::File::open(config_dir_path.join("config.json"))?,
-        &mut zip,
-    )?;
+    let mut config: serde_json::Value =
+        serde_json::from_reader(std::fs::File::open(config_dir_path.join("config.json"))?)?;
+    crate::credentials::scrub(&mut config);
+    zip.write_all(&serde_json::to_vec(&config)?)?;
 
     let history = config_dir_path.join("history.db");
     if history.exists() {
@@ -221,9 +263,7 @@ pub async fn webdav(
                 .await
             {
                 Ok(()) => Ok("".to_string()),
-                Err(e) => {
-                    Err(Error::Error(format!("WebDav Put Error: {}", e).into()))
-                }
+                Err(e) => Err(Error::Error(format!("WebDav Put Error: {}", e).into())),
             }
         }
 
@@ -232,15 +272,11 @@ pub async fn webdav(
             .await
         {
             Ok(()) => Ok("".to_string()),
-            Err(e) => {
-                Err(Error::Error(format!("WebDav Delete Error: {}", e).into()))
-            }
+            Err(e) => Err(Error::Error(format!("WebDav Delete Error: {}", e).into())),
         },
-        _ => {
-            Err(Error::Error(
-                format!("WebDav Operate Error: {}", operate).into(),
-            ))
-        }
+        _ => Err(Error::Error(
+            format!("WebDav Operate Error: {}", operate).into(),
+        )),
     }
 }
 
@@ -257,16 +293,19 @@ pub async fn local(operate: &str, path: String) -> Result<String, Error> {
             restore_archive(ZipArchive::new(&mut zip_file)?, &app_config_dir()?)?;
             Ok("".to_string())
         }
-        _ => {
-            Err(Error::Error(
-                format!("Local Operate Error: {}", operate).into(),
-            ))
-        }
+        _ => Err(Error::Error(
+            format!("Local Operate Error: {}", operate).into(),
+        )),
     }
 }
 
 #[tauri::command(async)]
 pub async fn aliyun(operate: &str, path: String, url: String) -> Result<String, Error> {
+    if crate::config::get_str("privacy_mode").as_deref() == Some("device_only") {
+        return Err(Error::Error(
+            "External OCR upload is blocked by device-only policy".into(),
+        ));
+    }
     match operate {
         "put" => {
             // 注意：std::fs::read 会把整个备份加载进内存。reqwest 0.12 的
@@ -304,11 +343,9 @@ pub async fn aliyun(operate: &str, path: String, url: String) -> Result<String, 
             restore_archive(ZipArchive::new(&mut zip_file)?, &app_config_dir()?)?;
             Ok("".to_string())
         }
-        _ => {
-            Err(Error::Error(
-                format!("Local Operate Error: {}", operate).into(),
-            ))
-        }
+        _ => Err(Error::Error(
+            format!("Local Operate Error: {}", operate).into(),
+        )),
     }
 }
 
@@ -371,7 +408,10 @@ mod tests {
         let path = {
             let tmp = TempBackupFile::new("test-normal");
             std::fs::write(tmp.path(), b"partial download").unwrap();
-            assert!(tmp.path().exists(), "file should exist while the guard lives");
+            assert!(
+                tmp.path().exists(),
+                "file should exist while the guard lives"
+            );
             tmp.path().to_path_buf()
         };
         assert!(
@@ -492,11 +532,15 @@ mod tests {
             .map(str::to_owned)
             .collect();
         assert!(
-            names.iter().any(|n| n == "plugins/translate/plugin-demo/main.js"),
+            names
+                .iter()
+                .any(|n| n == "plugins/translate/plugin-demo/main.js"),
             "the plugin entry must be in the archive, got {names:?}"
         );
         assert!(
-            names.iter().any(|n| n == "plugins/translate/plugin-demo/info.json"),
+            names
+                .iter()
+                .any(|n| n == "plugins/translate/plugin-demo/info.json"),
             "nested plugin files must all be included, got {names:?}"
         );
 
@@ -552,7 +596,11 @@ mod tests {
             .file_names()
             .map(str::to_owned)
             .collect();
-        assert_eq!(names, vec!["config.json".to_string()], "only config.json is expected");
+        assert_eq!(
+            names,
+            vec!["config.json".to_string()],
+            "only config.json is expected"
+        );
         std::fs::remove_dir_all(base).unwrap();
     }
 
@@ -623,10 +671,7 @@ mod tests {
         ));
         // zip slip: 路径穿越条目必须被 enclosed_name() 拒绝
         assert!(restore_archive(
-            archive(&[
-                ("config.json", b"{}"),
-                ("../outside.txt", b"escaped"),
-            ]),
+            archive(&[("config.json", b"{}"), ("../outside.txt", b"escaped"),]),
             &destination
         )
         .is_err());
@@ -639,10 +684,7 @@ mod tests {
         // plugins/ 前缀被用来夹带 .. 路径穿越：normalize_components() 把它
         // 归一为 escape.js（不在 plugins/ 下），必须被白名单拒绝。
         assert!(restore_archive(
-            archive(&[
-                ("config.json", b"{}"),
-                ("plugins/../escape.js", b"escaped"),
-            ]),
+            archive(&[("config.json", b"{}"), ("plugins/../escape.js", b"escaped"),]),
             &destination
         )
         .is_err());
@@ -786,12 +828,12 @@ mod tests {
         // 结果就是恢复/删除操作实际打到了另一个文件名上。
         // 与其静默改到一个可能存在的文件，不如直接拒绝。
         for name in [
-            Some("a\nb.zip"),    // 换行
-            Some("a\rb.zip"),    // 回车
-            Some("a\tb.zip"),    // 制表
-            Some("a\u{0}b.zip"), // NUL
+            Some("a\nb.zip"),       // 换行
+            Some("a\rb.zip"),       // 回车
+            Some("a\tb.zip"),       // 制表
+            Some("a\u{0}b.zip"),    // NUL
             Some("a\u{7f}b.zip"),   // DEL (C0)
-            Some("\u{1b}[31m.zip"),  // ANSI 转义（还会污染日志）
+            Some("\u{1b}[31m.zip"), // ANSI 转义（还会污染日志）
             Some("a\u{85}b.zip"),   // NEL (C1)：char::is_control() 覆盖 C1 区
         ] {
             assert!(
@@ -824,7 +866,12 @@ mod tests {
     fn ordinary_remote_backup_names_still_pass() {
         // 反向：不要把正常名字误伤。前端的默认名字形如
         // `macos-2026-10-15-14-30-0.zip`，含连字符与点，必须放行。
-        for name in ["settings.zip", "macos-2026-10-15-14-30-0.zip", "备份.zip", "a b.zip"] {
+        for name in [
+            "settings.zip",
+            "macos-2026-10-15-14-30-0.zip",
+            "备份.zip",
+            "a b.zip",
+        ] {
             assert_eq!(
                 backup_name(Some(name)).unwrap(),
                 name,

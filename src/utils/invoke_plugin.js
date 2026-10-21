@@ -1,3 +1,4 @@
+import { checkPolicy } from './requestRuntime';
 import { appCacheDir, appConfigDir, join } from '@tauri-apps/api/path';
 import { readBinaryFile, readTextFile } from '@tauri-apps/api/fs';
 import { invoke } from '@tauri-apps/api/tauri';
@@ -13,6 +14,7 @@ export async function invoke_plugin(pluginType, pluginName) {
     if (!validPluginType(pluginType) || !validPluginName(pluginName)) {
         throw new Error(`Invalid plugin path: ${pluginType}/${pluginName}`);
     }
+    await checkPolicy(pluginType, pluginName);
     let configDir = await appConfigDir();
     let cacheDir = await appCacheDir();
     let pluginDir = await join(configDir, 'plugins', pluginType, pluginName);

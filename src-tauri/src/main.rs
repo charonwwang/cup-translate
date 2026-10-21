@@ -5,15 +5,39 @@ mod backup;
 mod clipboard;
 mod cmd;
 mod config;
+mod credentials;
 mod error;
 mod hotkey;
+#[cfg(any(target_arch = "x86_64", all(target_arch = "aarch64", not(windows))))]
+mod hy_mt;
+mod kokoro;
 mod lang_detect;
 #[cfg(any(target_arch = "x86_64", all(target_arch = "aarch64", not(windows))))]
 mod local_mt;
 #[cfg(not(any(target_arch = "x86_64", all(target_arch = "aarch64", not(windows)))))]
 #[path = "local_mt_unsupported.rs"]
 mod local_mt;
+mod local_mt_tasks;
 mod notification;
+#[cfg(any(
+    all(target_os = "macos", target_arch = "aarch64"),
+    all(
+        target_os = "linux",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ),
+    all(windows, target_arch = "x86_64")
+))]
+mod piper;
+#[cfg(not(any(
+    all(target_os = "macos", target_arch = "aarch64"),
+    all(
+        target_os = "linux",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ),
+    all(windows, target_arch = "x86_64")
+)))]
+#[path = "piper_unsupported.rs"]
+mod piper;
 mod screenshot;
 mod server;
 mod system_ocr;
@@ -26,11 +50,15 @@ use backup::*;
 use clipboard::*;
 use cmd::*;
 use config::*;
+use credentials::*;
 use hotkey::*;
+use kokoro::*;
 use lang_detect::*;
 use local_mt::*;
+use local_mt_tasks::{local_mt_cancel_request, local_mt_prepare_request};
 use log::{info, warn, LevelFilter};
 use once_cell::sync::OnceCell;
+use piper::*;
 use screenshot::screenshot;
 use server::*;
 use std::sync::Mutex;
@@ -109,8 +137,7 @@ fn main() {
             #[cfg(target_os = "macos")]
             {
                 app.set_activation_policy(tauri::ActivationPolicy::Accessory);
-                let trusted =
-                    macos_accessibility_client::accessibility::application_is_trusted();
+                let trusted = macos_accessibility_client::accessibility::application_is_trusted();
                 info!("MacOS Accessibility Trusted: {}", trusted);
             }
             // Global AppHandle
@@ -209,11 +236,32 @@ fn main() {
             font_list,
             aliyun,
             local_mt_model_status,
+            local_mt_install_control,
+            local_mt_device_check,
+            kokoro_model_status,
+            kokoro_download,
+            kokoro_cancel,
+            kokoro_uninstall,
+            kokoro_speak,
+            kokoro_preview,
+            piper_catalog,
+            piper_download,
+            piper_cancel,
+            piper_uninstall,
+            piper_speak,
+            piper_preview,
+            tts_inventory,
             local_mt_download_model,
+            local_mt_import_model,
             local_mt_delete_model,
             local_mt_unload_model,
             local_mt_translate,
-            tts_speak
+            local_mt_prepare_request,
+            local_mt_cancel_request,
+            tts_speak,
+            seal_service_config,
+            read_service_secret,
+            save_config_atomic
         ])
         .on_system_tray_event(tray_event_handler)
         .build(tauri::generate_context!())

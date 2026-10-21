@@ -1,0 +1,7 @@
+id,source,target,mode,case_sensitive,priority,comment
+tech-001,worker threads,工作线程,suggest,false,100,区别于“工人线”
+tech-002,memory leak,内存泄漏,suggest,false,100,团队统一使用“泄漏”，不使用“泄露”
+tech-003,request context,请求上下文,suggest,false,90,后端请求处理上下文
+tech-004,shutdown,关闭,suggest,false,50,按语境也可使用“停机”
+tech-005,CI/CD,持续集成与持续交付,suggest,true,80,需要保留缩写时可写入说明
+tech-006,pull request,拉取请求,suggest,false,100,可按团队习惯改为“合并请求”

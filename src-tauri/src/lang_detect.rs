@@ -43,12 +43,10 @@ pub fn init_lang_detect() {
 
 /// 短文本字符集启发式：比 n-gram 检测更可靠（如 "hello" 被 n-gram 误判为意大利语）
 fn detect_by_charset(text: &str) -> Option<&'static str> {
-    let has_cjk = text.chars().any(|c| {
-        matches!(c as u32, 0x4E00..=0x9FFF | 0x3400..=0x4DBF | 0xF900..=0xFAFF)
-    });
-    let has_hiragana_katakana = text
+    let has_cjk = text
         .chars()
-        .any(|c| matches!(c as u32, 0x3040..=0x30FF));
+        .any(|c| matches!(c as u32, 0x4E00..=0x9FFF | 0x3400..=0x4DBF | 0xF900..=0xFAFF));
+    let has_hiragana_katakana = text.chars().any(|c| matches!(c as u32, 0x3040..=0x30FF));
     let has_hangul = text
         .chars()
         // 谚文音节 (U+AC00..U+D7AF)、谚文字母 jamo (U+1100..U+11FF)，
@@ -58,12 +56,8 @@ fn detect_by_charset(text: &str) -> Option<&'static str> {
         // 只列前两个区间会漏判——3 个字符的 "ㅋㅋㅋ" 会因 <8 字符走字符集，
         // 得 None 后被判成英语。
         .any(|c| matches!(c as u32, 0xAC00..=0xD7AF | 0x1100..=0x11FF | 0x3130..=0x318F));
-    let has_cyrillic = text
-        .chars()
-        .any(|c| matches!(c as u32, 0x0400..=0x04FF));
-    let has_arabic = text
-        .chars()
-        .any(|c| matches!(c as u32, 0x0600..=0x06FF));
+    let has_cyrillic = text.chars().any(|c| matches!(c as u32, 0x0400..=0x04FF));
+    let has_arabic = text.chars().any(|c| matches!(c as u32, 0x0600..=0x06FF));
     let has_thai = text.chars().any(|c| matches!(c as u32, 0x0E00..=0x0E7F));
 
     if has_hiragana_katakana {
@@ -89,7 +83,9 @@ fn detect_by_charset(text: &str) -> Option<&'static str> {
 
 #[tauri::command]
 pub async fn lang_detect(text: String) -> Result<&'static str, ()> {
-    tauri::async_runtime::spawn_blocking(move || detect_language(&text)).await.map_err(|_| ())?
+    tauri::async_runtime::spawn_blocking(move || detect_language(&text))
+        .await
+        .map_err(|_| ())?
 }
 
 fn detect_language(text: &str) -> Result<&'static str, ()> {

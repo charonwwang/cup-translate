@@ -1,7 +1,9 @@
+import { checkPolicy } from '../../../utils/requestRuntime';
 import { fetchWithTimeout as fetch, Body } from '../../../utils/fetchWithTimeout';
 import { Language } from './info';
 
 export async function translate(text, from, to, options = {}) {
+    await checkPolicy('translate', 'geminipro');
     const { config, setResult, detect } = options;
 
     let { apiKey, stream, promptList, requestPath } = config;

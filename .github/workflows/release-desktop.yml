@@ -20,6 +20,7 @@ concurrency:
 env:
     RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     RELEASE_REPOSITORY: ${{ github.repository }}
+    ESPEAK_STATIC_CRT: '1'
 jobs:
     preflight:
         environment: macos-release
@@ -131,6 +132,8 @@ jobs:
               run: |
                   pnpm tauri build --bundles app --target "$RELEASE_TARGET"
                   node packaging/package-macos.mjs "src-tauri/target/$RELEASE_TARGET/release/bundle/macos/cup-translate.app" --updater
+            - name: Run native Rust regression tests
+              run: cargo test --manifest-path src-tauri/Cargo.toml --release --locked --features custom-protocol --target "$RELEASE_TARGET"
             - name: Normalize macOS asset names
               run: |
                   version="${RELEASE_TAG#v}"
@@ -187,6 +190,9 @@ jobs:
               run: |
                   $bundles = if ('${{ matrix.msi }}' -eq 'true') { 'nsis,msi,updater' } else { 'nsis,updater' }
                   pnpm tauri build --target '${{ matrix.target }}' --bundles $bundles
+            - name: Run native Windows Rust regression tests
+              if: matrix.arch == 'x64'
+              run: cargo test --manifest-path src-tauri/Cargo.toml --release --locked --features custom-protocol --target '${{ matrix.target }}'
             - name: Normalize Windows asset names
               shell: pwsh
               run: |
@@ -216,11 +222,13 @@ jobs:
                 include:
                     - target: x86_64-unknown-linux-gnu
                       arch: x64
+                      os: ubuntu-latest
                       toolchain: stable-x86_64-unknown-linux-gnu
                     - target: aarch64-unknown-linux-gnu
                       arch: arm64
+                      os: ubuntu-24.04-arm
                       toolchain: stable-aarch64-unknown-linux-gnu
-        runs-on: ubuntu-latest
+        runs-on: ${{ matrix.os }}
         timeout-minutes: 90
         steps:
             - uses: actions/checkout@v4

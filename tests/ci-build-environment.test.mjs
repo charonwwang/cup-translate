@@ -57,3 +57,39 @@ test('unsupported native-model platforms retain IPC commands without compiling t
     assert.match(stub, /"supported":false/);
     assert.match(stub, /Err\(UNSUPPORTED.into\(\)\)/);
 });
+
+test('Linux build selects a Node runtime executable on its native host', async () => {
+    const source = await readFile('.github/actions/build-for-linux/entrypoint.sh', 'utf8');
+    const selection = source.slice(source.indexOf('case "$(uname -m)"'), source.indexOf('wget '));
+    for (const [host, expected] of [
+        ['x86_64', 'x64'],
+        ['aarch64', 'arm64'],
+        ['arm64', 'arm64'],
+    ]) {
+        const result = spawnSync(
+            'bash',
+            [
+                '-c',
+                `uname() { echo "$BUILD_TEST_HOST"; }; ${selection}
+echo "$node_arch"`,
+            ],
+            {
+                encoding: 'utf8',
+                env: { ...process.env, BUILD_TEST_HOST: host },
+            }
+        );
+        assert.equal(result.status, 0, result.stderr);
+        assert.equal(result.stdout.trim(), expected);
+    }
+    const unsupported = spawnSync('bash', ['-c', `uname() { echo unsupported; }; ${selection}`]);
+    assert.notEqual(unsupported.status, 0);
+    assert.match(source, /file clang libclang-dev/);
+});
+
+test('release builds native ARM64 Linux tools and uses consistent Windows CRT', async () => {
+    const workflow = await readFile('.github/workflows/release-desktop.yml', 'utf8');
+    assert.match(workflow, /target: aarch64-unknown-linux-gnu\s+arch: arm64\s+os: ubuntu-24.04-arm/);
+    assert.match(workflow, /ESPEAK_STATIC_CRT: '1'/);
+    assert.match(workflow, /Run native Windows Rust regression tests/);
+    assert.match(workflow, /needs: \[macos, windows, linux\]/);
+});

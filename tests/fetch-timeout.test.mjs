@@ -111,11 +111,18 @@ test('the timeout wrapper actually applies a default timeout', async () => {
         .join('\n')
         // `export const` / `export async function` 去掉 export 关键字即可
         .replace(/^export\s+/gm, '');
-    const factory = new Function('tauriFetch', `${stripped}\nreturn { fetchWithTimeout, DEFAULT_TIMEOUT_SECONDS };`);
-    const { fetchWithTimeout, DEFAULT_TIMEOUT_SECONDS: exported } = factory(async (url, options) => {
-        calls.push({ url, options });
-        return { ok: true };
-    });
+    const factory = new Function(
+        'tauriFetch',
+        'checkPolicy',
+        `${stripped}\nreturn { fetchWithTimeout, DEFAULT_TIMEOUT_SECONDS };`
+    );
+    const { fetchWithTimeout, DEFAULT_TIMEOUT_SECONDS: exported } = factory(
+        async (url, options) => {
+            calls.push({ url, options });
+            return { ok: true };
+        },
+        async () => {}
+    );
 
     assert.equal(exported, seconds, 'the exported constant must match the parsed one');
     await fetchWithTimeout('https://example.com/api', { method: 'GET' });

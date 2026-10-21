@@ -746,7 +746,8 @@ fn tray_menu_it() -> tauri::SystemTrayMenu {
 
 fn tray_menu_pt_pt() -> tauri::SystemTrayMenu {
     let input_translate = CustomMenuItem::new("input_translate", "Tradução do Texto");
-    let clipboard_monitor = CustomMenuItem::new("clipboard_monitor", "Monitorizar a área de transferência");
+    let clipboard_monitor =
+        CustomMenuItem::new("clipboard_monitor", "Monitorizar a área de transferência");
     let copy_source = CustomMenuItem::new("copy_source", "Origem");
     let copy_target = CustomMenuItem::new("copy_target", "Destino");
     let copy_source_target = CustomMenuItem::new("copy_source_target", "Origem+Destino");
@@ -839,8 +840,8 @@ mod tests {
     /// 前端下拉与**真实**的 `update_tray` 分发，新增语言会立刻失败（已实测）。
     /// 这里保留一份独立副本，是为了让 `cargo test` 单独也能发现托盘分支被删。
     const UI_LANGUAGES: &[&str] = &[
-        "zh_cn", "zh_tw", "en", "ja", "ko", "fr", "de", "es", "ru", "it", "tr", "pt_pt", "pt_br", "nb_no",
-        "nn_no", "fa", "uk", "ar", "he", "ta", "tk",
+        "zh_cn", "zh_tw", "en", "ja", "ko", "fr", "de", "es", "ru", "it", "tr", "pt_pt", "pt_br",
+        "nb_no", "nn_no", "fa", "uk", "ar", "he", "ta", "tk",
     ];
 
     /// locale 文件只有 2 个 key 的占位语言：全站文案本就回退英文，
@@ -902,7 +903,9 @@ mod tests {
             .find("aria-label='app language'")
             .expect("the language dropdown must exist");
         let rest = &source[start..];
-        let end = rest.find("</DropdownMenu>").expect("the dropdown must be closed");
+        let end = rest
+            .find("</DropdownMenu>")
+            .expect("the dropdown must be closed");
         let menu = &rest[..end];
 
         // 逐个提取 key='xx' 的值
@@ -935,7 +938,11 @@ mod tests {
         // 清单内不得重复（重复会掩盖漏项）
         let mut dedup = offered_sorted.clone();
         dedup.dedup();
-        assert_eq!(dedup.len(), offered_sorted.len(), "the picker must not repeat a language key");
+        assert_eq!(
+            dedup.len(),
+            offered_sorted.len(),
+            "the picker must not repeat a language key"
+        );
     }
 
     #[test]
@@ -1025,8 +1032,8 @@ mod tests {
     }
 
     const ALL_TRAY_MENUS: &[&str] = &[
-        "en", "zh_cn", "zh_tw", "ja", "ko", "fr", "de", "ru", "pt_br", "pt_pt", "es", "it", "ar", "he", "ta", "fa",
-        "uk",
+        "en", "zh_cn", "zh_tw", "ja", "ko", "fr", "de", "ru", "pt_br", "pt_pt", "es", "it", "ar",
+        "he", "ta", "fa", "uk",
     ];
 
     /// 从 Debug 输出里抽取所有 `id_str: "xxx"`（含子菜单内的项）。
@@ -1055,7 +1062,11 @@ mod tests {
     fn every_language_menu_carries_the_same_items() {
         let base = ids_in(&tray_menu_of("en"));
         // 13 个菜单项（含 Auto Copy 子菜单里的 4 个）
-        assert_eq!(base.len(), 13, "the English tray menu should have 13 items, got {base:?}");
+        assert_eq!(
+            base.len(),
+            13,
+            "the English tray menu should have 13 items, got {base:?}"
+        );
 
         for language in ALL_TRAY_MENUS {
             let ids = ids_in(&tray_menu_of(language));
@@ -1089,7 +1100,9 @@ mod tests {
             .find("SystemTrayEvent::MenuItemClick")
             .expect("tray_event_handler must still match on MenuItemClick");
         let rest = &source[start..];
-        let end = rest.find("_ => {}").expect("the MenuItemClick match must keep a catch-all arm");
+        let end = rest
+            .find("_ => {}")
+            .expect("the MenuItemClick match must keep a catch-all arm");
         let body = &rest[..end];
 
         // 抽取形如 `"view_log" =>` 的分支名。
@@ -1147,9 +1160,15 @@ mod tests {
         for language in ALL_TRAY_MENUS {
             let menu = tray_menu_of(language);
             let titles = titles_in(&menu);
-            assert!(!titles.is_empty(), "the '{language}' tray menu has no visible titles");
+            assert!(
+                !titles.is_empty(),
+                "the '{language}' tray menu has no visible titles"
+            );
             let empty: Vec<_> = titles.iter().filter(|t| t.trim().is_empty()).collect();
-            assert!(empty.is_empty(), "the '{language}' tray menu has empty titles: {empty:?}");
+            assert!(
+                empty.is_empty(),
+                "the '{language}' tray menu has empty titles: {empty:?}"
+            );
         }
     }
 

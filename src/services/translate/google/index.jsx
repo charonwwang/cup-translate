@@ -58,6 +58,20 @@ function sleep(ms) {
     return new Promise((r) => setTimeout(r, ms));
 }
 
+function assertActive(signal) {
+    if (signal?.aborted) throw new DOMException('Request expired', 'AbortError');
+}
+
+function sourceExamples(rawExamples) {
+    return (Array.isArray(rawExamples) ? rawExamples.slice(0, 4) : []).map((example) => ({
+        source: String(example[0] || '')
+            .replace(/<[^>]+>/g, '')
+            .replace(/\s+/g, ' ')
+            .trim(),
+        target: '',
+    }));
+}
+
 // Total retry budget is bounded: at most 3 × 6 seconds plus 750ms backoff.
 const MAX_ATTEMPTS = 3;
 const backoffMs = (attempt) => 250 * Math.pow(2, Math.min(attempt, 2));
@@ -66,6 +80,7 @@ async function translateExamples(rawExamples, detected, to, options) {
     const examples = Array.isArray(rawExamples) ? rawExamples.slice(0, 4) : [];
     const translated = [];
     for (let i = 0; i < examples.length; i += 2) {
+        assertActive(options.signal);
         const chunk = examples.slice(i, i + 2);
         translated.push(
             ...(await Promise.all(
@@ -79,12 +94,14 @@ async function translateExamples(rawExamples, detected, to, options) {
                         const value = await requestTranslation(source, detected, to, options);
                         return typeof value === 'string' ? value.trim() : '';
                     } catch {
+                        assertActive(options.signal);
                         return '';
                     }
                 })
             ))
         );
     }
+    assertActive(options.signal);
     return examples.map((example, index) => ({
         source: example[0],
         target: translated[index] || '',
@@ -112,6 +129,7 @@ const isRetryableStatus = (status) => status === 429 || (status >= 500 && status
 
 async function requestTranslation(text, from, to, options = {}) {
     const { config = {} } = options;
+    assertActive(options.signal);
 
     let { custom_url } = config;
 
@@ -127,11 +145,13 @@ async function requestTranslation(text, from, to, options = {}) {
     let res = null;
     let lastErr = '';
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        assertActive(options.signal);
         const url = urls[attempt % urls.length];
         // 仅当后面还有重试时才退避等待
         const willRetry = attempt < MAX_ATTEMPTS - 1;
         try {
             res = await tryTranslate(url, text, from, to);
+            assertActive(options.signal);
             if (res.ok) break;
             lastErr = `HTTP ${res.status}`;
             if (isRetryableStatus(res.status)) {
@@ -143,6 +163,7 @@ async function requestTranslation(text, from, to, options = {}) {
             }
             break;
         } catch (e) {
+            assertActive(options.signal);
             lastErr = String(e);
             if (willRetry) {
                 await sleep(backoffMs(attempt));
@@ -165,7 +186,7 @@ async function requestTranslation(text, from, to, options = {}) {
         if (result[1]) {
             let target = { pronunciations: [], explanations: [], associations: [], sentence: [] };
             // 发音
-            if (result[0][1][3]) {
+            if (result[0]?.[1]?.[3]) {
                 target.pronunciations.push({ symbol: result[0][1][3], voice: '' });
             }
             // 释义
@@ -179,10 +200,7 @@ async function requestTranslation(text, from, to, options = {}) {
             }
             // 例句
             if (result[13]) {
-                const detected = result[2] || from;
-                // Google 词典的 ex 通道只返回例句原文。用户查词时需要能对照目标语言，
-                // 因此这里只为少量例句补一次翻译；失败时保留原文，不阻断整个词条。
-                target.sentence = await translateExamples(result[13][0], detected, to, options);
+                target.sentence = sourceExamples(result[13][0]);
             }
             return target;
         } else {
@@ -208,8 +226,7 @@ async function requestTranslation(text, from, to, options = {}) {
                     wordResult.explanations.push({ trait: '', explains: [target] });
                 }
                 if (result[13]) {
-                    const detected = result[2] || from;
-                    wordResult.sentence = await translateExamples(result[13][0], detected, to, options);
+                    wordResult.sentence = sourceExamples(result[13][0]);
                 }
                 return wordResult;
             }
@@ -219,10 +236,34 @@ async function requestTranslation(text, from, to, options = {}) {
 }
 
 const cachedRequest = createRequestCache();
+const cachedExamples = createRequestCache();
 
 export async function translate(text, from, to, options = {}) {
+    assertActive(options.signal);
     const key = JSON.stringify([text, from, to, options.config?.custom_url ?? '']);
-    return cachedRequest(key, () => requestTranslation(text, from, to, options));
+    // Cancellable requests must not share an in-flight promise owned by another signal.
+    const value = await cachedRequest(key, () => requestTranslation(text, from, to, options), options.signal);
+    assertActive(options.signal);
+    return value;
+}
+
+// Called after the main result is committed. Failure never replaces the main meanings.
+export async function supplement(result, from, to, options = {}) {
+    assertActive(options.signal);
+    if (!result?.sentence?.some((example) => example.source && !example.target)) return result;
+    const sentence = await cachedExamples(
+        JSON.stringify([result.sentence, from, to, options.config?.custom_url ?? '']),
+        () =>
+            translateExamples(
+                result.sentence.map((example) => [example.source]),
+                from,
+                to,
+                options
+            ),
+        options.signal
+    );
+    assertActive(options.signal);
+    return { ...result, sentence };
 }
 translate.pronunciationFor = pronunciationFor;
 

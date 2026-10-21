@@ -44,6 +44,7 @@ async function loadRealInvokePlugin({ onCall } = {}) {
     // 注入的假依赖：凡是「碰外面」的一律先记录再放行，
     // 这样测试能观测到真实实现到底调用了什么、按什么顺序。
     const deps = {
+        checkPolicy: async () => {},
         appConfigDir: async () => '/home/user/.config/com.cup-translate.app',
         appCacheDir: async () => '/home/user/.cache/com.cup-translate.app',
         join: async (...parts) => parts.join('/'),
@@ -70,7 +71,9 @@ async function loadRealInvokePlugin({ onCall } = {}) {
     // 每个依赖都要**包上记录器**再注入 —— 否则 onCall 永远不会被触发
     // （实测踩过：定义了 record 却直接传了 Object.values(deps)，
     //  于是「没有调用文件系统」的断言恒真）。
-    return factory(...Object.entries(deps).map(([name, value]) => record(name, value)));
+    return factory(
+        ...Object.entries(deps).map(([name, value]) => (name === 'checkPolicy' ? value : record(name, value)))
+    );
 }
 
 test('a traversal-shaped plugin name is rejected before any filesystem access', async () => {

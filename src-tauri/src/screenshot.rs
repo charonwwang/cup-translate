@@ -58,19 +58,40 @@ mod tests {
     fn no_screen_error_reports_requested_and_enumerated_positions() {
         // 没有枚举到任何显示器
         let none = no_screen_message(0, 0, &[]);
-        assert!(none.contains("(0, 0)"), "must state the requested position: {none}");
-        assert!(none.contains("0 screen"), "must state how many were enumerated: {none}");
+        assert!(
+            none.contains("(0, 0)"),
+            "must state the requested position: {none}"
+        );
+        assert!(
+            none.contains("0 screen"),
+            "must state how many were enumerated: {none}"
+        );
 
         // 枚举到了显示器但坐标不匹配（典型的跨库坐标不一致）
         let mismatch = no_screen_message(1920, 0, &[(0, 0), (1920, 1080)]);
-        assert!(mismatch.contains("(1920, 0)"), "must state the requested position: {mismatch}");
-        assert!(mismatch.contains("2 screen"), "must state the count: {mismatch}");
+        assert!(
+            mismatch.contains("(1920, 0)"),
+            "must state the requested position: {mismatch}"
+        );
+        assert!(
+            mismatch.contains("2 screen"),
+            "must state the count: {mismatch}"
+        );
         // 实际枚举到的坐标必须出现，否则无法判断是不是坐标对不上
-        assert!(mismatch.contains("(0, 0)"), "must list enumerated positions: {mismatch}");
-        assert!(mismatch.contains("(1920, 1080)"), "must list enumerated positions: {mismatch}");
+        assert!(
+            mismatch.contains("(0, 0)"),
+            "must list enumerated positions: {mismatch}"
+        );
+        assert!(
+            mismatch.contains("(1920, 1080)"),
+            "must list enumerated positions: {mismatch}"
+        );
 
         // 负坐标（副屏在主屏左侧）也要如实反映
         let negative = no_screen_message(-1920, 0, &[(-1920, 0)]);
-        assert!(negative.contains("(-1920, 0)"), "must handle negative coordinates: {negative}");
+        assert!(
+            negative.contains("(-1920, 0)"),
+            "must handle negative coordinates: {negative}"
+        );
     }
 }

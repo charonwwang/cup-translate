@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tmx version="1.4">
+    <header
+        creationtool="cup-translate"
+        creationtoolversion="1.0"
+        datatype="PlainText"
+        segtype="phrase"
+        adminlang="en"
+        srclang="en"
+        o-encoding="UTF-8"
+    />
+    <body>
+        <tu>
+            <tuv xml:lang="en">
+                <seg>worker threads</seg>
+            </tuv>
+            <tuv xml:lang="zh-CN">
+                <seg>工作线程</seg>
+            </tuv>
+        </tu>
+        <tu>
+            <tuv xml:lang="en">
+                <seg>memory leak</seg>
+            </tuv>
+            <tuv xml:lang="zh-CN">
+                <seg>内存泄漏</seg>
+            </tuv>
+        </tu>
+        <tu>
+            <tuv xml:lang="en">
+                <seg>request context</seg>
+            </tuv>
+            <tuv xml:lang="zh-CN">
+                <seg>请求上下文</seg>
+            </tuv>
+        </tu>
+    </body>
+</tmx>

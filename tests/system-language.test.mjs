@@ -122,12 +122,11 @@ test('the auto-switch logic lives in exactly one place, and it is the live one',
         false,
         'LanguageArea must not import the removed dead helper'
     );
-    // 生效的那份逻辑必须仍然在
-    assert.match(
-        area,
-        /sourceLanguage\s*===\s*'auto'\s*&&\s*detectLanguage\s*&&\s*detectLanguage\s*===\s*targetLanguage/,
-        'the live auto-switch condition must stay in LanguageArea'
-    );
+    // The extracted condition must have a live caller and respect explicit user targets.
+    assert.match(area, /const target = automaticTargetLanguage\(/);
+    const selection = await readFile('src/utils/sourceLanguage.js', 'utf8');
+    assert.match(selection, /!userSelected && source === 'auto'/);
+    assert.match(area, /targetChosenByUser\.current = true/);
 });
 
 test('no module exports a function that nothing imports', async () => {

@@ -10,7 +10,7 @@ test('JSON round-trip omits credentials by default and preserves them during mer
     const text = createConfigTransfer(source);
     assert.ok(!text.includes('test-value'));
     assert.ok(!text.includes('test-password'));
-    assert.equal(parseConfigTransfer(createConfigTransfer(source, true)).google.api_key, 'test-value');
+    assert.equal(parseConfigTransfer(createConfigTransfer(source, true)).google.api_key, undefined);
     const values = new Map([['google', { api_key: 'existing-key' }]]);
     const store = {
         entries: async () => [...values],

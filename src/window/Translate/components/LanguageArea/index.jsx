@@ -1,8 +1,9 @@
+import { automaticTargetLanguage } from '../../../../utils/sourceLanguage';
 import { Dropdown, DropdownMenu, DropdownTrigger, DropdownItem } from '@nextui-org/react';
 import { useTranslation } from 'react-i18next';
 import { BiTransferAlt } from 'react-icons/bi';
 import { LuChevronDown } from 'react-icons/lu';
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAtom, useAtomValue } from 'jotai';
 
 import { languageList } from '../../../../utils/language';
@@ -24,32 +25,39 @@ export default function LanguageArea() {
     const [targetLanguage, setTargetLanguage] = useAtom(targetLanguageAtom);
     const detectLanguage = useAtomValue(detectLanguageAtom);
     const { t } = useTranslation();
+    const targetChosenByUser = useRef(false);
+    const [languagesLoaded, setLanguagesLoaded] = useState(false);
 
     useEffect(() => {
-        if (translateSourceLanguage) {
-            setSourceLanguage(translateSourceLanguage);
-        }
-        if (translateTargetLanguage) {
-            setTargetLanguage(translateTargetLanguage);
-        }
-    }, [translateSourceLanguage, translateTargetLanguage]);
+        if (languagesLoaded || rememberLanguage === null || !translateSourceLanguage || !translateTargetLanguage)
+            return;
+        setSourceLanguage(translateSourceLanguage);
+        setTargetLanguage(translateTargetLanguage);
+        targetChosenByUser.current = rememberLanguage;
+        setLanguagesLoaded(true);
+    }, [languagesLoaded, rememberLanguage, translateSourceLanguage, translateTargetLanguage]);
 
     useEffect(() => {
-        if (rememberLanguage !== null && rememberLanguage) {
+        if (languagesLoaded && rememberLanguage) {
             setTranslateSourceLanguage(sourceLanguage);
             setTranslateTargetLanguage(targetLanguage);
         }
-    }, [sourceLanguage, targetLanguage, rememberLanguage]);
+    }, [languagesLoaded, sourceLanguage, targetLanguage, rememberLanguage]);
 
     // 智能语言切换：检测到的源语言与目标语言相同时，自动切换目标为英语
     // （如中文系统翻译中文文本 → 自动切换为中→英）
     useEffect(() => {
-        if (sourceLanguage === 'auto' && detectLanguage && detectLanguage === targetLanguage) {
-            const systemLang = getSystemTargetLanguage();
-            const fallback = targetLanguage === 'en' ? systemLang : 'en';
-            setTargetLanguage(fallback);
-        }
-    }, [detectLanguage, sourceLanguage, targetLanguage]);
+        if (!languagesLoaded) return;
+        const fallback = targetLanguage === 'en' ? getSystemTargetLanguage() : translateSecondLanguage;
+        const target = automaticTargetLanguage(
+            sourceLanguage,
+            detectLanguage,
+            targetLanguage,
+            fallback,
+            targetChosenByUser.current
+        );
+        if (target !== targetLanguage) setTargetLanguage(target);
+    }, [detectLanguage, sourceLanguage, languagesLoaded]);
 
     return (
         <div className='cup-language-row'>
@@ -81,6 +89,7 @@ export default function LanguageArea() {
                 className='cup-language-swap'
                 aria-label={t('translate.swap_languages')}
                 onClick={async () => {
+                    targetChosenByUser.current = true;
                     if (sourceLanguage !== 'auto') {
                         const oldSourceLanguage = sourceLanguage;
                         setSourceLanguage(targetLanguage);
@@ -118,6 +127,7 @@ export default function LanguageArea() {
                     aria-label='Target Language'
                     className='max-h-[50vh] overflow-y-auto'
                     onAction={(key) => {
+                        targetChosenByUser.current = true;
                         setTargetLanguage(key);
                     }}
                 >

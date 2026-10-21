@@ -12,3 +12,8 @@ else
     pnpm tauri build --target $INPUT_TARGET -b deb rpm
 fi
 node scripts/fix-deb-dependencies.mjs "src-tauri/target/$INPUT_TARGET/release/bundle/deb"
+
+# Native hosts can execute the tests; never try to run a cross-built executable.
+if [ "$(rustc -vV | sed -n 's/^host: //p')" = "$INPUT_TARGET" ]; then
+    cargo test --manifest-path src-tauri/Cargo.toml --release --features custom-protocol --target "$INPUT_TARGET"
+fi

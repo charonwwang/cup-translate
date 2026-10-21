@@ -70,7 +70,11 @@ function makeReact() {
  * 载入真实 useConfig。
  * @param {object} storeStub 注入的 store 替身
  */
-async function loadHook(storeStub) {
+async function loadHook(
+    storeStub,
+    emitStub = () => {},
+    debounceStub = (fn) => Object.assign((...a) => fn(...a), { flush: () => {} })
+) {
     const source = await readFile(HOOK, 'utf8');
     const body = extractBody(source);
     const React = makeReact();
@@ -91,8 +95,8 @@ async function loadHook(storeStub) {
         React.useRef,
         storeStub,
         () => Promise.resolve(() => {}),
-        () => {},
-        (fn) => Object.assign((...a) => fn(...a), { flush: () => {} }),
+        emitStub,
+        debounceStub,
         React.useGetState
     );
     return { useConfig, React };
@@ -206,4 +210,95 @@ test('the rejection is logged so the failure is not silent', async () => {
         seen.some((line) => line.includes('check_update')),
         `the log must name the offending key so it can be debugged; got: ${JSON.stringify(seen)}`
     );
+});
+
+test('default is saved only after asynchronous sealing and store.set complete', async () => {
+    let finishSet;
+    const calls = [];
+    const { useConfig, React } = await loadHook({
+        get: async () => null,
+        set: () =>
+            new Promise((r) => {
+                finishSet = () => {
+                    calls.push('set');
+                    r();
+                };
+            }),
+        save: () => calls.push('save'),
+    });
+    useConfig('new-key', true);
+    React.effects.forEach((fn) => fn());
+    await new Promise((r) => setImmediate(r));
+    assert.deepEqual(calls, []);
+    finishSet();
+    await new Promise((r) => setImmediate(r));
+    assert.deepEqual(calls, ['set', 'save']);
+});
+
+test('late initialization cannot overwrite a user edit or seed its stale default', async () => {
+    let finishRead;
+    const calls = [];
+    const { useConfig, React } = await loadHook({
+        get: () =>
+            new Promise((r) => {
+                finishRead = r;
+            }),
+        set: (...args) => calls.push(args),
+        save: () => {},
+    });
+    const [, set, get] = useConfig('new-key', 'default', { sync: false });
+    React.effects.forEach((fn) => fn());
+    set('user value');
+    finishRead(null);
+    await new Promise((r) => setImmediate(r));
+    assert.equal(get(), 'user value');
+    assert.deepEqual(calls, []);
+});
+
+test('configuration events contain only the sealed store snapshot', async () => {
+    let saved;
+    const events = [];
+    const { useConfig } = await loadHook(
+        {
+            set: async () => {
+                saved = { secretRefs: { apiKey: 'fake-ref' } };
+            },
+            save: async () => {},
+            get: async () => saved,
+        },
+        async (...args) => events.push(args)
+    );
+    const [, set] = useConfig('openai@fixture', {}, { sync: false });
+    set({ apiKey: 'fake-plaintext' }, true);
+    await new Promise((r) => setImmediate(r));
+    assert.deepEqual(events, [['openai:fixture_changed', { secretRefs: { apiKey: 'fake-ref' } }]]);
+    assert.ok(!JSON.stringify(events).includes('fake-plaintext'));
+});
+
+test('immediate policy changes flush the debounce before returning to the caller', async () => {
+    const calls = [];
+    const { useConfig } = await loadHook(
+        {
+            set: (key, value) => calls.push([key, value]),
+            save: async () => {},
+            get: async () => 'device_only',
+        },
+        () => {},
+        (fn) => {
+            let pending;
+            return Object.assign(
+                (v) => {
+                    pending = v;
+                },
+                {
+                    flush: () => {
+                        if (pending !== undefined) fn(pending);
+                    },
+                }
+            );
+        }
+    );
+    const [, set] = useConfig('privacy_mode', 'standard', { immediate: true });
+    set('device_only');
+    assert.deepEqual(calls, [['privacy_mode', 'device_only']]);
 });

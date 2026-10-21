@@ -4,9 +4,14 @@ set -euo pipefail
 git config --global --add safe.directory "$(pwd)"
 
 node_version=v22.11.0
-wget "https://nodejs.org/dist/$node_version/node-$node_version-linux-x64.tar.xz"
-tar -Jxf "node-$node_version-linux-x64.tar.xz"
-export PATH="$(pwd)/node-$node_version-linux-x64/bin:$PATH"
+case "$(uname -m)" in
+    x86_64) node_arch=x64 ;;
+    aarch64|arm64) node_arch=arm64 ;;
+    *) echo "Unsupported build host architecture" >&2; exit 1 ;;
+esac
+wget "https://nodejs.org/dist/$node_version/node-$node_version-linux-$node_arch.tar.xz"
+tar -Jxf "node-$node_version-linux-$node_arch.tar.xz"
+export PATH="$(pwd)/node-$node_version-linux-$node_arch/bin:$PATH"
 npm install -g pnpm@9
 
 # Docker action inputs are also passed as argv; accept either transport.
@@ -19,7 +24,7 @@ rustup toolchain install --force-non-host "$INPUT_TOOLCHAIN"
 # Fail if indexes cannot refresh; do not install from stale cached lists.
 rm -rf /var/lib/apt/lists/*
 apt-get -o APT::Update::Error-Mode=any -o Acquire::Retries=3 update
-apt-get install -y --no-install-recommends cmake pkg-config file
+apt-get install -y --no-install-recommends cmake pkg-config file clang libclang-dev
 
 if [ "$INPUT_TARGET" = "x86_64-unknown-linux-gnu" ]; then
     apt-get -o APT::Update::Error-Mode=any -o Acquire::Retries=3 update

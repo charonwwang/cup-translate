@@ -1,0 +1,22 @@
+{
+  "aarch64-apple-darwin": {
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-osx-universal2-shared.tar.bz2",
+    "sha256": "2249f97f10df7d828af1b0d10e3d1eeaa2198b60b9a999a7ed853c150181ccfd"
+  },
+  "x86_64-apple-darwin": {
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-osx-universal2-shared.tar.bz2",
+    "sha256": "2249f97f10df7d828af1b0d10e3d1eeaa2198b60b9a999a7ed853c150181ccfd"
+  },
+  "x86_64-unknown-linux-gnu": {
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-linux-x64-shared-lib.tar.bz2",
+    "sha256": "3892d184be41027e18165e67f549cd4e4cdd8dcd73ac5579e97afd55e14e30b6"
+  },
+  "aarch64-unknown-linux-gnu": {
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-linux-aarch64-shared-cpu-lib.tar.bz2",
+    "sha256": "fb98b80628a383909bf83626daca2e0d0ffc93bf1f7d222eaaa4282b388f072f"
+  },
+  "x86_64-pc-windows-msvc": {
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-win-x64-shared-MT-Release-lib.tar.bz2",
+    "sha256": "b8eedf41bd6d3779218887b48367bb7a3ece5aaa7667f01f69ee823a12b0a9e7"
+  }
+}

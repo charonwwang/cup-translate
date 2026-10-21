@@ -29,7 +29,9 @@ pub fn start_server() {
                 if let Some(app_handle) = APP.get() {
                     let identifier = app_handle.config().tauri.bundle.identifier.clone();
                     // 文案按 app_language 本地化（见 notification.rs）
-                    let text = crate::notification::text(crate::notification::NotificationKind::ServerStartFailed);
+                    let text = crate::notification::text(
+                        crate::notification::NotificationKind::ServerStartFailed,
+                    );
                     let _ = notification::Notification::new(&identifier)
                         .title(text.title)
                         .body(text.body)
@@ -302,7 +304,9 @@ mod tests {
             .find("fn http_handle(")
             .expect("http_handle should exist");
         let body = &source[start..];
-        let end = body.find("\n/// 全部可路由").expect("ROUTES marker should exist");
+        let end = body
+            .find("\n/// 全部可路由")
+            .expect("ROUTES marker should exist");
         let router = &body[..end];
 
         // 1) 路由必须先把查询串剥掉
@@ -331,12 +335,19 @@ mod tests {
 
         // 3) ROUTES 里也不许出现带 '?' 或重复的条目
         for route in ROUTES {
-            assert!(!route.contains('?'), "ROUTES must hold bare paths, got {route}");
+            assert!(
+                !route.contains('?'),
+                "ROUTES must hold bare paths, got {route}"
+            );
         }
         let mut seen = ROUTES.to_vec();
         seen.sort_unstable();
         seen.dedup();
-        assert_eq!(seen.len(), ROUTES.len(), "ROUTES must not contain duplicates");
+        assert_eq!(
+            seen.len(),
+            ROUTES.len(),
+            "ROUTES must not contain duplicates"
+        );
     }
 
     /// 文档里的四个 OCR 端点必须仍然可达——其中包括过去唯一能进的那几种写法。
@@ -432,12 +443,20 @@ mod tests {
         // 契约：无参数 / screenshot=true → 软件内截图
         assert!(ocr_uses_internal_screenshot("/ocr_recognize"));
         assert!(ocr_uses_internal_screenshot("/ocr_translate"));
-        assert!(ocr_uses_internal_screenshot("/ocr_recognize?screenshot=true"));
-        assert!(ocr_uses_internal_screenshot("/ocr_translate?screenshot=true"));
+        assert!(ocr_uses_internal_screenshot(
+            "/ocr_recognize?screenshot=true"
+        ));
+        assert!(ocr_uses_internal_screenshot(
+            "/ocr_translate?screenshot=true"
+        ));
 
         // 契约：screenshot=false → 使用外部已截好的图
-        assert!(!ocr_uses_internal_screenshot("/ocr_recognize?screenshot=false"));
-        assert!(!ocr_uses_internal_screenshot("/ocr_translate?screenshot=false"));
+        assert!(!ocr_uses_internal_screenshot(
+            "/ocr_recognize?screenshot=false"
+        ));
+        assert!(!ocr_uses_internal_screenshot(
+            "/ocr_translate?screenshot=false"
+        ));
         // 参数顺序无关，附加参数不影响判定（旧 ends_with("false") 会漏判）
         assert!(!ocr_uses_internal_screenshot(
             "/ocr_recognize?screenshot=false&extra=1"
@@ -450,7 +469,9 @@ mod tests {
         // （旧 ends_with("false") 会把它们当成 screenshot=false）
         assert!(ocr_uses_internal_screenshot("/ocr_recognize?x=notfalse"));
         assert!(ocr_uses_internal_screenshot("/ocr_recognize?foo=false"));
-        assert!(ocr_uses_internal_screenshot("/ocr_recognize?other=notfalse"));
+        assert!(ocr_uses_internal_screenshot(
+            "/ocr_recognize?other=notfalse"
+        ));
     }
 
     /// Host 头不区分大小写（RFC 7230 §5.4）。
@@ -482,8 +503,20 @@ mod tests {
             "Origin must stay case-sensitive — loosening it would widen the CSRF surface"
         );
         // 放宽大小写不能顺带放宽其它判定
-        assert!(!browser_request_is_local(Some("LOCALHOST:60829"), None, None, None, port));
-        assert!(!browser_request_is_local(Some("LOCALHOST:60828"), None, None, Some("cross-site"), port));
+        assert!(!browser_request_is_local(
+            Some("LOCALHOST:60829"),
+            None,
+            None,
+            None,
+            port
+        ));
+        assert!(!browser_request_is_local(
+            Some("LOCALHOST:60828"),
+            None,
+            None,
+            Some("cross-site"),
+            port
+        ));
         assert!(!browser_request_is_local(
             Some("LOCALHOST:60828"),
             Some("https://evil.example"),
@@ -516,7 +549,13 @@ mod tests {
             port
         ));
         // 沙箱 iframe 发出的 Origin: null
-        assert!(!browser_request_is_local(host, Some("null"), None, None, port));
+        assert!(!browser_request_is_local(
+            host,
+            Some("null"),
+            None,
+            None,
+            port
+        ));
         // Origin 指向自身 IP 而非 tauri 协议
         assert!(!browser_request_is_local(
             host,
@@ -534,7 +573,13 @@ mod tests {
             port
         ));
         // same-site 不是 same-origin，同样要拒
-        assert!(!browser_request_is_local(host, None, None, Some("same-site"), port));
+        assert!(!browser_request_is_local(
+            host,
+            None,
+            None,
+            Some("same-site"),
+            port
+        ));
         // 完全缺失 Host 头
         assert!(!browser_request_is_local(None, None, None, None, port));
     }

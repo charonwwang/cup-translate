@@ -1,0 +1,443 @@
+[
+  {
+    "sid": 0,
+    "name": "af_alloy",
+    "language": "en",
+    "sample": "Hello. This voice uses one multilingual model.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/0-af_alloy.mp3",
+    "bytes": 187080,
+    "sha256": "26da9de94bec329c9a695aaee81b15eea93f077c4704568b3ac87538e676d10e"
+  },
+  {
+    "sid": 1,
+    "name": "af_aoede",
+    "language": "en",
+    "sample": "Hello. This voice uses one multilingual model.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/1-af_aoede.mp3",
+    "bytes": 156576,
+    "sha256": "37a96bdd2bb2cfa71df93281902123ba3db869bb5387f75a0e806385311c16b7"
+  },
+  {
+    "sid": 2,
+    "name": "af_bella",
+    "language": "en",
+    "sample": "Hello. This voice uses one multilingual model.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/2-af_bella.mp3",
+    "bytes": 152088,
+    "sha256": "877e5489a217fb9c8f1bb1983b4165240d8319eee18d771c7a2389b618a4abac"
+  },
+  {
+    "sid": 3,
+    "name": "af_heart",
+    "language": "en",
+    "sample": "Hello. This voice uses one multilingual model.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/3-af_heart.mp3",
+    "bytes": 157896,
+    "sha256": "4ef98a4485a2e58a355ef37343359f93aea2b89724b89ea157652ad09bd99e81"
+  },
+  {
+    "sid": 4,
+    "name": "af_jessica",
+    "language": "en",
+    "sample": "Hello. This voice uses one multilingual model.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/4-af_jessica.mp3",
+    "bytes": 166560,
+    "sha256": "51c64f4df6330b77cffdd14bfbcc522de69a5cb9782259c20ddc0eafc4fd4943"
+  },
+  {
+    "sid": 5,
+    "name": "af_kore",
+    "language": "en",
+    "sample": "Hello. This voice uses one multilingual model.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/5-af_kore.mp3",
+    "bytes": 153072,
+    "sha256": "b00419cdcbbd8eeeadac7122a84e416b75a8f1a08d600b9ca6258e255c458217"
+  },
+  {
+    "sid": 6,
+    "name": "af_nicole",
+    "language": "en",
+    "sample": "Hello. This voice uses one multilingual model.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/6-af_nicole.mp3",
+    "bytes": 181032,
+    "sha256": "344719a411c438364171a4276fa3b943435a1dd00bf870501903d7e2398b0e69"
+  },
+  {
+    "sid": 7,
+    "name": "af_nova",
+    "language": "en",
+    "sample": "Hello. This voice uses one multilingual model.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/7-af_nova.mp3",
+    "bytes": 168912,
+    "sha256": "079836d8a234fa3498c4c8c7e31b25b9970baecdfc0908acc608d877bc28c6ac"
+  },
+  {
+    "sid": 8,
+    "name": "af_river",
+    "language": "en",
+    "sample": "Hello. This voice uses one multilingual model.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/8-af_river.mp3",
+    "bytes": 169560,
+    "sha256": "0aa6d89193a81f2f2659079b522350b10fd488c96245883e7c5b909abe88344a"
+  },
+  {
+    "sid": 9,
+    "name": "af_sarah",
+    "language": "en",
+    "sample": "Hello. This voice uses one multilingual model.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/9-af_sarah.mp3",
+    "bytes": 159432,
+    "sha256": "6267f1d118127c3439779a8e4b5c252d76695c69f7c4edd0a5cd36e5b2b4c6da"
+  },
+  {
+    "sid": 10,
+    "name": "af_sky",
+    "language": "en",
+    "sample": "Hello. This voice uses one multilingual model.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/10-af_sky.mp3",
+    "bytes": 170928,
+    "sha256": "eaa9aad0ce1f5a3699724f5976c54fa2e4974cbff4664a2ddbd36b070a14cf42"
+  },
+  {
+    "sid": 11,
+    "name": "am_adam",
+    "language": "en",
+    "sample": "Hello. This voice uses one multilingual model.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/11-am_adam.mp3",
+    "bytes": 167064,
+    "sha256": "efd43c6c789df923cd915c527cdad468aaf5fc8a71ff7cc2f0c6a166ffae38dd"
+  },
+  {
+    "sid": 12,
+    "name": "am_echo",
+    "language": "en",
+    "sample": "Hello. This voice uses one multilingual model.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/12-am_echo.mp3",
+    "bytes": 189576,
+    "sha256": "e26dcb7b09717d5ee32d9b698fdc4490cbd5220a1ca797dd9e9d7db6a1fe66e8"
+  },
+  {
+    "sid": 13,
+    "name": "am_eric",
+    "language": "en",
+    "sample": "Hello. This voice uses one multilingual model.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/13-am_eric.mp3",
+    "bytes": 150792,
+    "sha256": "a62644e0eaf642625a7b4d8f15506251b7ba8703d596809a1a9db8a65eff1826"
+  },
+  {
+    "sid": 14,
+    "name": "am_fenrir",
+    "language": "en",
+    "sample": "Hello. This voice uses one multilingual model.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/14-am_fenrir.mp3",
+    "bytes": 159696,
+    "sha256": "dd420ba133a76a06ba6df5621d3a5718da5d41608658132f3169f4d0f52e4c2f"
+  },
+  {
+    "sid": 15,
+    "name": "am_liam",
+    "language": "en",
+    "sample": "Hello. This voice uses one multilingual model.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/15-am_liam.mp3",
+    "bytes": 180936,
+    "sha256": "4e44456e9830f46d60784506e45c430c6a5a211b3d556aa1969d5e29a2669569"
+  },
+  {
+    "sid": 16,
+    "name": "am_michael",
+    "language": "en",
+    "sample": "Hello. This voice uses one multilingual model.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/16-am_michael.mp3",
+    "bytes": 164880,
+    "sha256": "0253904e54660514b9ae2074e1661b7448fe53111b96c2bcc3d90287148449f2"
+  },
+  {
+    "sid": 17,
+    "name": "am_onyx",
+    "language": "en",
+    "sample": "Hello. This voice uses one multilingual model.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/17-am_onyx.mp3",
+    "bytes": 166824,
+    "sha256": "a2e643c30323461719f47d6e905a4b07745e88b5fbca86dbfe739e567695e7cc"
+  },
+  {
+    "sid": 18,
+    "name": "am_puck",
+    "language": "en",
+    "sample": "Hello. This voice uses one multilingual model.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/18-am_puck.mp3",
+    "bytes": 167016,
+    "sha256": "d23fba8e9ddf959e83f2c3f330448150018be4e7d4154b435ef24c6536223618"
+  },
+  {
+    "sid": 19,
+    "name": "am_santa",
+    "language": "en",
+    "sample": "Hello. This voice uses one multilingual model.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/19-am_santa.mp3",
+    "bytes": 173688,
+    "sha256": "ec836810c53660c004c03fcd1cf5936e36fb29117debe59bb9098ede1dda1e72"
+  },
+  {
+    "sid": 20,
+    "name": "bf_alice",
+    "language": "en",
+    "sample": "Hello. This voice uses one multilingual model.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/20-bf_alice.mp3",
+    "bytes": 178872,
+    "sha256": "8498d977cdcca244494175056bcffdfc13e813fc5e509a603b2b68d265a6a938"
+  },
+  {
+    "sid": 21,
+    "name": "bf_emma",
+    "language": "en",
+    "sample": "Hello. This voice uses one multilingual model.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/21-bf_emma.mp3",
+    "bytes": 169320,
+    "sha256": "1e25fc891779b4934583c29c231209c5d9e6c888795164e7de278a63f8faa928"
+  },
+  {
+    "sid": 22,
+    "name": "bf_isabella",
+    "language": "en",
+    "sample": "Hello. This voice uses one multilingual model.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/22-bf_isabella.mp3",
+    "bytes": 186240,
+    "sha256": "1a886448458705685ef18c6e301b447ca5bd2288e06d383302404b27374b4502"
+  },
+  {
+    "sid": 23,
+    "name": "bf_lily",
+    "language": "en",
+    "sample": "Hello. This voice uses one multilingual model.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/23-bf_lily.mp3",
+    "bytes": 181584,
+    "sha256": "587b1eb0279453fbc9e23e958c9ddde7cb66ed4e500c37087220f265f2f6ef48"
+  },
+  {
+    "sid": 24,
+    "name": "bm_daniel",
+    "language": "en",
+    "sample": "Hello. This voice uses one multilingual model.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/24-bm_daniel.mp3",
+    "bytes": 166392,
+    "sha256": "dd20ac8ec1137f9133aa43992723276a9dd65d01c20388d9fd319ed8cb135e10"
+  },
+  {
+    "sid": 25,
+    "name": "bm_fable",
+    "language": "en",
+    "sample": "Hello. This voice uses one multilingual model.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/25-bm_fable.mp3",
+    "bytes": 195696,
+    "sha256": "0efb40d280d85503c5eb64ea2c7156e7e1699bfa0be39c447255f28d95f6d562"
+  },
+  {
+    "sid": 26,
+    "name": "bm_george",
+    "language": "en",
+    "sample": "Hello. This voice uses one multilingual model.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/26-bm_george.mp3",
+    "bytes": 171696,
+    "sha256": "9b04ab01faac716f47f37f91a98253fde5c80141354933efb1301e6fb20a5593"
+  },
+  {
+    "sid": 27,
+    "name": "bm_lewis",
+    "language": "en",
+    "sample": "Hello. This voice uses one multilingual model.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/27-bm_lewis.mp3",
+    "bytes": 180648,
+    "sha256": "1a1c52529a31d50a8f7983bc1069ae50ec98474e0a020fde3aa3560883b95fb2"
+  },
+  {
+    "sid": 28,
+    "name": "ef_dora",
+    "language": "es",
+    "sample": "Hola, esta es una prueba de voz local.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/28-ef_dora.mp3",
+    "bytes": 148992,
+    "sha256": "c0c74be1eb7cb855dd69c812e4fd68db26bc6d14140cec422b0dad26d08a00fa"
+  },
+  {
+    "sid": 29,
+    "name": "em_alex",
+    "language": "es",
+    "sample": "Hola, esta es una prueba de voz local.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/29-em_alex.mp3",
+    "bytes": 150528,
+    "sha256": "94dc38882e35db3be33cff9d434f8de58fdb52bcd5434e490f80f8bef0d38d79"
+  },
+  {
+    "sid": 30,
+    "name": "ff_siwis",
+    "language": "fr",
+    "sample": "Bonjour, voici un exemple de voix locale.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/30-ff_siwis.mp3",
+    "bytes": 164880,
+    "sha256": "ef2c2a7a4ce261a05c7ad8f7909273b780b661eba31b6425ddc46331eab0f874"
+  },
+  {
+    "sid": 31,
+    "name": "hf_alpha",
+    "language": "hi",
+    "sample": "नमस्ते, यह स्थानीय आवाज का एक नमूना है।",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/31-hf_alpha.mp3",
+    "bytes": 185064,
+    "sha256": "bc7da67c36db497390e3cdfbd59f0303bb74836610b8e39b88f12df9068b894b"
+  },
+  {
+    "sid": 32,
+    "name": "hf_beta",
+    "language": "hi",
+    "sample": "नमस्ते, यह स्थानीय आवाज का एक नमूना है।",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/32-hf_beta.mp3",
+    "bytes": 160056,
+    "sha256": "ef1357c53224cb6c26e29f15c8465a8bd6bec5eeef2df8f254ba92e906aa6f0a"
+  },
+  {
+    "sid": 33,
+    "name": "hm_omega",
+    "language": "hi",
+    "sample": "नमस्ते, यह स्थानीय आवाज का एक नमूना है।",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/33-hm_omega.mp3",
+    "bytes": 184632,
+    "sha256": "dd33f0492289b773eda6ec8937edb2e3bd311374706954b5e2c211033242c9f4"
+  },
+  {
+    "sid": 34,
+    "name": "hm_psi",
+    "language": "hi",
+    "sample": "नमस्ते, यह स्थानीय आवाज का एक नमूना है।",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/34-hm_psi.mp3",
+    "bytes": 174984,
+    "sha256": "01f038139f63a8ca09506d903dc5807e4062d39d07e5fa2b61946eefb573b2e9"
+  },
+  {
+    "sid": 35,
+    "name": "if_sara",
+    "language": "it",
+    "sample": "Ciao, questa è una prova vocale locale.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/35-if_sara.mp3",
+    "bytes": 164856,
+    "sha256": "5c8052483d1890bbc5a792ca29310c9d5b166f779905b022415273e2bb643f60"
+  },
+  {
+    "sid": 36,
+    "name": "im_nicola",
+    "language": "it",
+    "sample": "Ciao, questa è una prova vocale locale.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/36-im_nicola.mp3",
+    "bytes": 170880,
+    "sha256": "ec55dde6405e58f107b536d9d658465bb0920383df3eb0d725e98bce437249ee"
+  },
+  {
+    "sid": 42,
+    "name": "pf_dora",
+    "language": "pt",
+    "sample": "Olá, este é um teste de voz local.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/42-pf_dora.mp3",
+    "bytes": 154248,
+    "sha256": "a61e912fc8338de4c8d6f77b4367a9f50e025be122408227ec81e41257e7ab3b"
+  },
+  {
+    "sid": 43,
+    "name": "pm_alex",
+    "language": "pt",
+    "sample": "Olá, este é um teste de voz local.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/43-pm_alex.mp3",
+    "bytes": 154848,
+    "sha256": "bc4d8c806f2b33ca25729096560d8b680cbb39c57e59e13135bb08b618e6bc5d"
+  },
+  {
+    "sid": 44,
+    "name": "pm_santa",
+    "language": "pt",
+    "sample": "Olá, este é um teste de voz local.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/44-pm_santa.mp3",
+    "bytes": 152880,
+    "sha256": "e946d1d6bed10e98e685df5158a0cf95521f99c2088cdf9cf96001ca465a3aa6"
+  },
+  {
+    "sid": 45,
+    "name": "zf_xiaobei",
+    "language": "zh",
+    "sample": "你好，这是多语言本地语音试听。",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/45-zf_xiaobei.mp3",
+    "bytes": 167640,
+    "sha256": "78702b04e030b7f377f30f2ea3710c0bc05a02383e33e4bf68c672eed544aa89"
+  },
+  {
+    "sid": 46,
+    "name": "zf_xiaoni",
+    "language": "zh",
+    "sample": "你好，这是多语言本地语音试听。",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/46-zf_xiaoni.mp3",
+    "bytes": 156720,
+    "sha256": "0af3af452aae3352230156758bb26297fe65fc20fb1c7e884728c84409e51790"
+  },
+  {
+    "sid": 47,
+    "name": "zf_xiaoxiao",
+    "language": "zh",
+    "sample": "你好，这是多语言本地语音试听。",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/47-zf_xiaoxiao.mp3",
+    "bytes": 152112,
+    "sha256": "60bb3f300d550dc70c3d22d17c3494973d79eb7b96ed9c15b796e3fb43add874"
+  },
+  {
+    "sid": 48,
+    "name": "zf_xiaoyi",
+    "language": "zh",
+    "sample": "你好，这是多语言本地语音试听。",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/48-zf_xiaoyi.mp3",
+    "bytes": 144864,
+    "sha256": "f6094dbb8eb9ddcba71bcdd07073e7730c4a3770cfcf33d47dc355590d24e0b5"
+  },
+  {
+    "sid": 49,
+    "name": "zm_yunjian",
+    "language": "zh",
+    "sample": "你好，这是多语言本地语音试听。",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/49-zm_yunjian.mp3",
+    "bytes": 156864,
+    "sha256": "7bb8615f504364db37984412c82d43dc6fc9da501c6c1fb01de66d8a51119fac"
+  },
+  {
+    "sid": 50,
+    "name": "zm_yunxi",
+    "language": "zh",
+    "sample": "你好，这是多语言本地语音试听。",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/50-zm_yunxi.mp3",
+    "bytes": 138000,
+    "sha256": "a0f12cf13e0477909385f6cf691eee8fa3681178186be2a930d5091d4562c55f"
+  },
+  {
+    "sid": 51,
+    "name": "zm_yunxia",
+    "language": "zh",
+    "sample": "你好，这是多语言本地语音试听。",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/51-zm_yunxia.mp3",
+    "bytes": 151968,
+    "sha256": "2269519300bd49350df7b3db5d461a213c9da6216a8a7e520978dadf21f73ceb"
+  },
+  {
+    "sid": 52,
+    "name": "zm_yunyang",
+    "language": "zh",
+    "sample": "你好，这是多语言本地语音试听。",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/52-zm_yunyang.mp3",
+    "bytes": 150192,
+    "sha256": "f1d3c8a53bdf849ae7ef00ae219541f80368187c273bced7b8459dbb150265a3"
+  },
+  {
+    "sid": 53,
+    "name": "em_santa",
+    "language": "es",
+    "sample": "Hola, esta es una prueba de voz local.",
+    "url": "https://k2-fsa.github.io/sherpa/onnx/tts/all/kokoro/v1.0/mp3/53-em_santa.mp3",
+    "bytes": 151272,
+    "sha256": "a0aee786e9b6d6ce24fc977477e4b1eb44e2ce8dab2adfefdf482979979ce2c2"
+  }
+]

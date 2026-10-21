@@ -1,3 +1,10 @@
+import { resolveLocalModel } from '../../services/translate/local_mt/options';
+import { translationLanguages } from '../../utils/sourceLanguage';
+import { useAtomValue } from 'jotai';
+import { sourceTextAtom, sourceLanguageAtom, targetLanguageAtom, detectLanguageAtom } from './atoms';
+import { serviceEligibility } from '../../utils/serviceEligibility';
+import * as providers from '../../services/translate';
+import { invoke } from '@tauri-apps/api/tauri';
 import { Toaster } from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 import { readDir, BaseDirectory, readTextFile, exists } from '@tauri-apps/api/fs';
@@ -100,6 +107,16 @@ export default function Translate() {
     const [ttsServiceInstanceList] = useConfig('tts_service_list', ['google_tts']);
     const [collectionServiceInstanceList] = useConfig('collection_service_list', []);
     const [hideLanguage] = useConfig('hide_language', false);
+    const sourceText = useAtomValue(sourceTextAtom);
+    const from = useAtomValue(sourceLanguageAtom);
+    const detected = useAtomValue(detectLanguageAtom);
+    const to = useAtomValue(targetLanguageAtom);
+    const [secondLanguage] = useConfig('translate_second_language', 'en');
+    const [privacyMode] = useConfig('privacy_mode', 'standard');
+    const [glossary] = useConfig('glossary_v2', { enabled: false, entries: [], revision: 0 });
+    const [revision, setRevision] = useState(0);
+    const [eligible, setEligible] = useState([]);
+    const [checkingServices, setCheckingServices] = useState(true);
     const [pined, setPined] = useState(false);
     const [pluginList, setPluginList] = useState(null);
     const [serviceInstanceConfigMap, setServiceInstanceConfigMap] = useState(null);
@@ -112,7 +129,11 @@ export default function Translate() {
 
     const onDragEnd = async (result) => {
         if (!result.destination) return;
-        const items = reorder(translateServiceInstanceList, result.source.index, result.destination.index);
+        const items = reorder(
+            translateServiceInstanceList,
+            translateServiceInstanceList.indexOf(eligible[result.source.index]),
+            translateServiceInstanceList.indexOf(eligible[result.destination.index])
+        );
         setTranslateServiceInstanceList(items);
     };
     // Reconcile both directions when a preference changes, including manual pinning.
@@ -265,9 +286,69 @@ export default function Translate() {
         collectionServiceInstanceList,
     ]);
 
-    const primaryServiceKey = translateServiceInstanceList?.find(
-        (key) => serviceInstanceConfigMap?.[key]?.enable ?? true
-    );
+    useEffect(() => {
+        let live = true;
+        const pending = listen('request_context_invalidated', () => {
+            if (live) {
+                setRevision((v) => v + 1);
+                loadServiceInstanceConfigMap();
+            }
+        });
+        return () => {
+            live = false;
+            pending.then((stop) => stop());
+        };
+    }, [translateServiceInstanceList]);
+    useEffect(() => {
+        let live = true;
+        // Keep mounted cards while eligibility is refreshed. Clearing this list
+        // launches then aborts the same new text once before remounting it.
+        setCheckingServices(true);
+        if (!serviceInstanceConfigMap || !pluginList || !privacyMode || !from || !to || (from === 'auto' && !detected))
+            return;
+        const { source, target } = translationLanguages(from, detected, to);
+        (async () => {
+            const status = {};
+            if (translateServiceInstanceList.some((key) => key.split('@')[0] === 'local_mt')) {
+                const models = new Set(
+                    translateServiceInstanceList
+                        .filter((key) => key.split('@')[0] === 'local_mt')
+                        .map((key) => resolveLocalModel(serviceInstanceConfigMap[key], source, target))
+                        .filter(Boolean)
+                );
+                for (const pair of models) {
+                    try {
+                        status[pair] = await invoke('local_mt_model_status', { pair });
+                    } catch {
+                        status[pair] = { installed: false };
+                    }
+                }
+            }
+            const next = translateServiceInstanceList.filter((key) => {
+                const name = key.split('@')[0];
+                const provider =
+                    providers[name] ??
+                    (pluginList.translate[name] ? { Language: pluginList.translate[name].language } : null);
+                return !serviceEligibility(
+                    key,
+                    serviceInstanceConfigMap[key],
+                    source,
+                    target,
+                    privacyMode,
+                    provider,
+                    status
+                );
+            });
+            if (live) {
+                setEligible(next);
+                setCheckingServices(false);
+            }
+        })();
+        return () => {
+            live = false;
+        };
+    }, [from, to, detected, secondLanguage, privacyMode, serviceInstanceConfigMap, pluginList, revision, glossary]);
+    const primaryServiceKey = eligible[0];
 
     return (
         pluginList && (
@@ -328,6 +409,22 @@ export default function Translate() {
                         <div className={`${hideLanguage && 'hidden'}`}>
                             <LanguageArea />
                         </div>
+                        {sourceText.trim() && checkingServices && (
+                            <p
+                                className='p-4 text-xs text-default-500'
+                                role='status'
+                            >
+                                {t('models.checking_services')}
+                            </p>
+                        )}
+                        {sourceText.trim() && !checkingServices && eligible.length === 0 && (
+                            <p
+                                className='p-4 text-sm'
+                                role='status'
+                            >
+                                {t('models.no_services')}
+                            </p>
+                        )}
                         <DragDropContext onDragEnd={onDragEnd}>
                             <Droppable
                                 droppableId='droppable'
@@ -340,7 +437,7 @@ export default function Translate() {
                                     >
                                         {translateServiceInstanceList !== null &&
                                             serviceInstanceConfigMap !== null &&
-                                            translateServiceInstanceList.map((serviceInstanceKey, index) => {
+                                            eligible.map((serviceInstanceKey, index) => {
                                                 const config = serviceInstanceConfigMap[serviceInstanceKey] ?? {};
                                                 const enable = config['enable'] ?? true;
 
@@ -357,12 +454,13 @@ export default function Translate() {
                                                             >
                                                                 <TargetArea
                                                                     {...provided.dragHandleProps}
+                                                                    requestRevision={revision}
+                                                                    privacyMode={privacyMode}
+                                                                    glossary={glossary}
                                                                     index={index}
                                                                     primary={serviceInstanceKey === primaryServiceKey}
                                                                     name={serviceInstanceKey}
-                                                                    translateServiceInstanceList={
-                                                                        translateServiceInstanceList
-                                                                    }
+                                                                    translateServiceInstanceList={eligible}
                                                                     pluginList={pluginList}
                                                                     serviceInstanceConfigMap={serviceInstanceConfigMap}
                                                                 />

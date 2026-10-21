@@ -277,7 +277,9 @@ pub fn install_plugin(path_list: Vec<String>) -> Result<i32, Error> {
         for index in 0..zip.len() {
             let entry = zip.by_index(index)?;
             if is_symlink_entry(entry.unix_mode()) {
-                return Err(Error::Error("Invalid Plugin: contains a symbolic link".into()));
+                return Err(Error::Error(
+                    "Invalid Plugin: contains a symbolic link".into(),
+                ));
             }
             // setuid / setgid / sticky 位：zip 会原样 set_permissions 落盘
             //（实测 external_attr=0o4755 -> 磁盘 4755），插件归档里没有正当用途。
@@ -292,7 +294,8 @@ pub fn install_plugin(path_list: Vec<String>) -> Result<i32, Error> {
         if let Ok(info) = zip.by_name("info.json") {
             let mut content = String::new();
             // 限制 info.json 大小，防止 zip 炸弹
-            info.take(MAX_PLUGIN_INFO_BYTES).read_to_string(&mut content)?;
+            info.take(MAX_PLUGIN_INFO_BYTES)
+                .read_to_string(&mut content)?;
             let json: serde_json::Value = serde_json::from_str(&content)?;
             plugin_type = json["plugin_type"]
                 .as_str()
@@ -309,13 +312,12 @@ pub fn install_plugin(path_list: Vec<String>) -> Result<i32, Error> {
                 "Invalid Plugin: unsupported plugin type".into(),
             ));
         }
-        let config_path = dirs::config_dir()
-            .ok_or_else(|| Error::Error("Get Config Dir Error".into()))?;
+        let config_path =
+            dirs::config_dir().ok_or_else(|| Error::Error("Get Config Dir Error".into()))?;
         let app_handle = APP
             .get()
             .ok_or_else(|| Error::Error("App is not initialized".into()))?;
-        let config_path =
-            config_path.join(app_handle.config().tauri.bundle.identifier.clone());
+        let config_path = config_path.join(app_handle.config().tauri.bundle.identifier.clone());
         let config_path = config_path.join("plugins");
         let config_path = config_path.join(plugin_type);
         let plugin_path = config_path.join(file_name);
@@ -335,12 +337,33 @@ pub fn install_plugin(path_list: Vec<String>) -> Result<i32, Error> {
 }
 
 #[tauri::command]
-pub fn run_binary(
+pub async fn run_binary(
+    plugin_type: String,
+    plugin_name: String,
+    cmd_name: String,
+    args: Vec<String>,
+) -> Result<Value, String> {
+    // Plugin subprocesses may be slow (for example OCR). Never wait for them on
+    // the window thread, otherwise the next screenshot cannot update the UI.
+    tauri::async_runtime::spawn_blocking(move || {
+        run_binary_blocking(plugin_type, plugin_name, cmd_name, args).map_err(|error| error.to_string())
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+fn run_binary_blocking(
     plugin_type: String,
     plugin_name: String,
     cmd_name: String,
     args: Vec<String>,
 ) -> Result<Value, Error> {
+    if crate::config::get_str("privacy_mode").as_deref() == Some("device_only") {
+        return Err(Error::Error(
+            "Plugins are blocked by device-only policy".into(),
+        ));
+    }
+
     #[cfg(target_os = "windows")]
     use std::os::windows::process::CommandExt;
     use std::process::Command;
@@ -487,7 +510,7 @@ mod tests {
         assert!(has_special_permission_bits(Some(0o2755))); // setgid
         assert!(has_special_permission_bits(Some(0o1755))); // sticky
         assert!(has_special_permission_bits(Some(0o7777))); // 全带上
-        // 普通权限不能被误伤（否则正常插件装不上）
+                                                            // 普通权限不能被误伤（否则正常插件装不上）
         for mode in [0o100644, 0o100755, 0o100600, 0o040755, 0o100000] {
             assert!(
                 !has_special_permission_bits(Some(mode)),

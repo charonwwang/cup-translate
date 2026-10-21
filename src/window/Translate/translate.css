@@ -99,15 +99,15 @@
 }
 
 .cup-v4 .cup-source-text.word {
-    font-size: calc(var(--cup4-base) * 1.75);
+    font-size: calc(var(--cup4-base) * 1.25);
 }
 
 .cup-v4 .cup-source-text.phrase {
-    font-size: calc(var(--cup4-base) * 1.32);
+    font-size: calc(var(--cup4-base) * 1.25);
 }
 
 .cup-v4 .cup-source-text.paragraph {
-    font-size: calc(var(--cup4-base) * 0.94);
+    font-size: calc(var(--cup4-base) * 1.25);
     line-height: 1.58;
     font-weight: 500;
     letter-spacing: -0.004em;
@@ -381,7 +381,7 @@
 .cup-v4 .cup-word-heading h3 {
     margin: 0;
     color: var(--cup4-ink);
-    font-size: calc(var(--cup4-base) * 1.9);
+    font-size: calc(var(--cup4-base) * 1.125);
     line-height: 1.12;
     font-weight: 680;
     letter-spacing: -0.035em;
@@ -485,7 +485,7 @@
 
 .cup-v4 .cup-meaning {
     color: var(--cup4-ink);
-    font-size: calc(var(--cup4-base) * 1.12);
+    font-size: calc(var(--cup4-base) * 1.25);
     line-height: 1.55;
     font-weight: 520;
     overflow-wrap: anywhere;
@@ -619,7 +619,7 @@
 
 .cup-v4 .cup-phrase-text {
     color: var(--cup4-accent-2);
-    font-size: calc(var(--cup4-base) * 1.12);
+    font-size: calc(var(--cup4-base) * 1.25);
     line-height: 1.6;
     font-weight: 540;
     letter-spacing: -0.01em;
@@ -770,7 +770,7 @@
 .cup-v4 .cup-paragraph-reading p {
     margin: 0;
     color: var(--cup4-ink);
-    font-size: calc(var(--cup4-base) * 1.05);
+    font-size: calc(var(--cup4-base) * 1.25);
     line-height: 1.9;
     font-weight: 510;
     letter-spacing: -0.008em;
@@ -820,7 +820,7 @@
 .cup-v4 .cup-sentence-target {
     margin-top: 5px !important;
     color: var(--cup4-ink);
-    font-size: calc(var(--cup4-base) * 0.94);
+    font-size: calc(var(--cup4-base) * 1.25);
     line-height: 1.58;
     font-weight: 510;
     letter-spacing: -0.006em;
@@ -984,7 +984,7 @@
     }
 
     .cup-v4 .cup-word-heading h3 {
-        font-size: calc(var(--cup4-base) * 1.72);
+        font-size: calc(var(--cup4-base) * 1.125);
     }
 
     .cup-v4 .cup-sense-row {
@@ -993,7 +993,7 @@
     }
 
     .cup-v4 .cup-meaning {
-        font-size: calc(var(--cup4-base) * 1.02);
+        font-size: calc(var(--cup4-base) * 1.25);
     }
 
     .cup-v4 .cup-foot-engine {
