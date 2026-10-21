@@ -195,10 +195,9 @@ fn make_archive<W: Write + Seek>(writer: W, config_dir_path: &Path) -> Result<W,
                 continue;
             }
             let path = entry.path();
-            let file_name = path
-                .strip_prefix(config_dir_path)?
-                .to_str()
-                .ok_or_else(|| Error::Error("Invalid backup file path".into()))?;
+            let file_name =
+                crate::backup_path::archive_entry_name(path.strip_prefix(config_dir_path)?)
+                    .ok_or_else(|| Error::Error("Invalid backup file path".into()))?;
             info!("adding file {path:?} as {file_name:?} ...");
             zip.start_file(file_name, options)?;
             std::io::copy(&mut std::fs::File::open(path)?, &mut zip)?;

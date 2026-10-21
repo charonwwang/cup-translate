@@ -346,7 +346,8 @@ pub async fn run_binary(
     // Plugin subprocesses may be slow (for example OCR). Never wait for them on
     // the window thread, otherwise the next screenshot cannot update the UI.
     tauri::async_runtime::spawn_blocking(move || {
-        run_binary_blocking(plugin_type, plugin_name, cmd_name, args).map_err(|error| error.to_string())
+        run_binary_blocking(plugin_type, plugin_name, cmd_name, args)
+            .map_err(|error| error.to_string())
     })
     .await
     .map_err(|error| error.to_string())?

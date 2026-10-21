@@ -58,6 +58,14 @@ jobs:
                   node-version: 22
             - name: Verify C++ engines can link with the static MSVC runtime
               run: node packaging/check-msvc-crt.mjs --verify-regression
+            - uses: dtolnay/rust-toolchain@stable
+            - name: Verify portable backup entry names on Windows
+              shell: pwsh
+              run: |
+                  rustc --edition=2021 --test src-tauri/src/backup_path.rs -o backup-path-tests.exe
+                  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+                  .\backup-path-tests.exe
+                  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     macos:
         needs: [preflight, windows-runtime]
         environment: macos-release

@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod backup;
+mod backup_path;
 mod clipboard;
 mod cmd;
 mod config;

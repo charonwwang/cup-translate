@@ -454,9 +454,14 @@ fn selected_text() -> String {
         .as_ref()
         .and_then(|application| application.focused_uielement().ok())
         .or_else(|| system.focused_uielement().ok());
-    let Some(element) = element else { return String::new(); };
+    let Some(element) = element else {
+        return String::new();
+    };
     let _ = element.set_messaging_timeout(0.25);
-    element.selected_text().map(|text| text.to_string()).unwrap_or_default()
+    element
+        .selected_text()
+        .map(|text| text.to_string())
+        .unwrap_or_default()
 }
 
 #[cfg(not(target_os = "macos"))]

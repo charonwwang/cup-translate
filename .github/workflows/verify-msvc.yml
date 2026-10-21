@@ -4,6 +4,8 @@ on:
         branches: [master, 'codex/**']
         paths:
             - '.cargo/config.toml'
+            - 'src-tauri/src/backup_path.rs'
+            - 'src-tauri/src/backup.rs'
             - 'packaging/check-msvc-crt.mjs'
             - 'packaging/msvc-crt-smoke/**'
             - '.github/workflows/verify-msvc.yml'
@@ -23,3 +25,11 @@ jobs:
                   node-version: 22
             - name: Reproduce the original mismatch and link with the fixed configuration
               run: node packaging/check-msvc-crt.mjs --verify-regression
+            - uses: dtolnay/rust-toolchain@stable
+            - name: Verify portable backup entry names on Windows
+              shell: pwsh
+              run: |
+                  rustc --edition=2021 --test src-tauri/src/backup_path.rs -o backup-path-tests.exe
+                  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+                  .\backup-path-tests.exe
+                  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

@@ -477,3 +477,6 @@ Windows x64 的最后链接还需要 llama.cpp 与 CTranslate2 共用静态 CRT�
 
 
 仅 `LLAMA_STATIC_CRT=1` 还不足以覆盖 llama.cpp 的 `CMP0091=NEW`：cmake-rs 仅向编译器传 `/MT`，现代 Visual Studio 生成器仍可能用默认目标属性 `/MD` 覆盖。另设 `CMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded`，由 llama-cpp-sys 的 CMAKE_ 环境转发写入所有目标。发布流程增加 Windows C++ 链接预检：一个候选 CMake 库与强制静态 CRT 的参考可执行文件实际编译、链接并执行；预检失败时不启动七个平台的大型构建。该属性及默认行为见 [CMake 官方文档](https://cmake.org/cmake/help/latest/variable/CMAKE_MSVC_RUNTIME_LIBRARY.html)。
+
+
+Windows 原生回归发现备份 ZIP 插件条目使用了反斜杠，无法按统一 ZIP 路径跨平台恢复。归档名称改由纯 `backup_path.rs` 路径组件函数生成，只写 `/`，保留 Unicode；拒绝绝对路径、上跳及不可跨平台表达的文件名。发布及分支 Windows 预检直接用 rustc 编译并运行该标准库测试模块，无需先编译模型后端；完整发布仍执行插件备份/恢复往返测试。
