@@ -117,3 +117,14 @@ test('all embedded MSVC engines use the same static runtime as CTranslate2', asy
         assert.ok(cargo.includes(`${engine}_STATIC_CRT = { value = "1", force = false }`));
     }
 });
+
+test('modern CMake targets explicitly select MT before the full release build starts', async () => {
+    const config = await readFile('.cargo/config.toml', 'utf8');
+    assert.match(config, /CMAKE_MSVC_RUNTIME_LIBRARY = \{ value = "MultiThreaded", force = false \}/);
+    const workflow = await readFile('.github/workflows/release-desktop.yml', 'utf8');
+    assert.equal((workflow.match(/needs: \[preflight, windows-runtime\]/g) || []).length, 3);
+    assert.match(workflow, /node packaging\/check-msvc-crt\.mjs/);
+    const cmake = await readFile('packaging/msvc-crt-smoke/CMakeLists.txt', 'utf8');
+    assert.match(cmake, /MSVC_RUNTIME_LIBRARY MultiThreaded/);
+    assert.match(cmake, /target_link_libraries\(crt_contract PRIVATE model_candidate\)/);
+});

@@ -45,8 +45,21 @@ jobs:
                   const branch=await fetch(`https://api.github.com/repos/${repo}/branches/${encodeURIComponent(info.default_branch)}`, {signal:AbortSignal.timeout(30000),headers:{Authorization:`Bearer ${token}`,Accept:'application/vnd.github+json'}});
                   if(!branch.ok) throw Error('Initialize the public download repository with a README first');
                   JS
+    windows-runtime:
+        runs-on: windows-latest
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  ref: ${{ inputs.tag || github.sha }}
+                  persist-credentials: false
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+            - name: Verify C++ engines can link with the static MSVC runtime
+              run: node packaging/check-msvc-crt.mjs --verify-regression
     macos:
-        needs: preflight
+        needs: [preflight, windows-runtime]
         environment: macos-release
         strategy:
             fail-fast: false
@@ -149,7 +162,7 @@ jobs:
                   path: release-assets/*
                   if-no-files-found: error
     windows:
-        needs: preflight
+        needs: [preflight, windows-runtime]
         environment: macos-release
         strategy:
             fail-fast: false
@@ -215,7 +228,7 @@ jobs:
                   path: release-assets/*
                   if-no-files-found: error
     linux:
-        needs: preflight
+        needs: [preflight, windows-runtime]
         environment: macos-release
         strategy:
             fail-fast: false

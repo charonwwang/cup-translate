@@ -1,0 +1,25 @@
+name: Verify MSVC runtime linkage
+on:
+    push:
+        branches: [master, 'codex/**']
+        paths:
+            - '.cargo/config.toml'
+            - 'packaging/check-msvc-crt.mjs'
+            - 'packaging/msvc-crt-smoke/**'
+            - '.github/workflows/verify-msvc.yml'
+    workflow_dispatch:
+permissions:
+    contents: read
+jobs:
+    link-regression:
+        runs-on: windows-latest
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  persist-credentials: false
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+            - name: Reproduce the original mismatch and link with the fixed configuration
+              run: node packaging/check-msvc-crt.mjs --verify-regression

@@ -474,3 +474,6 @@ eSpeak NG 默认 POSIX 数据目录缓冲只有 160 字节。显式 `--target` �
 
 
 Windows x64 的最后链接还需要 llama.cpp 与 CTranslate2 共用静态 CRT。`llama-cpp-sys-2` 的 `LLAMA_STATIC_CRT` 默认关闭，即使 Rust 已启用 `+crt-static`，其 CMake 产物仍可能使用 `/MD` 并触发 `LNK2038`/`LNK2005`。仓库 `.cargo/config.toml` 为全部本地及 CI 命令同时设置 `LLAMA_STATIC_CRT=1`、`ESPEAK_STATIC_CRT=1`，与 CTranslate2、sentencepiece 和 Rust 保持 `/MT` 一致；保留两个模型系列，不用禁用后端规避链接问题。
+
+
+仅 `LLAMA_STATIC_CRT=1` 还不足以覆盖 llama.cpp 的 `CMP0091=NEW`：cmake-rs 仅向编译器传 `/MT`，现代 Visual Studio 生成器仍可能用默认目标属性 `/MD` 覆盖。另设 `CMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded`，由 llama-cpp-sys 的 CMAKE_ 环境转发写入所有目标。发布流程增加 Windows C++ 链接预检：一个候选 CMake 库与强制静态 CRT 的参考可执行文件实际编译、链接并执行；预检失败时不启动七个平台的大型构建。该属性及默认行为见 [CMake 官方文档](https://cmake.org/cmake/help/latest/variable/CMAKE_MSVC_RUNTIME_LIBRARY.html)。

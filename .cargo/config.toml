@@ -12,3 +12,7 @@ CFLAGS = { value = "-DN_PATH_HOME=4096", force = false }
 # Match CTranslate2's MSVC runtime in every local/CI build, including tests.
 LLAMA_STATIC_CRT = { value = "1", force = false }
 ESPEAK_STATIC_CRT = { value = "1", force = false }
+
+# llama.cpp enables CMP0091: compiler /MT alone does not override the target
+# property's default /MD selected by modern Visual Studio generators.
+CMAKE_MSVC_RUNTIME_LIBRARY = { value = "MultiThreaded", force = false }
