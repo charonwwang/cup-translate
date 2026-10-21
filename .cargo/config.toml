@@ -8,3 +8,7 @@ rustflags = ["-C", "target-feature=+crt-static"]
 # Use the upstream override for both host tools and the bundled phonemizer.
 [env]
 CFLAGS = { value = "-DN_PATH_HOME=4096", force = false }
+
+# Match CTranslate2's MSVC runtime in every local/CI build, including tests.
+LLAMA_STATIC_CRT = { value = "1", force = false }
+ESPEAK_STATIC_CRT = { value = "1", force = false }

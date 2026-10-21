@@ -471,3 +471,6 @@ eSpeak NG 默认 POSIX 数据目录缓冲只有 160 字节。显式 `--target` �
 
 
 3.0.12 新增的 llama.cpp C++ bridge 使用 `std::filesystem`，Intel Mac 不能继续采用 Tauri 隐含的 macOS 10.13 编译下限。`bundle.macOS.minimumSystemVersion` 与发布 job 的 `MACOSX_DEPLOYMENT_TARGET` 同设为 `10.15`，覆盖应用编译和独立 Rust 测试；Apple Silicon 本身至少 macOS 11，Piper 的单独 ONNX Runtime 仍要求 macOS 14+。Kokoro 内嵌 universal 运行库的 Intel 最低版本由 Mach-O 检查确认为 10.15（ONNX）/10.14（sherpa），应用统一取更高下限。
+
+
+Windows x64 的最后链接还需要 llama.cpp 与 CTranslate2 共用静态 CRT。`llama-cpp-sys-2` 的 `LLAMA_STATIC_CRT` 默认关闭，即使 Rust 已启用 `+crt-static`，其 CMake 产物仍可能使用 `/MD` 并触发 `LNK2038`/`LNK2005`。仓库 `.cargo/config.toml` 为全部本地及 CI 命令同时设置 `LLAMA_STATIC_CRT=1`、`ESPEAK_STATIC_CRT=1`，与 CTranslate2、sentencepiece 和 Rust 保持 `/MT` 一致；保留两个模型系列，不用禁用后端规避链接问题。

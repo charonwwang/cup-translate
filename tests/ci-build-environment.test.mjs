@@ -109,3 +109,11 @@ test('macOS compilation and installer metadata allow the C++ filesystem dependen
     const workflow = await readFile('.github/workflows/release-desktop.yml', 'utf8');
     assert.match(workflow, /MACOSX_DEPLOYMENT_TARGET: '10.15'/);
 });
+
+test('all embedded MSVC engines use the same static runtime as CTranslate2', async () => {
+    const cargo = await readFile('.cargo/config.toml', 'utf8');
+    assert.match(cargo, /target-feature=\+crt-static/);
+    for (const engine of ['LLAMA', 'ESPEAK']) {
+        assert.ok(cargo.includes(`${engine}_STATIC_CRT = { value = "1", force = false }`));
+    }
+});
