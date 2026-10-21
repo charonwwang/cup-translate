@@ -182,10 +182,10 @@ test('same-repository publishing uses the public endpoint and narrowly scoped wo
     assert.doesNotMatch(triggers, /push:/);
 });
 
-test('version tags trigger the desktop publisher with the triggering tag as checkout and release input', async () => {
+test('version tags pin desktop builds to the triggering commit and retain the tag as release input', async () => {
     const { readFile } = await import('node:fs/promises');
     const workflow = await readFile('.github/workflows/release-desktop.yml', 'utf8');
     assert.match(workflow, /push:\n        tags: \["v\*"\]/);
-    assert.match(workflow, /ref: \$\{\{ inputs\.tag \|\| github\.ref_name \}\}/);
+    assert.match(workflow, /ref: \$\{\{ inputs\.tag \|\| github\.sha \}\}/);
     assert.match(workflow, /RELEASE_TAG: \$\{\{ inputs\.tag \|\| .*github\.ref_name.*\}\}/);
 });

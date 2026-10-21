@@ -93,3 +93,12 @@ test('release builds native ARM64 Linux tools and uses consistent Windows CRT', 
     assert.match(workflow, /Run native Windows Rust regression tests/);
     assert.match(workflow, /needs: \[macos, windows, linux\]/);
 });
+
+test('eSpeak host and target tools can compile phonemes under long CI paths', async () => {
+    const cargo = await readFile('.cargo/config.toml', 'utf8');
+    assert.match(cargo, /\[env\]\s+CFLAGS = \{ value = "-DN_PATH_HOME=4096", force = false \}/);
+    const failingPath =
+        '/Users/runner/work/cup-translate/cup-translate/src-tauri/target/aarch64-apple-darwin/release/build/espeak-rs-sys-3ece65f6d5c6cc44/out/build/espeak-ng-data/../phsource/r3/r_trill_short';
+    assert.ok(failingPath.length > 160 + 20);
+    assert.ok(failingPath.length < 4096);
+});

@@ -465,3 +465,6 @@ DMGBUILD=.venv-dmg/bin/dmgbuild pnpm package:macos:dmg
 Piper/eSpeak 构建需要 CMake、C/C++ 和 libclang；Linux 容器显式安装 clang/libclang-dev，Node 依构建宿主选择 x64/ARM64。Linux ARM64 发布使用 `ubuntu-24.04-arm` 原生宿主，避免构建词典时尝试在 x64 执行 ARM64 的 eSpeak 工具。Windows 设置 `ESPEAK_STATIC_CRT=1`，与仓库 MSVC 静态 CRT 保持一致。macOS 及 Windows x64、原生 Linux 宿主在打包后运行 Rust 回归；跨架构 Windows 包不在 x64 宿主执行。
 
 macOS 使用 ad-hoc 签名和经过校验的 Tauri 更新签名，Developer ID/公证仍需独立证书配置。Linux ARM64 当前没有自动更新条目，使用 deb/rpm 安装包升级。CI 构建成功不等同于其他平台已完成真实桌面划词、截图或全部模型的人工验收。
+
+
+eSpeak NG 默认 POSIX 数据目录缓冲只有 160 字节。显式 `--target` 的干净 CI 构建会在 `compiledata.c` 拼接音素源文件名时截断路径；`.cargo/config.toml` 通过上游支持的 `N_PATH_HOME=4096` 编译宏同时扩大宿主工具与内嵌音素引擎的目录容量。自定义 `CFLAGS` 时请保留此宏。

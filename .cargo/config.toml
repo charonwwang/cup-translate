@@ -2,3 +2,9 @@
 # sentencepiece, and the executable must use the same runtime to avoid LNK2038.
 [target.'cfg(all(windows, target_env = "msvc"))']
 rustflags = ["-C", "target-feature=+crt-static"]
+
+# eSpeak's POSIX default reserves only 160 bytes for its data directory.
+# Explicit target builds in CI exceed that limit while compiling phonemes.
+# Use the upstream override for both host tools and the bundled phonemizer.
+[env]
+CFLAGS = { value = "-DN_PATH_HOME=4096", force = false }
