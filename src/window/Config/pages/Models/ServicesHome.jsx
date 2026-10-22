@@ -12,6 +12,8 @@ export default function ServicesHome({
     voice,
     piper,
     kokoro,
+    qwen,
+    onQwenSettings,
     onKokoroSettings,
     onAddVoice,
     onPiperSettings,
@@ -33,7 +35,8 @@ export default function ServicesHome({
         tab === 'translation'
             ? services.filter(({ config }) => config?.enable !== false && config?.enable !== 'false').length
             : Number(
-                  (speechPolicy === 'kokoro' && kokoro?.installed) ||
+                  (speechPolicy === 'qwen' && qwen?.configured) ||
+                      (speechPolicy === 'kokoro' && kokoro?.installed) ||
                       (speechPolicy === 'piper' && piper?.voices?.some((entry) => entry.installed)) ||
                       (speechPolicy === 'local' && localSpeech) ||
                       (speechPolicy === 'google' && privacy !== 'device_only')
@@ -262,7 +265,7 @@ export default function ServicesHome({
                     <section className='service-panel'>
                         <div className='service-panel-head'>
                             <h3>{t('models.home_speech_services')}</h3>
-                            <span>{t('models.home_speech_follow')}</span>
+                            <span>{t('models.speech_fallback_hint')}</span>
                         </div>
                         <div className='service-home-row'>
                             <span className='service-home-logo system'>
@@ -290,7 +293,7 @@ export default function ServicesHome({
                                     aria-label={t('models.system_voice')}
                                     isDisabled={!localSpeech}
                                     isSelected={speechPolicy === 'local'}
-                                    onValueChange={(value) => onSpeechPolicy(value ? 'local' : 'off')}
+                                    onValueChange={(value) => onSpeechPolicy(value ? 'local' : 'engine')}
                                 />
                             </div>
                         </div>
@@ -314,7 +317,7 @@ export default function ServicesHome({
                                 aria-label={t('models.google_speech')}
                                 isDisabled={privacy === 'device_only'}
                                 isSelected={speechPolicy === 'google'}
-                                onValueChange={(value) => onSpeechPolicy(value ? 'google' : 'off')}
+                                onValueChange={(value) => onSpeechPolicy(value ? 'google' : 'engine')}
                             />
                         </div>
                         {piper?.voices?.some((entry) => entry.installed) && (
@@ -344,7 +347,32 @@ export default function ServicesHome({
                                         size='sm'
                                         aria-label='Piper'
                                         isSelected={speechPolicy === 'piper'}
-                                        onValueChange={(value) => onSpeechPolicy(value ? 'piper' : 'off')}
+                                        onValueChange={(value) => onSpeechPolicy(value ? 'piper' : 'engine')}
+                                    />
+                                </div>
+                            </div>
+                        )}
+                        {qwen?.configured && (
+                            <div className='service-home-row'>
+                                <span className='service-home-logo local'>
+                                    <LuVolume2 size={16} />
+                                </span>
+                                <div className='service-home-copy'>
+                                    <strong>Qwen3-TTS</strong>
+                                    <p>{t('models.qwen_intro')}</p>
+                                </div>
+                                <div className='service-home-actions'>
+                                    <button
+                                        className='service-text-button'
+                                        onClick={onQwenSettings}
+                                    >
+                                        {t('models.home_settings')}
+                                    </button>
+                                    <Switch
+                                        size='sm'
+                                        aria-label='Qwen3-TTS'
+                                        isSelected={speechPolicy === 'qwen'}
+                                        onValueChange={(value) => onSpeechPolicy(value ? 'qwen' : 'engine')}
                                     />
                                 </div>
                             </div>
@@ -372,7 +400,7 @@ export default function ServicesHome({
                                         size='sm'
                                         aria-label='Kokoro'
                                         isSelected={speechPolicy === 'kokoro'}
-                                        onValueChange={(value) => onSpeechPolicy(value ? 'kokoro' : 'off')}
+                                        onValueChange={(value) => onSpeechPolicy(value ? 'kokoro' : 'engine')}
                                     />
                                 </div>
                             </div>

@@ -1,3 +1,4 @@
+import ModelWizardSteps from './ModelWizardSteps';
 import React from 'react';
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Button } from '@nextui-org/react';
 import { useTranslation } from 'react-i18next';
@@ -23,7 +24,17 @@ export default function SpeechModels({ open, onClose, onSelect }) {
                     </div>
                 </ModalHeader>
                 <ModalBody>
+                    <ModelWizardSteps step={1} />
                     <div className='model-family-grid speech-family-grid'>
+                        <button
+                            className='model-family-card'
+                            onClick={() => onSelect('qwen')}
+                        >
+                            <strong>Qwen3-TTS</strong>
+                            <span>{t('models.qwen_intro')}</span>
+                            <small>0.6B / 1.7B · CustomVoice · Apache-2.0</small>
+                            <small>{t('models.local_service')}</small>
+                        </button>
                         <button
                             className='model-family-card'
                             onClick={() => onSelect('kokoro')}

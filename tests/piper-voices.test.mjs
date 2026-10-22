@@ -18,7 +18,7 @@ test('Piper preferences follow each spoken language and preserve locale boundari
 });
 test('Piper is an explicit offline choice independent of translation engine', () => {
     for (const engine of ['google', 'local_mt', 'openai', 'source'])
-        assert.equal(resolveSpeechService(engine, 'piper', []), 'piper_tts');
+        assert.equal(resolveSpeechService(engine, 'piper', []), engine === 'google' ? 'google_tts' : 'piper_tts');
     assert.doesNotThrow(() => assertPolicy('device_only', 'tts', 'piper_tts'));
     assert.throws(() => assertPolicy('device_only', 'tts', 'piper-plugin'));
     assert.equal(resolveSpeechService('source', 'off', ['piper_tts']), null);

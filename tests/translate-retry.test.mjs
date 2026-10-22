@@ -1,10 +1,13 @@
+import { parseEnglishDictionary } from '../src/utils/englishDictionary.js';
 import { createRequestCache } from '../src/utils/requestCache.js';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const GOOGLE = 'src/services/translate/google/index.jsx';
-const normalizedWord = (translation) => ({
+const normalizedWord = (translation, sourceText = 'hello', sourceLanguage = 'en') => ({
+    sourceText,
+    sourceLanguage,
     pronunciations: [],
     explanations: [{ trait: '', explains: [translation] }],
     associations: [],
@@ -18,7 +21,7 @@ const normalizedWord = (translation) => ({
 // 为避免「测试自己复刻逻辑、真实代码回归却照样全绿」，这里把真实源码
 // 装进受控作用域执行，并把 sleep 换成记录器 + 零延迟，从而直接观测
 // 真实实现到底睡了哪些时长。
-async function loadRealTranslate({ responses }) {
+async function loadRealTranslate({ responses, dictionary = [] }) {
     const source = await readFile(GOOGLE, 'utf8');
     const body = source
         // 去掉 import / export 关键字（new Function 里不能出现），
@@ -37,6 +40,7 @@ async function loadRealTranslate({ responses }) {
     let call = 0;
     // 与源码中 `fetchWithTimeout as fetch` 的别名对应
     const fetch = async (url, options) => {
+        if (url.startsWith('https://api.dictionaryapi.dev/')) return { ok: true, data: dictionary };
         requestOptions.push(options);
         attempted.push(url);
         const next = responses[Math.min(call, responses.length - 1)];
@@ -51,9 +55,10 @@ async function loadRealTranslate({ responses }) {
         'fetch',
         '__slept',
         'createRequestCache',
+        'parseEnglishDictionary',
         `${body}\nreturn { translate, supplement };`
     );
-    return { ...factory(fetch, slept, createRequestCache), slept, attempted, requestOptions };
+    return { ...factory(fetch, slept, createRequestCache, parseEnglishDictionary), slept, attempted, requestOptions };
 }
 
 test('real translate: no backoff sleep after the final attempt', async () => {
@@ -105,7 +110,7 @@ test('real translate: a first-try success never sleeps', async () => {
         responses: [{ ok: true, status: 200, data: [[['hi', 'x', null, null]], null] }],
     });
 
-    assert.deepEqual(await translate('你好', 'zh', 'en', { config: {} }), normalizedWord('hi'));
+    assert.deepEqual(await translate('你好', 'zh', 'en', { config: {} }), normalizedWord('hi', '你好', 'zh'));
     assert.deepEqual(slept, []);
 });
 
@@ -264,4 +269,26 @@ test('real Google service coalesces identical requests and separates endpoint co
     await translate('hello', 'en', 'zh', { config: { custom_url: 'https://example.test' } });
     assert.equal(attempted.length, 2);
     assert.ok(requestOptions.every((options) => options.timeout === 6));
+});
+
+test('Google missing IPA and examples are supplemented without delaying the main result', async () => {
+    const dictionary = [
+        { phonetics: [{ text: '/treɪs/' }], meanings: [{ definitions: [{ example: 'Trace the line.' }] }] },
+    ];
+    const { translate, supplement } = await loadRealTranslate({
+        dictionary,
+        responses: [
+            { ok: true, data: [[['痕迹', 'Trace']], null, 'en'] },
+            { ok: true, data: [[['描出这条线。']]] },
+        ],
+    });
+    const main = await translate('Trace', 'auto', 'zh-CN');
+    assert.equal(main.pronunciations.length, 0);
+    const updates = [];
+    const enriched = await supplement(main, 'auto', 'zh-CN', { setResult: (value) => updates.push(value) });
+    assert.equal(enriched.pronunciations[0].symbol, '/treɪs/');
+    assert.equal(enriched.sentence[0].target, '描出这条线。');
+    assert.equal(enriched.dictionarySource, 'Free Dictionary');
+    assert.equal(updates[0].pronunciations[0].symbol, '/treɪs/', 'IPA publishes before example translation');
+    assert.equal(main.sentence.length, 0, 'cached main result is not mutated');
 });

@@ -12,3 +12,6 @@ export const piper_tts = guardService('tts', 'piper_tts', _piper_tts);
 
 import * as _kokoro_tts from './kokoro_tts';
 export const kokoro_tts = guardService('tts', 'kokoro_tts', _kokoro_tts);
+
+import * as _qwen_tts from './qwen_tts';
+export const qwen_tts = guardService('tts', 'qwen_tts', _qwen_tts);

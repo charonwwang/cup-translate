@@ -19,6 +19,7 @@ mod local_mt;
 #[path = "local_mt_unsupported.rs"]
 mod local_mt;
 mod local_mt_tasks;
+mod model_checks;
 mod notification;
 #[cfg(any(
     all(target_os = "macos", target_arch = "aarch64"),
@@ -39,6 +40,7 @@ mod piper;
 )))]
 #[path = "piper_unsupported.rs"]
 mod piper;
+mod qwen_tts;
 mod screenshot;
 mod server;
 mod system_ocr;
@@ -60,6 +62,8 @@ use local_mt_tasks::{local_mt_cancel_request, local_mt_prepare_request};
 use log::{info, warn, LevelFilter};
 use once_cell::sync::OnceCell;
 use piper::*;
+use model_checks::*;
+use qwen_tts::*;
 use screenshot::screenshot;
 use server::*;
 use std::sync::Mutex;
@@ -252,6 +256,13 @@ fn main() {
             piper_speak,
             piper_preview,
             tts_inventory,
+            qwen_tts_request,
+            native_speech_device_check,
+            qwen_device_check,
+            qwen_install,
+            qwen_cancel,
+            qwen_status,
+            qwen_stop,
             local_mt_download_model,
             local_mt_import_model,
             local_mt_delete_model,

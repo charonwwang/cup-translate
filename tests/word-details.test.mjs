@@ -43,8 +43,8 @@ test('missing IPA remains absent and malformed data is bounded', () => {
     assert.equal(result.sentence[0].source.length, 512);
     assert.equal(parseWordDetails('```json\n{"translation":"窗口"}\n```', true).explanations[0].explains[0], '窗口');
 });
-test('API and local services do not silently select Google speech; explicit choices and off are respected', () => {
-    assert.equal(resolveSpeechService('openai', 'engine', ['google_tts']), null);
+test('services without speech use configured fallbacks and off is respected', () => {
+    assert.equal(resolveSpeechService('openai', 'engine', ['google_tts']), 'google_tts');
     assert.equal(resolveSpeechService('ollama', 'engine', []), null);
     assert.equal(resolveSpeechService('local_mt', 'google', []), 'google_tts');
     assert.equal(resolveSpeechService('openai', 'local', []), 'local_tts');

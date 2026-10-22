@@ -1,3 +1,4 @@
+import { parseEnglishDictionary } from '../../../utils/englishDictionary';
 import { createRequestCache } from '../../../utils/requestCache';
 import { fetchWithTimeout as fetch } from '../../../utils/fetchWithTimeout';
 
@@ -202,6 +203,8 @@ async function requestTranslation(text, from, to, options = {}) {
             if (result[13]) {
                 target.sentence = sourceExamples(result[13][0]);
             }
+            target.sourceLanguage = result[2] || from;
+            target.sourceText = text;
             return target;
         } else {
             // 翻译模式
@@ -228,6 +231,8 @@ async function requestTranslation(text, from, to, options = {}) {
                 if (result[13]) {
                     wordResult.sentence = sourceExamples(result[13][0]);
                 }
+                wordResult.sourceLanguage = result[2] || from;
+                wordResult.sourceText = text;
                 return wordResult;
             }
             return target.trim();
@@ -250,21 +255,61 @@ export async function translate(text, from, to, options = {}) {
 // Called after the main result is committed. Failure never replaces the main meanings.
 export async function supplement(result, from, to, options = {}) {
     assertActive(options.signal);
-    if (!result?.sentence?.some((example) => example.source && !example.target)) return result;
-    const sentence = await cachedExamples(
-        JSON.stringify([result.sentence, from, to, options.config?.custom_url ?? '']),
-        () =>
-            translateExamples(
-                result.sentence.map((example) => [example.source]),
-                from,
-                to,
-                options
-            ),
-        options.signal
-    );
-    assertActive(options.signal);
-    return { ...result, sentence };
+    if (typeof result !== 'object' || !result) return result;
+    let enriched = { ...result };
+    const englishWord =
+        (result.sourceLanguage === 'en' || from === 'en') &&
+        /^[a-z]+(?:['’-][a-z]+)*$/i.test(result.sourceText ?? '') &&
+        result.sourceText.length <= 48;
+    if (englishWord && (!result.pronunciations?.length || (result.sentence?.length ?? 0) < 2)) {
+        try {
+            const details = await cachedExamples(
+                `dictionary:${result.sourceText.toLowerCase()}`,
+                async () => {
+                    const response = await fetch(
+                        `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(result.sourceText.toLowerCase())}`,
+                        { method: 'GET', timeout: 4 }
+                    );
+                    if (!response.ok) throw new Error('Dictionary unavailable');
+                    return parseEnglishDictionary(response.data);
+                },
+                options.signal
+            );
+            assertActive(options.signal);
+            if (!enriched.pronunciations?.length) enriched.pronunciations = details.pronunciations;
+            const existing = enriched.sentence ?? [];
+            enriched.sentence = [
+                ...existing,
+                ...details.sentence.filter((item) => !existing.some((value) => value.source === item.source)),
+            ].slice(0, 2);
+            if (details.pronunciations.length || details.sentence.length) enriched.dictionarySource = 'Free Dictionary';
+        } catch {
+            assertActive(options.signal);
+        }
+    }
+    options.setResult?.(enriched);
+    if (enriched.sentence?.some((example) => example.source && !example.target)) {
+        const detected = result.sourceLanguage || from;
+        const sentence = await cachedExamples(
+            JSON.stringify([enriched.sentence, detected, to, options.config?.custom_url ?? '']),
+            () =>
+                translateExamples(
+                    enriched.sentence.map((example) => [example.source]),
+                    detected,
+                    to,
+                    options
+                ),
+            options.signal
+        );
+        assertActive(options.signal);
+        enriched.sentence = sentence.map((example, index) => ({
+            ...example,
+            target: enriched.sentence[index]?.target || example.target,
+        }));
+    }
+    return enriched;
 }
+
 translate.pronunciationFor = pronunciationFor;
 
 export * from './Config';

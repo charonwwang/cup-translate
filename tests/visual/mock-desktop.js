@@ -1,3 +1,6 @@
+import piperManifest from '../../src-tauri/resources/piper-catalog.json';
+import kokoroManifest from '../../src-tauri/resources/kokoro-model.json';
+import kokoroVoices from '../../src-tauri/resources/kokoro-voices.json';
 // Development-only fixture entry. Not referenced by either production build entry.
 // All desktop, disk and network operations terminate in memory here.
 const params = new URLSearchParams(location.search);
@@ -57,6 +60,9 @@ const fixtureHistory = params.has('history')
           timestamp: 1792110600000 - index * 60000,
       }))
     : [];
+const installedModels = new Set();
+const installedVoices = new Set();
+let kokoroInstalled = false;
 let eventId = 0;
 const events = new Map();
 window.__TAURI_METADATA__ = { __currentWindow: { label: view }, __windows: [{ label: view }] };
@@ -110,7 +116,43 @@ window.__TAURI_IPC__ = async (args) => {
             value = Array.from(bytes);
         } else if (cmd === 'get_text') value = source;
         else if (cmd === 'lang_detect') value = params.get('detect') || 'en';
-        else if (cmd === 'local_mt_model_status') value = { installed: false };
+        else if (cmd === 'piper_catalog')
+            value = {
+                supported: true,
+                voices: piperManifest.map((voice) => ({
+                    voice,
+                    installed: installedVoices.has(voice.id),
+                    task: { state: 'not_installed' },
+                })),
+            };
+        else if (cmd === 'kokoro_model_status')
+            value = {
+                supported: true,
+                installed: kokoroInstalled,
+                model: kokoroManifest,
+                voices: kokoroVoices,
+                task: { state: 'idle' },
+            };
+        else if (cmd === 'piper_download') installedVoices.add(args.id);
+        else if (cmd === 'kokoro_download') kokoroInstalled = true;
+        else if (cmd === 'native_speech_device_check')
+            value = {
+                supported: true,
+                platform: 'macos',
+                architecture: 'aarch64',
+                modelBytes: args.family === 'kokoro' ? kokoroManifest.archiveBytes : 63e6,
+                diskAvailable: 30e9,
+                diskRequired: 600e6,
+                bundledRuntime: true,
+            };
+        else if (cmd === 'local_mt_model_status')
+            value = { installed: installedModels.has(args.pair), supported: true };
+        else if (cmd === 'local_mt_device_check')
+            value = { platform: 'macos', architecture: 'aarch64', supported: true, diskAvailable: 30e9, threads: 4 };
+        else if (cmd === 'local_mt_download_model') {
+            installedModels.add(args.pair);
+            value = null;
+        } else if (cmd === 'local_mt_delete_model') installedModels.delete(args.pair);
         else if (module === 'Path') value = message.cmd === 'join' ? message.paths.join('/') : '/fixture';
         else if (module === 'Os')
             value = { osType: 'Linux', arch: 'aarch64', version: 'fixture', locale: 'zh-CN' }[message.cmd];
@@ -155,8 +197,7 @@ window.__TAURI_IPC__ = async (args) => {
                     });
                     return;
                 }
-                const dictionaryRequest =
-                    scenario === 'dictionary' && message.options?.query?.q === source;
+                const dictionaryRequest = scenario === 'dictionary' && message.options?.query?.q === source;
                 const data = dictionaryRequest
                     ? [
                           [
@@ -164,11 +205,7 @@ window.__TAURI_IPC__ = async (args) => {
                               [null, null, null, 'tɜːrm'],
                           ],
                           [
-                              [
-                                  '名词',
-                                  null,
-                                  [['术语'], ['学期'], ['期限'], ['用语'], ['词语'], ['条款'], ['条件']],
-                              ],
+                              ['名词', null, [['术语'], ['学期'], ['期限'], ['用语'], ['词语'], ['条款'], ['条件']]],
                               ['动词', null, [['称为'], ['把…叫作']]],
                           ],
                       ]

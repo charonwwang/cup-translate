@@ -3,7 +3,7 @@ export function isDeviceAllowed(kind, name) {
     return (
         (kind === 'translate' && name === 'local_mt') ||
         (kind === 'recognize' && ['system', 'qrcode'].includes(name)) ||
-        (kind === 'tts' && ['local_tts', 'piper_tts', 'kokoro_tts'].includes(name))
+        (kind === 'tts' && ['local_tts', 'piper_tts', 'kokoro_tts', 'qwen_tts'].includes(name))
     );
 }
 export function assertPolicy(mode, kind, name) {

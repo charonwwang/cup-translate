@@ -105,7 +105,7 @@ export default function TargetArea(props) {
             : resolveSpeechService(getServiceName(currentTranslateServiceInstanceKey), speechPolicy, ttsServiceList));
     const speechService =
         privacyMode === 'device_only' &&
-        !['local_tts', 'piper_tts', 'kokoro_tts'].includes(getServiceName(resolvedSpeechService ?? ''))
+        !['local_tts', 'piper_tts', 'kokoro_tts', 'qwen_tts'].includes(getServiceName(resolvedSpeechService ?? ''))
             ? null
             : resolvedSpeechService;
     useEffect(() => {
@@ -705,9 +705,9 @@ export default function TargetArea(props) {
         );
         return {
             ...base,
-            pronunciations: extra.pronunciations,
+            pronunciations: base.pronunciations.length ? base.pronunciations : extra.pronunciations,
             examples: extra.examples,
-            senses: [...base.senses, ...extra.senses],
+            senses: base.senses,
         };
     }, [
         result,
@@ -1029,7 +1029,7 @@ export default function TargetArea(props) {
                         {!wordEntry.pronunciations.length && !isLoading && (
                             <div className='cup-dictionary-tools'>
                                 <span>{t('models.no_phonetics')}</span>
-                                {translateServiceName !== 'google' && (
+                                {
                                     <button
                                         type='button'
                                         disabled={privacyMode === 'device_only' || dictionaryLoading}
@@ -1042,12 +1042,16 @@ export default function TargetArea(props) {
                                     >
                                         {dictionaryLoading ? t('models.checking') : t('models.get_google_dictionary')}
                                     </button>
-                                )}
+                                }
                                 {privacyMode === 'device_only' && <span>{t('models.no_offline_dictionary')}</span>}
                             </div>
                         )}
-                        {dictionarySupplement && (
-                            <p className='cup-lexical-note'>{t('models.google_dictionary_note')}</p>
+                        {(dictionarySupplement || result?.dictionarySource) && (
+                            <p className='cup-lexical-note'>
+                                {result?.dictionarySource
+                                    ? t('models.dictionary_source_note')
+                                    : t('models.google_dictionary_note')}
+                            </p>
                         )}
                         {wordEntry.senses.length > 0 && (
                             <>
@@ -1441,17 +1445,19 @@ export default function TargetArea(props) {
                             <span className='cup-provider-mark'>
                                 {speechService === 'google_tts' ? 'G' : speechService ? '◉' : '·'}
                             </span>
-                            {speechService === 'google_tts'
-                                ? 'Google'
-                                : speechService === 'lingva_tts'
-                                  ? 'Lingva'
-                                  : speechService === 'kokoro_tts'
-                                    ? 'Kokoro'
-                                    : speechService === 'piper_tts'
-                                      ? 'Piper'
-                                      : speechService
-                                        ? t('translate.local_speech')
-                                        : t('translate.speech_service')}
+                            {speechService === 'qwen_tts'
+                                ? 'Qwen3-TTS'
+                                : speechService === 'google_tts'
+                                  ? 'Google'
+                                  : speechService === 'lingva_tts'
+                                    ? 'Lingva'
+                                    : speechService === 'kokoro_tts'
+                                      ? 'Kokoro'
+                                      : speechService === 'piper_tts'
+                                        ? 'Piper'
+                                        : speechService
+                                          ? t('translate.local_speech')
+                                          : t('translate.speech_service')}
                         </button>
                     </DropdownTrigger>
                     <DropdownMenu
@@ -1485,6 +1491,7 @@ export default function TargetArea(props) {
                         </DropdownItem>
                         <DropdownItem key='piper_tts'>Piper · {t('models.offline_short')}</DropdownItem>
                         <DropdownItem key='kokoro_tts'>Kokoro · {t('models.offline_short')}</DropdownItem>
+                        <DropdownItem key='qwen_tts'>Qwen3-TTS · {t('models.local_service')}</DropdownItem>
                         <DropdownItem key='off'>{t('models.no_speech')}</DropdownItem>
                     </DropdownMenu>
                 </Dropdown>

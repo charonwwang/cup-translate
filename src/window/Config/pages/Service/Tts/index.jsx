@@ -85,6 +85,9 @@ export default function Tts(props) {
                 >
                     <SelectItem key='engine'>{t('translate.follow_engine')}</SelectItem>
                     <SelectItem key='google'>Google</SelectItem>
+                    <SelectItem key='piper'>Piper</SelectItem>
+                    <SelectItem key='kokoro'>Kokoro</SelectItem>
+                    <SelectItem key='qwen'>Qwen3-TTS</SelectItem>
                     <SelectItem key='local'>{t('translate.local_speech')}</SelectItem>
                     <SelectItem key='configured'>{t('translate.configured_speech')}</SelectItem>
                 </Select>

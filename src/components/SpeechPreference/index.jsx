@@ -7,6 +7,7 @@ import './speechPreference.css';
 export default function SpeechPreference({ compact = false }) {
     const { t } = useTranslation();
     const [policy, setPolicy] = useConfig('speech_policy', 'engine');
+    const [qwen] = useConfig('qwen_tts', {});
     const [privacy] = useConfig('privacy_mode', 'standard');
     const [kokoroReady, setKokoroReady] = useState(false);
     const [piperReady, setPiperReady] = useState(false);
@@ -67,6 +68,15 @@ export default function SpeechPreference({ compact = false }) {
                 >
                     Kokoro <small>{t('models.offline_short')}</small>
                 </button>
+                {qwen?.configured && (
+                    <button
+                        type='button'
+                        aria-pressed={policy === 'qwen'}
+                        onClick={() => setPolicy('qwen')}
+                    >
+                        Qwen3-TTS <small>{t('models.local_service')}</small>
+                    </button>
+                )}
                 <button
                     type='button'
                     aria-pressed={policy === 'off'}

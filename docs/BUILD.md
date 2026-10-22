@@ -480,3 +480,10 @@ Windows x64 的最后链接还需要 llama.cpp 与 CTranslate2 共用静态 CRT�
 
 
 Windows 原生回归发现备份 ZIP 插件条目使用了反斜杠，无法按统一 ZIP 路径跨平台恢复。归档名称改由纯 `backup_path.rs` 路径组件函数生成，只写 `/`，保留 Unicode；拒绝绝对路径、上跳及不可跨平台表达的文件名。发布及分支 Windows 预检直接用 rustc 编译并运行该标准库测试模块，无需先编译模型后端；完整发布仍执行插件备份/恢复往返测试。
+
+
+### Qwen3-TTS 运行时与安装向导
+
+Qwen 采用应用管理的 Python 子进程。构建时通过 Rust `include_str!` 嵌入 `scripts/qwen-runtime.py` 和 `src-tauri/resources/qwen-models.json`，构建机器无需安装 Python / PyTorch，模型与依赖也不打进主应用包。用户在应用内通过“选择 → 检查 → 安装”按需安装。第二步先检测完整兼容环境和现有解释器，再决定复用或下载；缺依赖时创建应用专用环境，不修改系统环境。详见 [Qwen 安装说明](qwen-tts.md)。
+
+修改 Python 运行时或模型清单后必须重编 Rust；仅重建前端不会更新嵌入内容。Python 协议及校验测试可运行 `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_qwen_runtime.py'`。这类单元测试不替代真实权重的安装及合成验证。

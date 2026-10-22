@@ -1,3 +1,5 @@
+import { useLocation } from 'react-router-dom';
+import QwenSpeech from './QwenSpeech';
 import SpeechModels from './SpeechModels';
 import KokoroVoices from './KokoroVoices';
 import PiperVoices from './PiperVoices';
@@ -50,7 +52,16 @@ export default function Models() {
     const [services, setServices] = useState([]);
     const [catalogOpen, setCatalogOpen] = useState(false);
     const [manageModelId, setManageModelId] = useState(null);
+    const location = useLocation();
+    useEffect(() => {
+        const id = new URLSearchParams(location.search).get('install');
+        if (['en-zh', 'zh-en', 'm2m100', 'hymt-q4', 'hymt-q8'].includes(id)) {
+            setCatalogOpen(true);
+            setManageModelId(id);
+        }
+    }, [location.search]);
     const [panel, setPanel] = useState(null);
+    const [qwen] = useConfig('qwen_tts', {});
     const [speechPolicy] = useConfig('speech_policy', 'engine');
     const [piper, setPiper] = useState(null);
     const [speechFamily, setSpeechFamily] = useState(null);
@@ -259,13 +270,18 @@ export default function Models() {
                 piper={piper}
                 onPiperSettings={() => setSpeechFamily('piper')}
                 kokoro={kokoro}
+                qwen={qwen}
+                onQwenSettings={() => setSpeechFamily('qwen')}
                 onKokoroSettings={() => setSpeechFamily('kokoro')}
                 onAddVoice={() => setSpeechFamily('choose')}
                 speechPolicy={speechPolicy}
                 onToggle={toggleService}
                 onSpeechPolicy={chooseSpeechPolicy}
                 onAdd={() => setCatalogOpen(true)}
-                onManage={setManageModelId}
+                onManage={(id) => {
+                    if (!status[id]?.installed) setCatalogOpen(true);
+                    setManageModelId(id);
+                }}
                 onConnect={openConnection}
                 onVoiceSettings={() => setPanel('voice')}
                 onGlossary={() => setPanel('glossary')}
@@ -274,6 +290,11 @@ export default function Models() {
                 open={speechFamily === 'choose'}
                 onClose={() => setSpeechFamily(null)}
                 onSelect={setSpeechFamily}
+            />
+            <QwenSpeech
+                open={speechFamily === 'qwen'}
+                onClose={() => setSpeechFamily(null)}
+                onSaved={() => chooseSpeechPolicy('qwen')}
             />
             <KokoroVoices
                 open={speechFamily === 'kokoro'}

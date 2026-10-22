@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { store } from '../../../utils/store';
 import { Button, Input, Select, SelectItem } from '@nextui-org/react';
 import toast, { Toaster } from 'react-hot-toast';
@@ -16,6 +17,7 @@ const PAIRS = ['en-zh', 'zh-en'];
 export function Config(props) {
     const { instanceKey, updateServiceList, onClose } = props;
     const { t } = useTranslation();
+    const navigate = useNavigate();
     const [config, setConfig] = useConfig(
         instanceKey,
         {
@@ -182,22 +184,12 @@ export function Config(props) {
                                 <Button
                                     color='primary'
                                     isDisabled={busy !== '' || status?.supported === false}
-                                    isLoading={busy === `download-${pair}`}
-                                    onPress={async () => {
-                                        setBusy(`download-${pair}`);
-                                        try {
-                                            await invoke('local_mt_download_model', { pair });
-                                            await refreshStatus();
-                                            toast.success(t('services.translate.local_mt.download_done'), {
-                                                style: toastStyle,
-                                            });
-                                        } catch (e) {
-                                            toast.error(e.toString(), { style: toastStyle });
-                                        }
-                                        setBusy('');
+                                    onPress={() => {
+                                        onClose();
+                                        navigate(`/models?install=${encodeURIComponent(pair)}`);
                                     }}
                                 >
-                                    {t('services.translate.local_mt.download_model')}
+                                    {t('models.wizard_next')}
                                 </Button>
                             )}
                         </div>

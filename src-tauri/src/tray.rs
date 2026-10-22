@@ -236,6 +236,7 @@ fn on_quit_click(app: &AppHandle) {
     }
     crate::hotkey::clear_registered_accelerators();
     info!("============== Quit App ==============");
+    crate::qwen_tts::shutdown();
     app.exit(0);
 }
 

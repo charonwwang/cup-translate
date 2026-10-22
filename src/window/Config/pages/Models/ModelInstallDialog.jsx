@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import ModelWizardSteps from './ModelWizardSteps';
 import {
     Modal,
     ModalContent,
@@ -36,6 +37,11 @@ export default function ModelInstallDialog({
         modelPairs
             .map((pair) => status[pair])
             .some((item) => ['queued', 'downloading', 'verifying', 'warming'].includes(item?.task?.state));
+    const [step, setStep] = useState(2);
+    useEffect(() => {
+        if (open) setStep(ready || running ? 3 : 2);
+    }, [open]);
+    const close = () => (ready && !running ? onSave() : onClose());
     const enough = device?.diskAvailable >= device?.diskRequired;
     const compatible = device?.supported;
     const checks = [
@@ -76,9 +82,9 @@ export default function ModelInstallDialog({
         <Modal
             disableAnimation
             isOpen={open}
-            onClose={onClose}
+            onClose={close}
             onOpenChange={(isOpen) => {
-                if (!isOpen) onClose();
+                if (!isOpen) close();
             }}
             size='2xl'
             scrollBehavior='inside'
@@ -110,6 +116,7 @@ export default function ModelInstallDialog({
                     </div>
                 </ModalHeader>
                 <ModalBody>
+                    <ModelWizardSteps step={step} />
                     <div className='model-check-layout'>
                         <section className='model-check-card'>
                             <h3>{t('models.device_checks')}</h3>
@@ -245,7 +252,7 @@ export default function ModelInstallDialog({
                     <Button
                         size='sm'
                         variant='light'
-                        onPress={onClose}
+                        onPress={close}
                     >
                         {t(running ? 'models.close_background' : 'common.close')}
                     </Button>
@@ -256,7 +263,16 @@ export default function ModelInstallDialog({
                             isDisabled={busy}
                             onPress={onSave}
                         >
-                            {t('common.save')}
+                            {t('models.save_and_close')}
+                        </Button>
+                    ) : step === 2 ? (
+                        <Button
+                            size='sm'
+                            color='primary'
+                            isDisabled={!compatible || !enough || !license || running}
+                            onPress={() => setStep(3)}
+                        >
+                            {t('models.wizard_to_install')}
                         </Button>
                     ) : (
                         <Button

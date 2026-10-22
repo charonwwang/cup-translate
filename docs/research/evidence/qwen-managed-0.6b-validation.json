@@ -1,0 +1,35 @@
+[
+  {
+    "language": "English",
+    "voice": "Ryan",
+    "device": "mps",
+    "rate": 24000,
+    "duration": 6.72,
+    "synthesisSeconds": 18.45,
+    "peak": 14855,
+    "rms": 1892.89,
+    "file": "qwen-managed-0.6b-en.wav"
+  },
+  {
+    "language": "Chinese",
+    "voice": "Vivian",
+    "device": "mps",
+    "rate": 24000,
+    "duration": 5.04,
+    "synthesisSeconds": 11.39,
+    "peak": 23899,
+    "rms": 3740.98,
+    "file": "qwen-managed-0.6b-zh.wav"
+  },
+  {
+    "language": "Japanese",
+    "voice": "Ono_Anna",
+    "device": "mps",
+    "rate": 24000,
+    "duration": 5.28,
+    "synthesisSeconds": 12.17,
+    "peak": 5170,
+    "rms": 999.58,
+    "file": "qwen-managed-0.6b-ja.wav"
+  }
+]

@@ -1,3 +1,4 @@
+import ModelWizardSteps from './ModelWizardSteps';
 import React, { useEffect, useState } from 'react';
 import {
     Button,
@@ -59,6 +60,7 @@ export default function ModelCatalog({
         if (browseOpen) setFamily(null);
     }, [browseOpen]);
     const [installFinished, setInstallFinished] = useState(false);
+    const [step, setStep] = useState(2);
     const [installedOnly, setInstalledOnly] = useState(false);
     const [device, setDevice] = useState(null);
     const [accepted, setAccepted] = useState(false);
@@ -66,6 +68,7 @@ export default function ModelCatalog({
     const [source, setSource] = useState('official');
     const [address, setAddress] = useState('');
     const [busyId, setBusyId] = useState('');
+    const [saving, setSaving] = useState(false);
     const [instances, setInstances] = useState({});
     const [confirmRemoval, setConfirmRemoval] = useState(false);
     const [advanced, setAdvanced] = useState('');
@@ -79,8 +82,9 @@ export default function ModelCatalog({
         refreshInstances().catch(() => {});
     }, []);
     const item = selected ? status[selected.id] : null;
-    const running = !!busyId || localTaskRunning(item);
+    const running = !!busyId || saving || localTaskRunning(item);
     const canInstall =
+        step === 3 &&
         selected &&
         item &&
         item.supported !== false &&
@@ -112,7 +116,10 @@ export default function ModelCatalog({
     };
     const manage = (model) =>
         act(async () => {
+            setFamily(model.family);
+            setCandidate(model.id);
             setSelected(model);
+            setStep(status[model.id]?.installed || localTaskRunning(status[model.id]) ? 3 : 2);
             setInstallFinished(false);
             setDevice(null);
             setAccepted(false);
@@ -167,10 +174,30 @@ export default function ModelCatalog({
                 setInstallFinished(true);
             });
         });
-    const closeManager = () => {
+    const dismissManager = () => {
         setSelected(null);
         setConfirmRemoval(false);
         onBrowseClose();
+    };
+    const saveAndClose = () => {
+        if (running) return;
+        return act(async () => {
+            setSaving(true);
+            try {
+                if (selected && (item?.installed || installFinished)) {
+                    await saveService(selected, enabled);
+                    await refresh();
+                }
+                dismissManager();
+            } finally {
+                setSaving(false);
+            }
+        });
+    };
+    const closeManager = () => {
+        if (saving) return;
+        if (selected && (item?.installed || installFinished) && !running) return saveAndClose();
+        dismissManager();
     };
     useEffect(() => {
         if (!manageModelId) return;
@@ -199,7 +226,7 @@ export default function ModelCatalog({
                             <h2>{t('models.home_add_local')}</h2>
                             <p>{t('models.wizard_subtitle')}</p>
                         </div>
-                        <WizardSteps
+                        <ModelWizardSteps
                             step={1}
                             t={t}
                         />
@@ -379,9 +406,9 @@ export default function ModelCatalog({
                                 </div>
                             </ModalHeader>
                             <ModalBody>
-                                {browseOpen && (
-                                    <WizardSteps
-                                        step={localTaskRunning(item) || busyId || installFinished ? 3 : 2}
+                                {(browseOpen || !item?.installed) && (
+                                    <ModelWizardSteps
+                                        step={step}
                                         t={t}
                                     />
                                 )}
@@ -478,55 +505,57 @@ export default function ModelCatalog({
                                         {item.task.error && <p role='alert'>{item.task.error}</p>}
                                     </div>
                                 )}
-                                <details className='models-details'>
-                                    <summary>{t('models.catalog_sources')}</summary>
-                                    <p>{t('models.catalog_source_hint')}</p>
-                                    <Select
-                                        size='sm'
-                                        label={t('models.source_label')}
-                                        selectedKeys={[source]}
-                                        isDisabled={running}
-                                        onSelectionChange={(keys) => setSource([...keys][0] ?? 'official')}
-                                    >
-                                        <SelectItem key='official'>{t('models.catalog_official')}</SelectItem>
-                                        <SelectItem key='custom'>{t('models.catalog_custom')}</SelectItem>
-                                    </Select>
-                                    {source === 'custom' && (
-                                        <Input
+                                {step === 3 && (
+                                    <details className='models-details'>
+                                        <summary>{t('models.catalog_sources')}</summary>
+                                        <p>{t('models.catalog_source_hint')}</p>
+                                        <Select
                                             size='sm'
-                                            type='url'
-                                            label={t('models.catalog_address')}
-                                            placeholder={item?.downloadBase ?? 'https://example.org/model-files'}
-                                            value={address}
+                                            label={t('models.source_label')}
+                                            selectedKeys={[source]}
                                             isDisabled={running}
-                                            onValueChange={setAddress}
-                                        />
-                                    )}
-                                    <p>{t('models.catalog_import_hint')}</p>
-                                    <div className='models-row-actions'>
-                                        <Button
-                                            size='sm'
-                                            isDisabled={!canInstall || (source === 'custom' && !address.trim())}
-                                            onPress={download}
+                                            onSelectionChange={(keys) => setSource([...keys][0] ?? 'official')}
                                         >
-                                            <LuDownload size={12} />
-                                            {t(
-                                                item?.installed
-                                                    ? 'models.catalog_repair'
-                                                    : 'models.catalog_download_selected'
-                                            )}
-                                        </Button>
-                                        <Button
-                                            size='sm'
-                                            variant='flat'
-                                            isDisabled={!canInstall}
-                                            onPress={importModel}
-                                        >
-                                            <LuFolderInput size={12} />
-                                            {t('models.catalog_import')}
-                                        </Button>
-                                    </div>
-                                </details>
+                                            <SelectItem key='official'>{t('models.catalog_official')}</SelectItem>
+                                            <SelectItem key='custom'>{t('models.catalog_custom')}</SelectItem>
+                                        </Select>
+                                        {source === 'custom' && (
+                                            <Input
+                                                size='sm'
+                                                type='url'
+                                                label={t('models.catalog_address')}
+                                                placeholder={item?.downloadBase ?? 'https://example.org/model-files'}
+                                                value={address}
+                                                isDisabled={running}
+                                                onValueChange={setAddress}
+                                            />
+                                        )}
+                                        <p>{t('models.catalog_import_hint')}</p>
+                                        <div className='models-row-actions'>
+                                            <Button
+                                                size='sm'
+                                                isDisabled={!canInstall || (source === 'custom' && !address.trim())}
+                                                onPress={download}
+                                            >
+                                                <LuDownload size={12} />
+                                                {t(
+                                                    item?.installed
+                                                        ? 'models.catalog_repair'
+                                                        : 'models.catalog_download_selected'
+                                                )}
+                                            </Button>
+                                            <Button
+                                                size='sm'
+                                                variant='flat'
+                                                isDisabled={!canInstall}
+                                                onPress={importModel}
+                                            >
+                                                <LuFolderInput size={12} />
+                                                {t('models.catalog_import')}
+                                            </Button>
+                                        </div>
+                                    </details>
+                                )}
                                 <details className='models-details'>
                                     <summary>{t('models.version_details')}</summary>
                                     <dl>
@@ -598,7 +627,24 @@ export default function ModelCatalog({
                                     </div>
                                 ) : (
                                     <div className='models-row-actions model-catalog-actions'>
-                                        {!item?.installed && !localTaskRunning(item) && (
+                                        {step === 2 && (
+                                            <Button
+                                                size='sm'
+                                                className='service-primary-button'
+                                                isDisabled={
+                                                    !device?.supported ||
+                                                    !item ||
+                                                    item.supported === false ||
+                                                    device.diskAvailable < selected.disk ||
+                                                    !accepted ||
+                                                    running
+                                                }
+                                                onPress={() => setStep(3)}
+                                            >
+                                                {t('models.wizard_to_install')}
+                                            </Button>
+                                        )}
+                                        {step === 3 && !item?.installed && !localTaskRunning(item) && (
                                             <Button
                                                 size='sm'
                                                 className='service-primary-button'
@@ -608,13 +654,13 @@ export default function ModelCatalog({
                                                 {t('models.begin_install')}
                                             </Button>
                                         )}
-                                        {browseOpen && !running && (
+                                        {browseOpen && !running && !item?.installed && !installFinished && (
                                             <Button
                                                 size='sm'
                                                 variant='light'
-                                                onPress={() => setSelected(null)}
+                                                onPress={() => (step === 3 ? setStep(2) : setSelected(null))}
                                             >
-                                                {t('models.wizard_back')}
+                                                {t(step === 3 ? 'models.wizard_back_check' : 'models.wizard_back')}
                                             </Button>
                                         )}
                                         {localTaskRunning(item) && (
@@ -655,13 +701,9 @@ export default function ModelCatalog({
                                                     size='sm'
                                                     className='service-primary-button'
                                                     isDisabled={running}
-                                                    onPress={() =>
-                                                        job(async (model) => {
-                                                            await saveService(model, enabled);
-                                                        })
-                                                    }
+                                                    onPress={saveAndClose}
                                                 >
-                                                    {t('common.save')}
+                                                    {t('models.save_and_close')}
                                                 </Button>
                                                 {item.loaded && (
                                                     <Button
@@ -718,24 +760,5 @@ export default function ModelCatalog({
                 </ModalContent>
             </Modal>
         </>
-    );
-}
-
-function WizardSteps({ step, t }) {
-    return (
-        <div
-            className='model-wizard-steps'
-            aria-label={t('models.wizard_steps')}
-        >
-            {['wizard_step_choose', 'wizard_step_check', 'wizard_step_install'].map((key, index) => (
-                <span
-                    key={key}
-                    className={step === index + 1 ? 'active' : step > index + 1 ? 'complete' : ''}
-                >
-                    <i>{index + 1}</i>
-                    {t(`models.${key}`)}
-                </span>
-            ))}
-        </div>
     );
 }

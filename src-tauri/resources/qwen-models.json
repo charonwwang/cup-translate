@@ -1,0 +1,160 @@
+{
+  "models": [
+    {
+      "id": "0.6B",
+      "repo": "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
+      "revision": "85e237c12c027371202489a0ec509ded67b5e4b5",
+      "files": [
+        {
+          "name": "config.json",
+          "bytes": 4908,
+          "sha256": null
+        },
+        {
+          "name": "generation_config.json",
+          "bytes": 245,
+          "sha256": null
+        },
+        {
+          "name": "merges.txt",
+          "bytes": 1671839,
+          "sha256": null
+        },
+        {
+          "name": "model.safetensors",
+          "bytes": 1811626576,
+          "sha256": "bc3c7e785eb961179c25450d1acff03f839e0002f2f3a5aeb67b5735c0fa2adb"
+        },
+        {
+          "name": "preprocessor_config.json",
+          "bytes": 127,
+          "sha256": null
+        },
+        {
+          "name": "speech_tokenizer/config.json",
+          "bytes": 2336,
+          "sha256": null
+        },
+        {
+          "name": "speech_tokenizer/configuration.json",
+          "bytes": 76,
+          "sha256": null
+        },
+        {
+          "name": "speech_tokenizer/model.safetensors",
+          "bytes": 682293092,
+          "sha256": "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258"
+        },
+        {
+          "name": "speech_tokenizer/preprocessor_config.json",
+          "bytes": 234,
+          "sha256": null
+        },
+        {
+          "name": "tokenizer_config.json",
+          "bytes": 7344,
+          "sha256": null
+        },
+        {
+          "name": "vocab.json",
+          "bytes": 2776833,
+          "sha256": null
+        }
+      ]
+    },
+    {
+      "id": "1.7B",
+      "repo": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+      "revision": "0c0e3051f131929182e2c023b9537f8b1c68adfe",
+      "files": [
+        {
+          "name": "config.json",
+          "bytes": 4908,
+          "sha256": null
+        },
+        {
+          "name": "generation_config.json",
+          "bytes": 245,
+          "sha256": null
+        },
+        {
+          "name": "merges.txt",
+          "bytes": 1671839,
+          "sha256": null
+        },
+        {
+          "name": "model.safetensors",
+          "bytes": 3833402552,
+          "sha256": "38b1d5971bdbd982b561cccec982669a53b0537c3cf5e9bd4778ed07bb2f5137"
+        },
+        {
+          "name": "preprocessor_config.json",
+          "bytes": 127,
+          "sha256": null
+        },
+        {
+          "name": "speech_tokenizer/config.json",
+          "bytes": 2336,
+          "sha256": null
+        },
+        {
+          "name": "speech_tokenizer/configuration.json",
+          "bytes": 76,
+          "sha256": null
+        },
+        {
+          "name": "speech_tokenizer/model.safetensors",
+          "bytes": 682293092,
+          "sha256": "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258"
+        },
+        {
+          "name": "speech_tokenizer/preprocessor_config.json",
+          "bytes": 234,
+          "sha256": null
+        },
+        {
+          "name": "tokenizer_config.json",
+          "bytes": 7344,
+          "sha256": null
+        },
+        {
+          "name": "vocab.json",
+          "bytes": 2776833,
+          "sha256": null
+        }
+      ]
+    }
+  ],
+  "uv": {
+    "aarch64-apple-darwin": {
+      "url": "https://github.com/astral-sh/uv/releases/download/0.9.5/uv-aarch64-apple-darwin.tar.gz",
+      "sha256": "dc098ff224d78ed418e121fd374f655949d2c7031a70f6f6604eaf016a130433",
+      "archive": "tar.gz"
+    },
+    "x86_64-apple-darwin": {
+      "url": "https://github.com/astral-sh/uv/releases/download/0.9.5/uv-x86_64-apple-darwin.tar.gz",
+      "sha256": "58b1d4a25aa8ff99147c2550b33dcf730207fe7e0f9a0d5d36a1bbf36b845aca",
+      "archive": "tar.gz"
+    },
+    "aarch64-unknown-linux-gnu": {
+      "url": "https://github.com/astral-sh/uv/releases/download/0.9.5/uv-aarch64-unknown-linux-gnu.tar.gz",
+      "sha256": "9db0c2f6683099f86bfeea47f4134e915f382512278de95b2a0e625957594ff3",
+      "archive": "tar.gz"
+    },
+    "x86_64-unknown-linux-gnu": {
+      "url": "https://github.com/astral-sh/uv/releases/download/0.9.5/uv-x86_64-unknown-linux-gnu.tar.gz",
+      "sha256": "2cf10babba653310606f8b49876cfb679928669e7ddaa1fb41fb00ce73e64f66",
+      "archive": "tar.gz"
+    },
+    "x86_64-pc-windows-msvc": {
+      "url": "https://github.com/astral-sh/uv/releases/download/0.9.5/uv-x86_64-pc-windows-msvc.zip",
+      "sha256": "515dc53d7553f1357d0abc1f70acd921fbb9e30230b1d9a08737236daa6ee920",
+      "archive": "zip"
+    },
+    "aarch64-pc-windows-msvc": {
+      "url": "https://github.com/astral-sh/uv/releases/download/0.9.5/uv-aarch64-pc-windows-msvc.zip",
+      "sha256": "4c615aa19e37b2ec7da3370a25a562bb0061ab005081e4539702c059715dc2b0",
+      "archive": "zip"
+    }
+  }
+}

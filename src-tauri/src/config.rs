@@ -288,6 +288,7 @@ pub fn check_service_available() -> Result<(), Error> {
         "local_tts",
         "piper_tts",
         "kokoro_tts",
+        "qwen_tts",
     ];
     let builtin_collection_list: Vec<&str> = vec!["anki", "eudic"];
 

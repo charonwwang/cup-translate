@@ -1413,7 +1413,7 @@ dependencies = [
 
 [[package]]
 name = "cup-translate"
-version = "3.0.12"
+version = "3.0.13"
 dependencies = [
  "accessibility-ng",
  "arboard",
@@ -1423,6 +1423,7 @@ dependencies = [
  "ct2rs",
  "dirs 5.0.1",
  "espeak-rs-sys",
+ "flate2",
  "font-kit",
  "fs2",
  "image 0.25.4",

@@ -25,7 +25,7 @@ test('HY-MT specification follows its service instance while language stays in t
 });
 test('one multilingual TTS family routes speech independently of its translating engine', () => {
     for (const engine of ['source', 'google', 'local_mt', 'openai'])
-        assert.equal(resolveSpeechService(engine, 'kokoro', []), 'kokoro_tts');
+        assert.equal(resolveSpeechService(engine, 'kokoro', []), engine === 'google' ? 'google_tts' : 'kokoro_tts');
     assert.doesNotThrow(() => assertPolicy('device_only', 'tts', 'kokoro_tts'));
     assert.throws(() => assertPolicy('device_only', 'tts', 'kokoro-custom'));
     assert.equal(speechLanguageKey('zh_TW'), 'zh');

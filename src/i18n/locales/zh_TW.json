@@ -479,6 +479,9 @@
                 "kokoro_tts": {
                     "title": "Kokoro",
                     "help": "此处仅筛选与配置音色偏好；实际朗读语言跟随原文或译文。"
+                },
+                "qwen_tts": {
+                    "title": "Qwen3-TTS"
                 }
             },
             "collection": {
@@ -513,7 +516,8 @@
             "more_examples": "展開更多例句",
             "copy_result": "複製譯文",
             "pin": "視窗置頂",
-            "swap_languages": "交換語言"
+            "swap_languages": "交換語言",
+            "speech_policy_hint": "Google / Lingva 優先使用自身朗讀，其他翻譯服務使用所選後備語音。"
         },
         "recognize": {
             "recognize": "辨識",
@@ -797,7 +801,7 @@
             "piper_confirm_remove": "确认卸载",
             "piper_footer": "未安装时仅下载公开试听样例；安装后试听和朗读均离线。每次合成最多 3000 字。",
             "piper_service_hint": "已安装 {{count}} 个音色 · 分别跟随原文与译文语言",
-            "piper_add_hint": "选择 Kokoro 多语共用模型，或 Piper 独立音色包。",
+            "piper_add_hint": "选择 Qwen3-TTS、Kokoro 多语共用模型，或 Piper 独立音色包。",
             "piper_close": "关闭",
             "piper_speech_failed": "Piper 无法朗读当前语言。请在设置 → 模型与连接中检查对应音色是否已安装，再重试（每次最多 3000 字）。",
             "piper_preview_loading": "正在准备…",
@@ -832,7 +836,58 @@
             "kokoro_footer": "安装前：联网试听公开样例；安装后：本地合成。不自动切换到云端。",
             "speech_back_families": "返回模型系列",
             "kokoro_service_hint": "82M INT8 · 共用模型 · 七种语言、多音色",
-            "kokoro_speech_failed": "Kokoro 无法朗读当前语言。请检查模型已安装且该语言有对应音色（每次最多 3000 字）。"
+            "kokoro_speech_failed": "Kokoro 无法朗读当前语言。请检查模型已安装且该语言有对应音色（每次最多 3000 字）。",
+            "qwen_failed": "Qwen 本地朗读失败，请在模型管理中检查安装状态。",
+            "qwen_test": "试听",
+            "qwen_languages": "Chinese, English, Japanese, Korean, German, French, Russian, Portuguese, Spanish and Italian. Every voice supports all ten languages.",
+            "qwen_voice": "Voice",
+            "qwen_variant": "选择模型规格",
+            "qwen_intro": "一个模型支持十种语言与九种音色。应用自动安装依赖、启动推理，离线朗读。",
+            "local_service": "应用管理 · 本地离线",
+            "speech_fallback_hint": "Use provider speech first; choose a fallback for providers without speech",
+            "dictionary_source_note": "Pronunciations and extra examples: Free Dictionary. Example translations: Google.",
+            "save_and_close": "Save and close",
+            "wizard_back_check": "Back to checks",
+            "wizard_to_install": "Checks passed · Next: install",
+            "qwen_dependencies_detail": "依赖 Python 3.10–3.12、PyTorch、torchaudio、Transformers 4.57.3、accelerate、音频处理库及 qwen-tts 0.1.1。安装包含模型与依赖环境，不只是权重。应用自动管理，无需手动启动服务；本推理路径不需要 FlashAttention 或系统 SoX。",
+            "qwen_memory": "建议至少 {{size}} GB 内存。自动使用可用的 Apple GPU / CUDA / CPU；CPU 合成速度较慢。",
+            "qwen_checking_environment": "正在检测现有 Python、依赖版本与实际导入能力，不会开始下载…",
+            "qwen_model_download": "模型文件 {{size}}，已缓存且校验完整的文件会复用。",
+            "qwen_runtime_plan": "运行环境计划",
+            "qwen_reuse_full": "复用现有完整兼容环境，无需安装依赖。",
+            "qwen_reuse_python": "复用检测到的 Python，为应用创建独立依赖环境。",
+            "qwen_download_python": "未检测到兼容 Python，将自动下载 Python 3.12 并创建应用专用环境。",
+            "qwen_dependency_download": "依赖下载（不含模型）",
+            "qwen_no_dependency_download": "无需额外下载",
+            "qwen_dependency_estimate": "预计约 0.2–1.5 GB，含 PyTorch 和音频库；实际体积随平台与缓存而变化。缺少 Python 时另需下载运行时。",
+            "qwen_disk_required": "本次建议预留 {{size}}（包含解压与缓存）",
+            "qwen_detected_environment": "检测到的 Python / 环境",
+            "qwen_reusable": "完整兼容，可直接复用",
+            "qwen_needs_dependencies": "可复用解释器，需独立安装依赖",
+            "qwen_reuse_safety": "兼容性检查包含版本和真实模块导入。完整环境直接复用；缺依赖时创建应用专用环境，不修改现有 Python 包。",
+            "qwen_platform_unsupported": "此平台暂无已适配的 Qwen / PyTorch 运行时。",
+            "qwen_disk_insufficient": "磁盘空间不足，无法安装模型与依赖环境。",
+            "qwen_download_ack": "已了解模型、依赖下载内容及来源许可（Qwen · Apache-2.0）。",
+            "qwen_install_verified": "安装完成，已校验文件并通过真实语音合成测试。",
+            "qwen_install_plan": "点击开始安装后，按检查结果复用或安装运行环境，再下载、校验模型并试运行。中断后可重试，已下载文件保留。",
+            "qwen_autostart_hint": "朗读时应用自动启动并复用推理进程。释放内存可卸载进程，应用退出时自动结束。 首次加载与合成需要等待；单次最多 2000 字符。",
+            "qwen_stage_checking": "复核环境与磁盘",
+            "qwen_stage_runtime": "准备 Python 运行时与独立环境",
+            "qwen_stage_dependencies": "安装 PyTorch、Qwen 和音频依赖",
+            "qwen_stage_model": "下载模型（可续传）",
+            "qwen_stage_verifying": "校验模型完整性",
+            "qwen_stage_warming": "加载模型并进行真实语音测试",
+            "qwen_stage_failed": "安装失败，可重试",
+            "qwen_stage_cancelled": "已取消，下载文件已保留",
+            "qwen_stage_ready": "安装完成",
+            "native_install_intro": "选择后先检查设备与运行环境，再进入安装。",
+            "native_runtime_reuse": "复用应用内置的原生语音运行时，无需安装 Python 或额外环境。",
+            "native_dependencies_included": "运行依赖已随应用提供，无额外依赖下载",
+            "native_install_plan": "检查已通过。点击开始安装后才下载模型，完成校验和语音测试后启用。",
+            "native_install_done": "安装与校验完成，配置已保存。",
+            "qwen_cpu_fallback": "加速器测试未通过，正在使用 CPU 验证。",
+            "qwen_actual_device": "实际推理设备",
+            "qwen_other_variant": "选择其他规格"
         }
     }
 }
