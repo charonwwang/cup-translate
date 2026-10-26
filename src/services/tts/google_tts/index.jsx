@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Button } from '@nextui-org/react';
 import { useTranslation } from 'react-i18next';
 import { fetchWithTimeout as fetch } from '../../../utils/fetchWithTimeout';
@@ -121,14 +122,33 @@ export const Language = Object.freeze(
 
 export function Config({ onClose, updateServiceList, instanceKey }) {
     const { t } = useTranslation();
+    const [error, setError] = useState('');
+    const [saving, setSaving] = useState(false);
     return (
         <>
             <p>{t('translate.google_speech_hint')}</p>
+            {error && (
+                <p
+                    role='alert'
+                    className='break-all'
+                >
+                    {t('models.speech_action_failed')} {error}
+                </p>
+            )}
             <Button
                 color='primary'
-                onPress={() => {
-                    updateServiceList(instanceKey);
-                    onClose();
+                isLoading={saving}
+                onPress={async () => {
+                    setSaving(true);
+                    setError('');
+                    try {
+                        await updateServiceList(instanceKey);
+                        onClose();
+                    } catch (failure) {
+                        setError(String(failure));
+                    } finally {
+                        setSaving(false);
+                    }
                 }}
             >
                 {t('common.ok')}

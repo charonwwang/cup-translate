@@ -15,13 +15,14 @@ import {
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/tauri';
 import { emit } from '@tauri-apps/api/event';
+import { saveQwenSettings } from '../../../../utils/qwenConfig.js';
 import { store } from '../../../../utils/store';
 import { useSpeech } from '../../../../hooks/useSpeech';
 
 const voices = ['Vivian', 'Serena', 'Uncle_Fu', 'Dylan', 'Eric', 'Ryan', 'Aiden', 'Ono_Anna', 'Sohee'];
 const active = (state) => ['checking', 'runtime', 'dependencies', 'model', 'verifying', 'warming'].includes(state);
 const gb = (value) => `${(Number(value || 0) / 1e9).toFixed(2)} GB`;
-export default function QwenSpeech({ open, onClose, onSaved }) {
+export default function QwenSpeech({ open, onClose, mode = 'models' }) {
     const { t } = useTranslation();
     const [step, setStep] = useState(1);
     const [voice, setVoice] = useState('Vivian');
@@ -33,6 +34,10 @@ export default function QwenSpeech({ open, onClose, onSaved }) {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     const generation = useRef(0);
+    const original = useRef({ variant: '0.6B', voice: 'Vivian' });
+    const [discarding, setDiscarding] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [ready, setReady] = useState(false);
     const speech = useSpeech('qwen-settings');
     const installed = status?.models?.[variant];
     const task = status?.task?.variant === variant ? status.task : {};
@@ -44,19 +49,24 @@ export default function QwenSpeech({ open, onClose, onSaved }) {
         if (!open) return;
         const id = ++generation.current;
         setError('');
+        setReady(false);
+        setDiscarding(false);
+        setStatus(null);
         setBusy(false);
         setDevice(null);
         setAccepted(false);
         Promise.all([store.get('qwen_tts'), invoke('qwen_status')])
             .then(([config, value]) => {
                 if (id !== generation.current) return;
-                const selection = active(value?.task?.state) ? value.task.variant : config?.variant || '0.6B';
+                const selection = config?.variant || '0.6B';
+                original.current = { variant: selection, voice: config?.voice || 'Vivian' };
+                setReady(true);
                 setVariant(selection);
                 setVoice(config?.voice || 'Vivian');
                 setStatus(value);
                 setStep(active(value?.task?.state) || value?.models?.[selection] ? 3 : 1);
             })
-            .catch(() => id === generation.current && setError(t('models.qwen_failed')));
+            .catch((failure) => id === generation.current && setError(`${t('models.qwen_failed')} ${String(failure)}`));
         return () => {
             generation.current++;
             speech.stop();
@@ -101,51 +111,64 @@ export default function QwenSpeech({ open, onClose, onSaved }) {
             if (generation.current === id) setBusy(false);
         }
     };
+    const close = () => {
+        if (saving) return;
+        speech.stop();
+        if (ready && (voice !== original.current.voice || variant !== original.current.variant)) {
+            setDiscarding(true);
+            return;
+        }
+        generation.current++;
+        onClose();
+    };
     const install = async () => {
+        const id = generation.current;
         setBusy(true);
         setError('');
         try {
             await invoke('qwen_install', { variant, environment: environment || null });
-            setStatus(await invoke('qwen_status'));
+            const value = await invoke('qwen_status');
+            if (id === generation.current) setStatus(value);
         } catch (failure) {
-            setError(String(failure));
+            if (id === generation.current) setError(String(failure));
         } finally {
-            setBusy(false);
+            if (id === generation.current) setBusy(false);
         }
     };
     const test = async () => {
-        setBusy(true);
+        const id = generation.current;
         setError('');
         try {
             await speech.toggle(() =>
                 invoke('qwen_tts_request', { variant, text: '你好，这是语音测试。 Hello.', language: 'Chinese', voice })
             );
         } catch (failure) {
-            setError(String(failure));
-        } finally {
-            setBusy(false);
+            if (id === generation.current) setError(String(failure));
         }
     };
-    const save = async () => {
-        setBusy(true);
+    const save = async (enable = false) => {
+        if (saving) return;
+        setSaving(true);
+        setError('');
+        speech.stop();
         try {
-            const config = { variant, voice, configured: true };
-            await store.set('qwen_tts', config);
-            await store.save();
-            await emit('qwen_tts_changed', config);
-            await onSaved();
+            await saveQwenSettings(store, emit, { variant, voice }, { register: mode === 'service', enable });
+            generation.current++;
             onClose();
         } catch (failure) {
             setError(String(failure));
         } finally {
-            setBusy(false);
+            setSaving(false);
         }
     };
     return (
         <Modal
             disableAnimation
             isOpen={open}
-            onClose={onClose}
+            onClose={close}
+            isDismissable={!saving}
+            isKeyboardDismissDisabled={saving}
+            hideCloseButton={saving}
             size='3xl'
             scrollBehavior='inside'
             classNames={{
@@ -167,12 +190,18 @@ export default function QwenSpeech({ open, onClose, onSaved }) {
                 </ModalHeader>
                 <ModalBody>
                     <ModelWizardSteps step={step} />
+                    {active(status?.task?.state) && status.task.variant !== variant && (
+                        <p role='status'>
+                            {status.task.variant} · {t(`models.qwen_stage_${status.task.state}`)}
+                        </p>
+                    )}
                     {step === 1 && (
                         <>
                             <Select
                                 label={t('models.qwen_variant')}
                                 selectedKeys={[variant]}
                                 onSelectionChange={(keys) => {
+                                    speech.stop();
                                     setVariant([...keys][0] || '0.6B');
                                     setDevice(null);
                                 }}
@@ -302,8 +331,11 @@ export default function QwenSpeech({ open, onClose, onSaved }) {
                                     <Select
                                         label={t('models.qwen_voice')}
                                         selectedKeys={[voice]}
-                                        isDisabled={busy}
-                                        onSelectionChange={(keys) => setVoice([...keys][0] || 'Vivian')}
+                                        isDisabled={busy || saving || !ready}
+                                        onSelectionChange={(keys) => {
+                                            speech.stop();
+                                            setVoice([...keys][0] || 'Vivian');
+                                        }}
                                     >
                                         {voices.map((name) => (
                                             <SelectItem key={name}>{name}</SelectItem>
@@ -324,12 +356,38 @@ export default function QwenSpeech({ open, onClose, onSaved }) {
                             </details>
                         </>
                     )}
-                    {error && <p role='alert'>{error}</p>}
+                    {speech.status !== 'idle' && <p role='status'>{t(`models.qwen_preview_${speech.status}`)}</p>}
+                    {error && (
+                        <div role='alert'>
+                            <p>{t('models.qwen_action_failed')}</p>
+                            <details>
+                                <summary>{t('models.version_details')}</summary>
+                                <pre className='whitespace-pre-wrap break-all select-text'>{error}</pre>
+                                <p>{status?.logPath}</p>
+                            </details>
+                        </div>
+                    )}
+                    {discarding && (
+                        <div role='alert'>
+                            <p>{t('models.qwen_discard_prompt')}</p>
+                            <Button
+                                onPress={() => {
+                                    speech.stop();
+                                    generation.current++;
+                                    onClose();
+                                }}
+                            >
+                                {t('models.qwen_discard')}
+                            </Button>
+                            <Button onPress={() => setDiscarding(false)}>{t('models.qwen_keep_editing')}</Button>
+                        </div>
+                    )}
                 </ModalBody>
                 <ModalFooter>
                     {step === 1 && (
                         <Button
                             className='service-primary-button'
+                            isDisabled={!ready || saving}
                             onPress={installed ? () => setStep(3) : check}
                         >
                             {t(installed ? 'models.manage_install' : 'models.wizard_next')}
@@ -339,7 +397,7 @@ export default function QwenSpeech({ open, onClose, onSaved }) {
                         <>
                             <Button
                                 variant='light'
-                                isDisabled={busy}
+                                isDisabled={busy || saving || !ready}
                                 onPress={() => setStep(1)}
                             >
                                 {t('models.wizard_back')}
@@ -357,7 +415,7 @@ export default function QwenSpeech({ open, onClose, onSaved }) {
                         <>
                             <Button
                                 variant='light'
-                                isDisabled={busy}
+                                isDisabled={busy || saving || !ready}
                                 onPress={check}
                             >
                                 {t('models.wizard_back_check')}
@@ -387,40 +445,45 @@ export default function QwenSpeech({ open, onClose, onSaved }) {
                         <>
                             <Button
                                 variant='light'
-                                isDisabled={busy}
+                                isDisabled={busy || saving || !ready}
                                 onPress={() => setStep(1)}
                             >
                                 {t('models.qwen_other_variant')}
                             </Button>
                             <Button
-                                isDisabled={busy}
-                                isLoading={busy}
+                                isDisabled={busy || saving || !ready}
                                 onPress={test}
                             >
-                                {t('models.qwen_test')}
+                                {t(speech.status === 'idle' ? 'models.qwen_test' : 'models.qwen_preview_stop')}
                             </Button>
                             <Button
                                 variant='light'
-                                isDisabled={busy}
+                                isDisabled={busy || saving || !ready}
                                 onPress={() => invoke('qwen_stop').catch((failure) => setError(String(failure)))}
                             >
                                 {t('models.catalog_unload')}
                             </Button>
                             <Button
                                 className='service-primary-button'
-                                isDisabled={busy}
-                                onPress={save}
+                                isDisabled={busy || saving || !ready}
+                                onPress={() => save(false)}
                             >
-                                {t('models.save_and_close')}
+                                {t('common.save')}
+                            </Button>
+                            <Button
+                                isDisabled={busy || saving || !ready}
+                                onPress={() => save(true)}
+                            >
+                                {t('models.qwen_save_enable')}
                             </Button>
                         </>
                     )}
                     <Button
                         variant='light'
-                        isDisabled={busy}
-                        onPress={installed && !running ? save : onClose}
+                        isDisabled={saving}
+                        onPress={close}
                     >
-                        {t(running ? 'models.close_background' : 'common.close')}
+                        {t(active(status?.task?.state) ? 'models.close_background' : 'common.close')}
                     </Button>
                 </ModalFooter>
             </ModalContent>

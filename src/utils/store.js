@@ -1,3 +1,4 @@
+import { migrateQwenSettings } from './qwenConfig.js';
 import { sealConfig, supportedSecretService } from './credentials';
 import { invalidateRequests } from './requestRuntime';
 import { emit, listen } from '@tauri-apps/api/event';
@@ -61,6 +62,11 @@ export async function initStore() {
             for (const item of pending) await originalSet(item.key, item.value);
             console.warn('Credential migration not committed; original configuration retained');
         }
+    }
+    try {
+        await migrateQwenSettings(store, emit);
+    } catch {
+        console.warn('Qwen singleton migration pending; original list retained');
     }
     // 外部改动配置文件时把内容读回内存，并通知 Rust 侧重载。
     //

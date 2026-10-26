@@ -294,7 +294,6 @@ export default function Models() {
             <QwenSpeech
                 open={speechFamily === 'qwen'}
                 onClose={() => setSpeechFamily(null)}
-                onSaved={() => chooseSpeechPolicy('qwen')}
             />
             <KokoroVoices
                 open={speechFamily === 'kokoro'}

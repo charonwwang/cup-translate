@@ -26,7 +26,8 @@ export default function SelectModal(props) {
                                         <Button
                                             fullWidth
                                             onPress={() => {
-                                                setCurrentConfigKey(createServiceInstanceKey(x));
+                                                onClose();
+                                                setCurrentConfigKey(x === 'qwen_tts' ? x : createServiceInstanceKey(x));
                                                 onConfigOpen();
                                             }}
                                             startContent={
