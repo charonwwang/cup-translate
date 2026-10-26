@@ -1,3 +1,4 @@
+import { createCollectionGate } from '../../../../services/collection/pending';
 import SpeechPreference from '../../../../components/SpeechPreference';
 import { checkGlossary, matchGlossary, glossaryHint } from '../../../../utils/glossary';
 import { checkPolicy } from '../../../../utils/requestRuntime';
@@ -836,27 +837,43 @@ export default function TargetArea(props) {
         }
     };
 
+    const collectionGate = useRef(createCollectionGate());
+    const [collectionPending, setCollectionPending] = useState([]);
     const addToCollection = async (collectionServiceInstanceName) => {
-        try {
-            if (getServiceSouceType(collectionServiceInstanceName) === ServiceSourceType.PLUGIN) {
-                const pluginConfig = serviceInstanceConfigMap[collectionServiceInstanceName];
-                const [func, utils] = await invoke_plugin('collection', getServiceName(collectionServiceInstanceName));
-                await func(sourceText.trim(), translationResultToText(result), {
-                    config: pluginConfig,
-                    utils,
-                });
-            } else {
-                const instanceConfig = serviceInstanceConfigMap[collectionServiceInstanceName];
-                await builtinCollectionServices[getServiceName(collectionServiceInstanceName)].collection(
-                    sourceText,
-                    result,
-                    { config: instanceConfig }
+        if (collectionGate.current.has(collectionServiceInstanceName)) return;
+        setCollectionPending((pending) => [...pending, collectionServiceInstanceName]);
+        await collectionGate.current.run(collectionServiceInstanceName, async () => {
+            try {
+                if (getServiceSouceType(collectionServiceInstanceName) === ServiceSourceType.PLUGIN) {
+                    const pluginConfig = serviceInstanceConfigMap[collectionServiceInstanceName];
+                    const [func, utils] = await invoke_plugin(
+                        'collection',
+                        getServiceName(collectionServiceInstanceName)
+                    );
+                    await func(sourceText.trim(), translationResultToText(result), {
+                        config: pluginConfig,
+                        utils,
+                    });
+                } else {
+                    const instanceConfig = serviceInstanceConfigMap[collectionServiceInstanceName];
+                    await builtinCollectionServices[getServiceName(collectionServiceInstanceName)].collection(
+                        sourceText,
+                        result,
+                        { config: instanceConfig }
+                    );
+                }
+                toast.success(t('translate.add_collection_success'), { style: toastStyle });
+            } catch (e) {
+                toast.error(
+                    e.code
+                        ? t(`services.collection.errors.${e.code}`)
+                        : t('services.collection.errors.COLLECTION_FAILED'),
+                    { style: toastStyle }
                 );
+            } finally {
+                setCollectionPending((pending) => pending.filter((key) => key !== collectionServiceInstanceName));
             }
-            toast.success(t('translate.add_collection_success'), { style: toastStyle });
-        } catch (e) {
-            toast.error(e.toString(), { style: toastStyle });
-        }
+        });
     };
 
     const translateServiceName = getServiceName(currentTranslateServiceInstanceKey);
@@ -1518,6 +1535,13 @@ export default function TargetArea(props) {
                             type='button'
                             className='cup-foot-icon'
                             key={collectionServiceInstanceName}
+                            disabled={collectionPending.includes(collectionServiceInstanceName)}
+                            aria-busy={collectionPending.includes(collectionServiceInstanceName)}
+                            aria-label={t('services.collection.collect_to', {
+                                name: getInstanceName(collectionServiceInstanceName, () =>
+                                    t(`services.collection.${getServiceName(collectionServiceInstanceName)}.title`)
+                                ),
+                            })}
                             onClick={() => addToCollection(collectionServiceInstanceName)}
                         >
                             <img

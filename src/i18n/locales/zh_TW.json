@@ -169,7 +169,7 @@
                 "translate": "翻譯",
                 "tts": "語音合成",
                 "recognize": "文字辨識",
-                "collection": "收藏",
+                "collection": "收藏與匯出",
                 "least": "請至少保留一個",
                 "add_builtin_service": "新增內建服務",
                 "add_external_service": "新增擴充套件",
@@ -487,15 +487,57 @@
                 }
             },
             "collection": {
+                "remove_secret": "移除已儲存的憑證",
+                "discard_prompt": "是否放棄未儲存的變更？",
+                "keep_editing": "繼續編輯",
+                "discard": "放棄變更",
                 "anki": {
-                    "title": "Anki",
-                    "port": "連接埠"
+                    "title": "Anki 連線",
+                    "port": "連接埠",
+                    "api_key": "API key（選填）",
+                    "guide": "需要 Anki 桌面版與 AnkiConnect 外掛。開啟 Anki、安裝 AnkiConnect 並重新啟動 Anki 後測試。預設本機連接埠 8765。儲存及測試不會寫入卡片；收藏時使用 cup-translate 牌組及 cup-translate Card 範本。"
                 },
                 "eudic": {
                     "title": "歐路詞典",
                     "name": "收藏名稱",
-                    "token": "Token"
-                }
+                    "token": "Token",
+                    "guide": "將英語詞條匯出至你的歐路帳號，不匯出譯文及音訊。請在 my.eudic.net/OpenAPI/Authorization 取得授權 Token。測試僅讀取生詞本，儲存無需連線；實際收藏時才建立指定生詞本。"
+                },
+                "status": {
+                    "untested": "尚未測試連線，可離線儲存設定。",
+                    "checking": "正在唯讀測試連線…",
+                    "connected": "本次連線正常。",
+                    "failed": "連線測試失敗。",
+                    "saving": "正在儲存設定…",
+                    "saved_connected": "設定已儲存，本次連線正常。",
+                    "saved_offline": "已儲存，尚未確認連線。",
+                    "save_failed": "儲存失敗，草稿已保留，請重試。",
+                    "load_failed": "設定讀取失敗，請重新開啟後重試。"
+                },
+                "errors": {
+                    "ANKI_UNREACHABLE": "無法連線 Anki。請開啟已安裝 AnkiConnect 的 Anki 桌面版後重試。",
+                    "ANKI_TIMEOUT": "Anki 連線逾時，請檢查 Anki 和連接埠後重試。",
+                    "ANKI_AUTH": "AnkiConnect 授權失敗，請檢查 API key 與存取設定。",
+                    "ANKI_HTTP": "Anki 傳回 HTTP 錯誤，請檢查連接埠及 AnkiConnect。",
+                    "ANKI_PROTOCOL": "此連接埠未傳回有效的 AnkiConnect v6 回應，請檢查連接埠或升級 AnkiConnect。",
+                    "ANKI_MODEL": "Anki 牌組或範本欄位不符，請檢查 Anki 中的 cup-translate Card 範本。",
+                    "ANKI_DUPLICATE": "此詞條已存在於 Anki。",
+                    "ANKI_WRITE_FAILED": "Anki 拒絕了此請求，請檢查 Anki 與設定。",
+                    "ANKI_WRITE_UNKNOWN": "收藏結果未確認。請先檢查 Anki，再決定是否重試；請求未自動重送。",
+                    "EUDIC_AUTH": "歐路授權缺失或已過期，請檢查 OpenAPI Token。",
+                    "EUDIC_LIMIT": "歐路請求過於頻繁，請稍後重試。",
+                    "EUDIC_TIMEOUT": "歐路連線逾時，請稍後重試。",
+                    "EUDIC_UNREACHABLE": "無法連線歐路，請檢查網路與隱私設定。",
+                    "EUDIC_HTTP": "歐路傳回 HTTP 錯誤，請稍後重試。",
+                    "EUDIC_PROTOCOL": "歐路傳回格式異常，未確認連線成功。",
+                    "EUDIC_WRITE_UNKNOWN": "匯出結果未確認。請先檢查歐路生詞本再重試；請求未自動重送。",
+                    "COLLECTION_EMPTY": "沒有可收藏的文字。",
+                    "COLLECTION_FAILED": "收藏失敗，請檢查服務與設定。"
+                },
+                "test": "測試連線",
+                "save": "儲存設定",
+                "secret_saved": "憑證已儲存，輸入可替換，清空可移除",
+                "collect_to": "收藏至 {{name}}"
             }
         },
         "translate": {
