@@ -45,6 +45,15 @@ jobs:
                   const branch=await fetch(`https://api.github.com/repos/${repo}/branches/${encodeURIComponent(info.default_branch)}`, {signal:AbortSignal.timeout(30000),headers:{Authorization:`Bearer ${token}`,Accept:'application/vnd.github+json'}});
                   if(!branch.ok) throw Error('Initialize the public download repository with a README first');
                   JS
+            - uses: actions/checkout@v4
+              with:
+                  ref: ${{ inputs.tag || github.sha }}
+                  persist-credentials: false
+            - uses: actions/setup-python@v5
+              with:
+                  python-version: '3.12'
+            - name: Verify Qwen runtime content binding and CPU compatibility
+              run: python tests/test_qwen_runtime.py
     windows-runtime:
         runs-on: windows-latest
         timeout-minutes: 10
