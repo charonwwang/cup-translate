@@ -11,8 +11,8 @@ import {
 } from '../src/window/Translate/resultView.js';
 
 test('input classification separates words, phrases, and paragraphs', () => {
-    assert.equal(classifySourceText('query'), 'word');
-    assert.equal(classifySourceText('take something into account'), 'phrase');
+    assert.equal(classifySourceText('query', 'en'), 'word');
+    assert.equal(classifySourceText('take something into account', 'en'), 'phrase');
     assert.equal(
         classifySourceText('Good design is clear. It removes friction. Clarity is part of the product.'),
         'paragraph'

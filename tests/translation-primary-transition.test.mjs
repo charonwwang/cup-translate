@@ -13,8 +13,7 @@ test('promoting a secondary engine to primary restarts its request with the curr
     const base = {
         setResult: () => {},
         setTermChecks: () => {},
-        setDictionarySupplement: () => {},
-        setDictionaryLoading: () => {},
+        setDictionaryState: () => {},
         setHide: () => {},
         setError: () => {},
         setSkipped: () => {},

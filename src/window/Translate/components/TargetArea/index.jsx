@@ -1,4 +1,5 @@
 import { createCollectionGate } from '../../../../services/collection/pending';
+import { createDictionarySupplement, dictionaryAudioBytes } from '../../dictionarySupplement';
 import SpeechPreference from '../../../../components/SpeechPreference';
 import { checkGlossary, matchGlossary, glossaryHint } from '../../../../utils/glossary';
 import { checkPolicy } from '../../../../utils/requestRuntime';
@@ -21,7 +22,7 @@ import { nanoid } from 'nanoid';
 import * as builtinCollectionServices from '../../../../services/collection';
 import { isServiceConfigured } from '../../../../services/translate/required_config';
 import { invoke } from '@tauri-apps/api/tauri';
-import { useConfig, useToastStyle, useVoice } from '../../../../hooks';
+import { useConfig, useToastStyle } from '../../../../hooks';
 import { translationResultToText } from '../../../../utils/translationResult';
 import { clipboardFailureMessage, writeClipboardSafely } from '../../../../utils/clipboard';
 import { invoke_plugin } from '../../../../utils/invoke_plugin';
@@ -96,9 +97,10 @@ export default function TargetArea(props) {
     const [ttsServiceList] = useConfig('tts_service_list', ['google_tts']);
     const [speechPolicy] = useConfig('speech_policy', 'engine');
     const [speechOverride, setSpeechOverride] = useState('');
-    const [dictionarySupplement, setDictionarySupplement] = useState(null);
-    const [dictionaryLoading, setDictionaryLoading] = useState(false);
+    const [dictionaryState, setDictionaryState] = useState({ status: 'idle', value: null });
     const dictionaryRequest = useRef(null);
+    if (!dictionaryRequest.current)
+        dictionaryRequest.current = createDictionarySupplement({ publish: setDictionaryState });
     const resolvedSpeechService =
         (speechOverride === 'off' ? null : speechOverride) ||
         (speechOverride === 'off'
@@ -139,6 +141,17 @@ export default function TargetArea(props) {
 
     const detectLanguage = useAtomValue(detectLanguageAtom);
     const activeSourceLanguage = getActiveSourceLanguage(sourceLanguage, detectLanguage);
+    const dictionaryKey = JSON.stringify([
+        sourceText,
+        activeSourceLanguage,
+        targetLanguage,
+        currentTranslateServiceInstanceKey,
+        requestRevision,
+        privacyMode,
+    ]);
+    const dictionarySupplement = dictionaryState.key === dictionaryKey ? dictionaryState.value : null;
+    const dictionaryStatus = dictionaryState.key === dictionaryKey ? dictionaryState.status : 'idle';
+    const dictionaryLoading = dictionaryStatus === 'loading';
     const spokenLanguage = showBack ? activeSourceLanguage : targetLanguage;
     useEffect(() => {
         backRequest.current += 1;
@@ -161,20 +174,23 @@ export default function TargetArea(props) {
     const [ttsPluginInfo, setTtsPluginInfo] = useState();
     const { t } = useTranslation();
     const toastStyle = useToastStyle();
-    const speak = useVoice();
     const speech = useSpeech(displayResult);
     useEffect(() => {
         speech.stop();
         exampleSpeech.stop();
         sourceWordSpeech.stop();
-    }, [sourceLanguage, targetLanguage, speechService]);
+    }, [sourceLanguage, activeSourceLanguage, targetLanguage, speechService, privacyMode]);
     const exampleSpeech = useSpeech('dictionary-example');
     const sourceWordSpeech = useSpeech('source-word');
     const [activeExample, setActiveExample] = useState('');
-    const speechLabel = speech.status === 'idle' ? t('translate.speak') : t('translate.stop_speaking');
-    const exampleSpeechLabel = exampleSpeech.status === 'idle' ? t('translate.speak') : t('translate.stop_speaking');
+    const speechLabel =
+        speech.status === 'idle'
+            ? t(showBack ? 'translate.speak_source' : 'translate.speak_target')
+            : t('translate.stop_speaking');
+    const exampleSpeechLabel =
+        exampleSpeech.status === 'idle' ? t('translate.speak_target') : t('translate.stop_speaking');
     const sourceWordSpeechLabel =
-        sourceWordSpeech.status === 'idle' ? t('translate.speak') : t('translate.stop_speaking');
+        sourceWordSpeech.status === 'idle' ? t('translate.speak_source') : t('translate.stop_speaking');
 
     useEffect(() => {
         if (exampleSpeech.status === 'idle') setActiveExample('');
@@ -217,9 +233,8 @@ export default function TargetArea(props) {
     useEffect(() => {
         setResult('');
         setTermChecks([]);
-        dictionaryRequest.current?.abort();
-        setDictionarySupplement(null);
-        setDictionaryLoading(false);
+        dictionaryRequest.current?.cancel();
+        setDictionaryState({ status: 'idle', value: null });
         if (!sourceText.trim()) setHide(true);
         setError('');
         setSkipped(false);
@@ -240,7 +255,7 @@ export default function TargetArea(props) {
         return () => {
             activeRequest.current = null;
             requestController.current?.abort();
-            dictionaryRequest.current?.abort();
+            dictionaryRequest.current?.cancel();
         };
     }, [
         primary,
@@ -651,21 +666,25 @@ export default function TargetArea(props) {
             });
     };
 
-    const isSingleWord = sourceText.trim() !== '' && !/\s/.test(sourceText.trim());
+    const resultMode = classifySourceText(sourceText, activeSourceLanguage);
     const serviceModule = builtinServices[getServiceName(currentTranslateServiceInstanceKey)];
     const serviceLanguage = serviceModule?.Language;
     const effectiveTargetLanguage = targetLanguage;
-    const singleWordPronunciation = isSingleWord
+    const sourcePronunciation = sourceText.trim()
         ? serviceModule?.translate?.pronunciationFor?.(
               sourceText.trim(),
               serviceLanguage?.[activeSourceLanguage] ?? activeSourceLanguage,
               serviceLanguage?.[effectiveTargetLanguage] ?? effectiveTargetLanguage
           ) || ''
         : '';
-    const speakSourceWord = () => {
-        if (!speechService || !isSingleWord) return;
+    const speakSourceWord = (voice) => {
+        if (!speechService || !sourceText.trim()) return;
         sourceWordSpeech
-            .toggle(() => speakWithService(sourceText.trim(), activeSourceLanguage))
+            .toggle(
+                () =>
+                    dictionaryAudioBytes(voice, privacyMode) ||
+                    speakWithService(sourceText.trim(), activeSourceLanguage)
+            )
             .catch((e) => {
                 logError('[speech] failed');
                 toast.error(
@@ -691,9 +710,8 @@ export default function TargetArea(props) {
         return <LuVolume2 className='text-[13px]' />;
     };
 
-    const resultMode = classifySourceText(sourceText);
     const wordEntry = useMemo(() => {
-        const base = buildWordEntry(result, sourceText, singleWordPronunciation);
+        const base = buildWordEntry(result, sourceText, sourcePronunciation);
         if (!dictionarySupplement) return base;
         const extra = buildWordEntry(
             dictionarySupplement,
@@ -707,51 +725,73 @@ export default function TargetArea(props) {
         return {
             ...base,
             pronunciations: base.pronunciations.length ? base.pronunciations : extra.pronunciations,
-            examples: extra.examples,
+            examples: base.examples.length ? base.examples : extra.examples,
             senses: base.senses,
         };
-    }, [
-        result,
-        sourceText,
-        singleWordPronunciation,
-        dictionarySupplement,
-        activeSourceLanguage,
-        effectiveTargetLanguage,
-    ]);
-    const supplementDictionary = async () => {
-        dictionaryRequest.current?.abort();
-        const controller = new AbortController();
-        dictionaryRequest.current = controller;
-        const requestId = activeRequest.current;
-        setDictionaryLoading(true);
-        try {
-            await checkPolicy('translate', 'google');
-            const language = builtinServices.google.Language;
-            const extra = await builtinServices.google.translate(
-                sourceText.trim(),
-                language[activeSourceLanguage] ?? 'auto',
-                language[effectiveTargetLanguage],
-                { config: serviceInstanceConfigMap.google ?? {}, signal: controller.signal }
-            );
-            if (controller.signal.aborted || requestId !== activeRequest.current) return;
-            setDictionarySupplement(extra);
-            void supplementTranslation(
-                builtinServices.google,
-                extra,
-                language[activeSourceLanguage] ?? 'auto',
-                language[effectiveTargetLanguage],
-                { config: serviceInstanceConfigMap.google ?? {}, signal: controller.signal },
-                (value) => {
-                    if (!controller.signal.aborted && requestId === activeRequest.current)
-                        setDictionarySupplement(value);
-                }
-            );
-        } catch (error) {
-            if (!controller.signal.aborted) toast.error(t('models.dictionary_failed'), { style: toastStyle });
-        } finally {
-            if (!controller.signal.aborted) setDictionaryLoading(false);
-        }
-    };
+    }, [result, sourceText, sourcePronunciation, dictionarySupplement, activeSourceLanguage, effectiveTargetLanguage]);
+    const supplementDictionary = () =>
+        dictionaryRequest.current.run({
+            key: dictionaryKey,
+            privacyMode,
+            checkPolicy: () => checkPolicy('translate', 'google'),
+            lookup: async (signal) => {
+                const language = builtinServices.google.Language;
+                const from = language[activeSourceLanguage] ?? 'auto';
+                const to = language[effectiveTargetLanguage];
+                const extra = await builtinServices.google.translate(sourceText.trim(), from, to, {
+                    config: serviceInstanceConfigMap.google ?? {},
+                    signal,
+                });
+                const symbol = builtinServices.google.translate.pronunciationFor?.(sourceText.trim(), from, to);
+                if (symbol && typeof extra === 'string') return { pronunciations: [{ symbol }], explanations: [] };
+                return extra;
+            },
+            enrich: (extra, signal, publish) =>
+                supplementTranslation(
+                    builtinServices.google,
+                    extra,
+                    builtinServices.google.Language[activeSourceLanguage] ?? 'auto',
+                    builtinServices.google.Language[effectiveTargetLanguage],
+                    { config: serviceInstanceConfigMap.google ?? {}, signal },
+                    publish
+                ),
+        });
+    const pronunciationDetails = wordEntry.pronunciations.length > 0 && (
+        <div className='cup-phonetics'>
+            {wordEntry.pronunciations.map((pronunciation, index) => (
+                <span
+                    className='cup-phonetic'
+                    key={`${pronunciation.region}-${pronunciation.symbol}-${index}`}
+                >
+                    {pronunciation.region && <span className='cup-phonetic-region'>{pronunciation.region}</span>}
+                    {pronunciation.symbol}
+                    {speechService && dictionaryAudioBytes(pronunciation.voice, privacyMode) && (
+                        <button
+                            type='button'
+                            className='cup-speak-button'
+                            aria-label={
+                                sourceWordSpeech.status === 'idle'
+                                    ? t('translate.play_recording', {
+                                          region: pronunciation.region,
+                                      })
+                                    : t('translate.stop_speaking')
+                            }
+                            data-active={sourceWordSpeech.status !== 'idle'}
+                            onClick={() => speakSourceWord(pronunciation.voice)}
+                        >
+                            {sourceWordSpeech.status === 'loading' ? (
+                                <LuLoader2 className='animate-spin text-[11px]' />
+                            ) : sourceWordSpeech.status === 'playing' ? (
+                                <LuSquare className='text-[9px]' />
+                            ) : (
+                                <LuVolume2 className='text-[12px]' />
+                            )}
+                        </button>
+                    )}
+                </span>
+            ))}
+        </div>
+    );
     const phraseEntry = useMemo(
         () =>
             showBack
@@ -771,9 +811,13 @@ export default function TargetArea(props) {
                       ? 'translate.dictionary_mode'
                       : 'translate.mode_word'
               )
-            : resultMode === 'paragraph'
-              ? t('translate.mode_paragraph')
-              : t('translate.mode_phrase');
+            : resultMode === 'text'
+              ? t('translate.mode_text')
+              : resultMode === 'sentence'
+                ? t('translate.mode_sentence')
+                : resultMode === 'paragraph'
+                  ? t('translate.mode_paragraph')
+                  : t('translate.mode_phrase');
     const resultBadge =
         resultMode === 'word'
             ? wordEntry.senses.length > 0 && wordEntry.examples.length >= 2
@@ -979,61 +1023,58 @@ export default function TargetArea(props) {
                     </div>
                 )}
 
+                {resultMode !== 'word' && result && pronunciationDetails}
+
+                {resultMode !== 'word' && result && speechService && (
+                    <button
+                        type='button'
+                        className='cup-read-all'
+                        aria-label={sourceWordSpeechLabel}
+                        data-active={sourceWordSpeech.status !== 'idle'}
+                        onClick={() => speakSourceWord()}
+                    >
+                        {sourceWordSpeech.status === 'loading' ? (
+                            <LuLoader2
+                                className='animate-spin'
+                                size={13}
+                            />
+                        ) : sourceWordSpeech.status === 'playing' ? (
+                            <LuSquare size={13} />
+                        ) : (
+                            <LuVolume2 size={13} />
+                        )}
+                        {sourceWordSpeechLabel}
+                    </button>
+                )}
+
                 {resultMode === 'word' && result && (
                     <>
                         <div className='cup-word-heading'>
                             <div>
                                 <h3 className='flex items-center gap-2'>
                                     {wordEntry.word}
-                                    {speechService && !wordEntry.pronunciations.length && (
+                                    {speechService && (
                                         <button
                                             type='button'
                                             className='cup-speak-button'
                                             aria-label={sourceWordSpeechLabel}
-                                            onClick={speakSourceWord}
+                                            data-active={sourceWordSpeech.status !== 'idle'}
+                                            onClick={() => speakSourceWord()}
                                         >
-                                            <LuVolume2 size={13} />
+                                            {sourceWordSpeech.status === 'loading' ? (
+                                                <LuLoader2
+                                                    className='animate-spin'
+                                                    size={13}
+                                                />
+                                            ) : sourceWordSpeech.status === 'playing' ? (
+                                                <LuSquare size={13} />
+                                            ) : (
+                                                <LuVolume2 size={13} />
+                                            )}
                                         </button>
                                     )}
                                 </h3>
-                                {wordEntry.pronunciations.length > 0 && (
-                                    <div className='cup-phonetics'>
-                                        {wordEntry.pronunciations.map((pronunciation, index) => (
-                                            <span
-                                                className='cup-phonetic'
-                                                key={`${pronunciation.region}-${pronunciation.symbol}-${index}`}
-                                            >
-                                                {pronunciation.region && (
-                                                    <span className='cup-phonetic-region'>{pronunciation.region}</span>
-                                                )}
-                                                {pronunciation.symbol}
-                                                {speechService && (
-                                                    <button
-                                                        type='button'
-                                                        className='cup-speak-button'
-                                                        aria-label={sourceWordSpeechLabel}
-                                                        data-active={sourceWordSpeech.status !== 'idle'}
-                                                        onClick={() => {
-                                                            if (pronunciation.voice) {
-                                                                speak(pronunciation.voice);
-                                                            } else {
-                                                                speakSourceWord();
-                                                            }
-                                                        }}
-                                                    >
-                                                        {sourceWordSpeech.status === 'loading' ? (
-                                                            <LuLoader2 className='animate-spin text-[11px]' />
-                                                        ) : sourceWordSpeech.status === 'playing' ? (
-                                                            <LuSquare className='text-[9px]' />
-                                                        ) : (
-                                                            <LuVolume2 className='text-[12px]' />
-                                                        )}
-                                                    </button>
-                                                )}
-                                            </span>
-                                        ))}
-                                    </div>
-                                )}
+                                {pronunciationDetails}
                             </div>
                             <span className='cup-word-kind'>
                                 {t('translate.mode_word')} · {t(`languages.${activeSourceLanguage || 'auto'}`)}
@@ -1043,9 +1084,12 @@ export default function TargetArea(props) {
                         {result?.metadataSource === 'model' && (
                             <p className='cup-lexical-note'>{t('models.model_dictionary_note')}</p>
                         )}
-                        {!wordEntry.pronunciations.length && !isLoading && (
+                        {!wordEntry.pronunciations.some((item) => item.symbol) && !isLoading && (
                             <div className='cup-dictionary-tools'>
                                 <span>{t('models.no_phonetics')}</span>
+                                {['empty', 'failed', 'timeout'].includes(dictionaryStatus) && (
+                                    <span role='status'>{t(`models.dictionary_${dictionaryStatus}`)}</span>
+                                )}
                                 {
                                     <button
                                         type='button'
@@ -1162,7 +1206,11 @@ export default function TargetArea(props) {
                                                     <button
                                                         type='button'
                                                         className='cup-speak-button'
-                                                        aria-label={exampleSpeechLabel}
+                                                        aria-label={
+                                                            exampleSpeech.status === 'idle'
+                                                                ? t('translate.speak_source')
+                                                                : t('translate.stop_speaking')
+                                                        }
                                                         data-active={activeExample === `example-${index}-source`}
                                                         onClick={() =>
                                                             speakExample(
@@ -1209,7 +1257,7 @@ export default function TargetArea(props) {
                     </>
                 )}
 
-                {resultMode === 'phrase' && result && (
+                {['phrase', 'text'].includes(resultMode) && result && (
                     <>
                         <div className='cup-phrase-pair'>
                             <div className='cup-phrase-row target'>
@@ -1306,7 +1354,7 @@ export default function TargetArea(props) {
                     </>
                 )}
 
-                {resultMode === 'paragraph' && result && (
+                {['paragraph', 'sentence'].includes(resultMode) && result && (
                     <>
                         <div className='cup-paragraph-toolbar'>
                             <div className='cup-segmented'>
@@ -1346,7 +1394,7 @@ export default function TargetArea(props) {
                                     }
                                 >
                                     <LuVolume2 className='text-[12px]' />
-                                    {t('translate.read_all')}
+                                    {speechLabel}
                                 </button>
                             )}
                         </div>

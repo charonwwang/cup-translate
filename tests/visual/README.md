@@ -18,3 +18,10 @@
 本入口不在 Vite 的两个生产入口中，生产包不包含它。翻译结果是固定测试数据，不代表线上引擎质量。
 
 检查要点：380 / 340px 浮窗下无横向溢出；释义字号大于词性；例句展开/收起；多引擎展开/收起；复制后仅有一个成功提示；清空原文后旧译文消失；深色及字体偏好；设置导航及滚动。
+
+词典 P1 修复可用 `scenario=local&speech=1&privacy=device_only` 检查无音标的 HY-MT 结果（仍为内存夹具，不加载真实模型）：
+
+- `&source=zh_cn&target=en&text=卸载向导&width=340&theme=dark`：词语 / 文本，无 IPA 缺失提示。
+- `&source=en&target=zh_cn&text=hello&width=340&theme=dark`：单词、有本地朗读、联网补全禁用。
+- `&source=en&target=zh_cn&text=uninstall%20wizard&width=340&theme=dark`：短语。
+- `&source=en&target=zh_cn&text=Please%20uninstall%20the%20wizard.&width=340&theme=dark`：句子。

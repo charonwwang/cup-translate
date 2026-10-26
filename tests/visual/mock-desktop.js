@@ -26,8 +26,11 @@ const settings = new Map(
         app_font_size: Number(params.get('font')) || 16,
         translate_detect_engine: 'local',
         translate_source_language: params.get('source') || 'auto',
-        translate_target_language: 'zh_cn',
-        translate_service_list: scenario === 'multi' ? ['google', 'google@2'] : ['google'],
+        translate_target_language: params.get('target') || 'zh_cn',
+        privacy_mode: params.get('privacy') || 'standard',
+        local_mt: { model: 'hymt' },
+        translate_service_list:
+            scenario === 'local' ? ['local_mt'] : scenario === 'multi' ? ['google', 'google@2'] : ['google'],
         google: {},
         'google@2': { name: 'Google · 对照引擎' },
         tts_service_list: params.has('speech') ? ['local_tts'] : [],
@@ -146,7 +149,10 @@ window.__TAURI_IPC__ = async (args) => {
                 bundledRuntime: true,
             };
         else if (cmd === 'local_mt_model_status')
-            value = { installed: installedModels.has(args.pair), supported: true };
+            value = { installed: scenario === 'local' || installedModels.has(args.pair), supported: true };
+        else if (cmd === 'local_mt_prepare_request') value = 'fixture-request';
+        else if (cmd === 'local_mt_translate')
+            value = args.text === '卸载向导' ? 'uninstall wizard' : args.text === 'hello' ? '你好' : '请卸载向导。';
         else if (cmd === 'local_mt_device_check')
             value = { platform: 'macos', architecture: 'aarch64', supported: true, diskAvailable: 30e9, threads: 4 };
         else if (cmd === 'local_mt_download_model') {
