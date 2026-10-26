@@ -3,6 +3,8 @@
 > 本文档是 **cup-translate（pot-desktop 社区续版）** 的长期维护路线。
 > 目标读者：维护者、贡献者和对方向有疑问的人。
 
+当前服务功能的演进请结合 [服务与词典交互规范](product/service-and-dictionary-contract.md) 和 [2026-10-26 问题评审与修复计划](reviews/service-capabilities-2026-10-26/README.md) 阅读。本文保留了较早阶段的默认功能与平台定位，涉及当前行为时需先核对实现和已验收记录。
+
 ---
 
 ## 1. 项目一页简介
