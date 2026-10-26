@@ -25,3 +25,5 @@
 - `&source=en&target=zh_cn&text=hello&width=340&theme=dark`：单词、有本地朗读、联网补全禁用。
 - `&source=en&target=zh_cn&text=uninstall%20wizard&width=340&theme=dark`：短语。
 - `&source=en&target=zh_cn&text=Please%20uninstall%20the%20wizard.&width=340&theme=dark`：句子。
+
+- `?view=translate&scenario=pinyin&source=zh_cn&target=en&text=卸载向导&width=340&theme=dark`：Google 兼容响应夹具通过现有缓存提供拼音；验证中文文本保留已有发音信息而不展示缺 IPA 提示。仍为隔离夹具，不访问真实 Google。

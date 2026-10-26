@@ -64,6 +64,7 @@ export default function SelectPluginModal(props) {
                                             fullWidth
                                             className='mr-[8px]'
                                             onPress={() => {
+                                                onClose();
                                                 setCurrentConfigKey(createServiceInstanceKey(x));
                                                 onConfigOpen();
                                             }}

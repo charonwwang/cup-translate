@@ -228,6 +228,11 @@ window.__TAURI_IPC__ = async (args) => {
                               ],
                           ],
                       ];
+                if (scenario === 'pinyin')
+                    data[0] = [
+                        ['Uninstall wizard', source],
+                        [null, null, null, 'Xièzài xiàngdǎo'],
+                    ];
                 if (dictionaryRequest)
                     data[13] = [
                         [
