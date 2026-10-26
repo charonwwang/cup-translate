@@ -1,0 +1,191 @@
+{
+  "version": "3.0.14",
+  "releaseURL": "https://github.com/charonwwang/cup-translate/releases/tag/v3.0.14",
+  "workflowURL": "https://github.com/charonwwang/cup-translate/actions/runs/40302632061",
+  "latest": true,
+  "mainAssetCount": 16,
+  "updaterAssetCount": 12,
+  "platforms": [
+    "darwin-aarch64",
+    "darwin-x86_64",
+    "linux-x86_64",
+    "windows-aarch64",
+    "windows-i686",
+    "windows-x86_64"
+  ],
+  "anonymousURLs": [
+    {
+      "url": "https://github.com/charonwwang/cup-translate/releases/download/updater-v3.0.14/cup-translate_3.0.14_mac_arm64.app.tar.gz",
+      "status": 200
+    },
+    {
+      "url": "https://github.com/charonwwang/cup-translate/releases/download/updater-v3.0.14/cup-translate_3.0.14_mac_arm64.app.tar.gz.sig",
+      "status": 200
+    },
+    {
+      "url": "https://github.com/charonwwang/cup-translate/releases/download/updater-v3.0.14/cup-translate_3.0.14_mac_x64.app.tar.gz",
+      "status": 200
+    },
+    {
+      "url": "https://github.com/charonwwang/cup-translate/releases/download/updater-v3.0.14/cup-translate_3.0.14_mac_x64.app.tar.gz.sig",
+      "status": 200
+    },
+    {
+      "url": "https://github.com/charonwwang/cup-translate/releases/download/updater-v3.0.14/cup-translate_3.0.14_windows_x64_setup.nsis.zip",
+      "status": 200
+    },
+    {
+      "url": "https://github.com/charonwwang/cup-translate/releases/download/updater-v3.0.14/cup-translate_3.0.14_windows_x64_setup.nsis.zip.sig",
+      "status": 200
+    },
+    {
+      "url": "https://github.com/charonwwang/cup-translate/releases/download/updater-v3.0.14/cup-translate_3.0.14_windows_x86_setup.nsis.zip",
+      "status": 200
+    },
+    {
+      "url": "https://github.com/charonwwang/cup-translate/releases/download/updater-v3.0.14/cup-translate_3.0.14_windows_x86_setup.nsis.zip.sig",
+      "status": 200
+    },
+    {
+      "url": "https://github.com/charonwwang/cup-translate/releases/download/updater-v3.0.14/cup-translate_3.0.14_windows_arm64_setup.nsis.zip",
+      "status": 200
+    },
+    {
+      "url": "https://github.com/charonwwang/cup-translate/releases/download/updater-v3.0.14/cup-translate_3.0.14_windows_arm64_setup.nsis.zip.sig",
+      "status": 200
+    },
+    {
+      "url": "https://github.com/charonwwang/cup-translate/releases/download/updater-v3.0.14/cup-translate_3.0.14_linux_x64.AppImage.tar.gz",
+      "status": 200
+    },
+    {
+      "url": "https://github.com/charonwwang/cup-translate/releases/download/updater-v3.0.14/cup-translate_3.0.14_linux_x64.AppImage.tar.gz.sig",
+      "status": 200
+    },
+    {
+      "url": "https://github.com/charonwwang/cup-translate/releases/download/v3.0.14/cup-translate_3.0.14_linux_arm64.deb",
+      "status": 200
+    },
+    {
+      "url": "https://github.com/charonwwang/cup-translate/releases/download/v3.0.14/cup-translate_3.0.14_linux_arm64.rpm",
+      "status": 200
+    },
+    {
+      "url": "https://github.com/charonwwang/cup-translate/releases/download/v3.0.14/cup-translate_3.0.14_linux_arm64.tar.gz",
+      "status": 200
+    },
+    {
+      "url": "https://github.com/charonwwang/cup-translate/releases/download/v3.0.14/cup-translate_3.0.14_linux_x64.deb",
+      "status": 200
+    },
+    {
+      "url": "https://github.com/charonwwang/cup-translate/releases/download/v3.0.14/cup-translate_3.0.14_linux_x64.rpm",
+      "status": 200
+    },
+    {
+      "url": "https://github.com/charonwwang/cup-translate/releases/download/v3.0.14/cup-translate_3.0.14_linux_x64.tar.gz",
+      "status": 200
+    },
+    {
+      "url": "https://github.com/charonwwang/cup-translate/releases/download/v3.0.14/cup-translate_3.0.14_mac_arm64.dmg",
+      "status": 200
+    },
+    {
+      "url": "https://github.com/charonwwang/cup-translate/releases/download/v3.0.14/cup-translate_3.0.14_mac_x64.dmg",
+      "status": 200
+    },
+    {
+      "url": "https://github.com/charonwwang/cup-translate/releases/download/v3.0.14/cup-translate_3.0.14_source.tar.gz",
+      "status": 200
+    },
+    {
+      "url": "https://github.com/charonwwang/cup-translate/releases/download/v3.0.14/cup-translate_3.0.14_windows_arm64_setup.exe",
+      "status": 200
+    },
+    {
+      "url": "https://github.com/charonwwang/cup-translate/releases/download/v3.0.14/cup-translate_3.0.14_windows_x64.msi",
+      "status": 200
+    },
+    {
+      "url": "https://github.com/charonwwang/cup-translate/releases/download/v3.0.14/cup-translate_3.0.14_windows_x64_setup.exe",
+      "status": 200
+    },
+    {
+      "url": "https://github.com/charonwwang/cup-translate/releases/download/v3.0.14/cup-translate_3.0.14_windows_x86.msi",
+      "status": 200
+    },
+    {
+      "url": "https://github.com/charonwwang/cup-translate/releases/download/v3.0.14/cup-translate_3.0.14_windows_x86_setup.exe",
+      "status": 200
+    },
+    {
+      "url": "https://github.com/charonwwang/cup-translate/releases/download/v3.0.14/SHA256SUMS",
+      "status": 200
+    },
+    {
+      "url": "https://github.com/charonwwang/cup-translate/releases/download/v3.0.14/update.json",
+      "status": 200
+    }
+  ],
+  "manifestChecksumVerified": true,
+  "githubAssetDigestsVerified": true,
+  "sourceAsset": "cup-translate_3.0.14_source.tar.gz",
+  "metadataAccess": "Authenticated GitHub API; all release download checks sent no authorization header",
+  "verifiedAt": "2026-10-26T18:18:38.626962+08:00",
+  "sourceCommit": "3fb8e7e9713112b1759eecc7796ebfe3a1b7118c",
+  "workflowConclusion": "success",
+  "jobs": [
+    {
+      "name": "windows-runtime",
+      "conclusion": "success"
+    },
+    {
+      "name": "preflight",
+      "conclusion": "success"
+    },
+    {
+      "name": "linux (x86_64-unknown-linux-gnu, x64, ubuntu-latest, stable-x86_64-unknown-linux-gnu)",
+      "conclusion": "success"
+    },
+    {
+      "name": "linux (aarch64-unknown-linux-gnu, arm64, ubuntu-24.04-arm, stable-aarch64-unknown-linux-gnu)",
+      "conclusion": "success"
+    },
+    {
+      "name": "macos (macos-15, aarch64-apple-darwin, aarch64, arm64)",
+      "conclusion": "success"
+    },
+    {
+      "name": "windows (x86_64-pc-windows-msvc, x64, true)",
+      "conclusion": "success"
+    },
+    {
+      "name": "macos (macos-15-intel, x86_64-apple-darwin, x64, x64)",
+      "conclusion": "success"
+    },
+    {
+      "name": "windows (i686-pc-windows-msvc, x86, true)",
+      "conclusion": "success"
+    },
+    {
+      "name": "windows (aarch64-pc-windows-msvc, arm64, false)",
+      "conclusion": "success"
+    },
+    {
+      "name": "publish",
+      "conclusion": "success"
+    }
+  ],
+  "independentArm64Check": {
+    "updaterSignatureVerifiedAgainstEmbeddedPublicKey": true,
+    "bundleVersion": "3.0.14",
+    "bundleIdentifier": "com.cup-translate.app"
+  },
+  "extendedBuildVerification": {
+    "run": "https://github.com/charonwwang/cup-translate/actions/runs/40302597939",
+    "conclusion": "failure",
+    "failedTarget": "armv7-unknown-linux-gnueabihf",
+    "preExisting": true,
+    "includedInRelease": false
+  }
+}
