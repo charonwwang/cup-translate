@@ -5,6 +5,7 @@ mod backup;
 mod backup_path;
 mod clipboard;
 mod cmd;
+mod plugin_package;
 mod config;
 mod credentials;
 mod error;
@@ -238,6 +239,10 @@ fn main() {
             webdav,
             local,
             install_plugin,
+            inspect_plugin_entry,
+            load_plugin,
+            plugin_info,
+            uninstall_plugin,
             font_list,
             aliyun,
             local_mt_model_status,

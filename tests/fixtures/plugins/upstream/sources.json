@@ -1,0 +1,83 @@
+[
+  {
+    "repository": "https://github.com/pot-app/pot-app-tts-plugin-template",
+    "commit": "8c36bbd908d687f7cd02392099c3d9619e839dcd",
+    "id": "plugin.com.pot-app.lingva_tts",
+    "files": [
+      {
+        "path": "info.json",
+        "sha256": "077e2bf32bd0a875c4872e03e886e384f17b64d4bb3100889d71142c35bb535e",
+        "url": "https://raw.githubusercontent.com/pot-app/pot-app-tts-plugin-template/8c36bbd908d687f7cd02392099c3d9619e839dcd/info.json"
+      },
+      {
+        "path": "main.js",
+        "sha256": "44f2d63f0a96351664a0255907c5d2b7465d2c1b2386c991c0f1f6a66b819349",
+        "url": "https://raw.githubusercontent.com/pot-app/pot-app-tts-plugin-template/8c36bbd908d687f7cd02392099c3d9619e839dcd/main.js"
+      },
+      {
+        "path": "lingva.svg",
+        "sha256": "6cb1d38a8c1c52ab7c37d6949f7f6a22b32d4e1d2454893d77353210a4a77f47",
+        "url": "https://raw.githubusercontent.com/pot-app/pot-app-tts-plugin-template/8c36bbd908d687f7cd02392099c3d9619e839dcd/lingva.svg"
+      },
+      {
+        "path": "LICENSE",
+        "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+        "url": "https://raw.githubusercontent.com/pot-app/pot-app-tts-plugin-template/8c36bbd908d687f7cd02392099c3d9619e839dcd/LICENSE"
+      }
+    ]
+  },
+  {
+    "repository": "https://github.com/pot-app/pot-app-collection-plugin-template",
+    "commit": "629c23e5812197bf4839b79f215eb8be9f74f7e0",
+    "id": "plugin.com.pot-app.anki",
+    "files": [
+      {
+        "path": "info.json",
+        "sha256": "709f0c7bf449c739289a12684256b43c86ad4bcadb32ce50cb0a83ad0be6673b",
+        "url": "https://raw.githubusercontent.com/pot-app/pot-app-collection-plugin-template/629c23e5812197bf4839b79f215eb8be9f74f7e0/info.json"
+      },
+      {
+        "path": "main.js",
+        "sha256": "ff3ea59871f023706e25529244f98f8bddba8bf24f8f608b0a264dc77e66a368",
+        "url": "https://raw.githubusercontent.com/pot-app/pot-app-collection-plugin-template/629c23e5812197bf4839b79f215eb8be9f74f7e0/main.js"
+      },
+      {
+        "path": "anki.svg",
+        "sha256": "21a2401eeb6b63038508746da2c610ddac1f2b5d4150df2e1c827e8175c2b6de",
+        "url": "https://raw.githubusercontent.com/pot-app/pot-app-collection-plugin-template/629c23e5812197bf4839b79f215eb8be9f74f7e0/anki.svg"
+      },
+      {
+        "path": "LICENSE",
+        "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+        "url": "https://raw.githubusercontent.com/pot-app/pot-app-collection-plugin-template/629c23e5812197bf4839b79f215eb8be9f74f7e0/LICENSE"
+      }
+    ]
+  },
+  {
+    "repository": "https://github.com/pot-app/pot-app-translate-plugin-ecdict",
+    "commit": "aceea5798a9269146d55ee3697d85a526630c176",
+    "id": "plugin.com.pot-app.ecdict",
+    "files": [
+      {
+        "path": "info.json",
+        "sha256": "d2eb2c25b6fb8d4cbaff3fa6c50eb2e30793fa338866be1168c35533c3b7fa93",
+        "url": "https://raw.githubusercontent.com/pot-app/pot-app-translate-plugin-ecdict/aceea5798a9269146d55ee3697d85a526630c176/info.json"
+      },
+      {
+        "path": "main.js",
+        "sha256": "00e52b30f7ec5feb9e1ead8ef57e6427a4cb082a2fba8b3f5c9b1d9ee5033443",
+        "url": "https://raw.githubusercontent.com/pot-app/pot-app-translate-plugin-ecdict/aceea5798a9269146d55ee3697d85a526630c176/main.js"
+      },
+      {
+        "path": "icon.svg",
+        "sha256": "4fa43352455b60bce868bc65f776fc092f853270aa646270ddf8248df0a8f06c",
+        "url": "https://raw.githubusercontent.com/pot-app/pot-app-translate-plugin-ecdict/aceea5798a9269146d55ee3697d85a526630c176/icon.svg"
+      },
+      {
+        "path": "LICENSE",
+        "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+        "url": "https://raw.githubusercontent.com/pot-app/pot-app-translate-plugin-ecdict/aceea5798a9269146d55ee3697d85a526630c176/LICENSE"
+      }
+    ]
+  }
+]

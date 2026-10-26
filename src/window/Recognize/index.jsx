@@ -1,3 +1,4 @@
+import { invoke } from '@tauri-apps/api/tauri';
 import { readDir, BaseDirectory, readTextFile, exists } from '@tauri-apps/api/fs';
 import { appConfigDir, join } from '@tauri-apps/api/path';
 import { convertFileSrc } from '@tauri-apps/api/tauri';
@@ -64,10 +65,7 @@ export default function Recognize() {
             for (const plugin of plugins) {
                 let pluginInfo;
                 try {
-                    const infoStr = await readTextFile(`plugins/recognize/${plugin.name}/info.json`, {
-                        dir: BaseDirectory.AppConfig,
-                    });
-                    pluginInfo = JSON.parse(infoStr);
+                    pluginInfo = await invoke('plugin_info', { pluginType: 'recognize', pluginName: plugin.name });
                 } catch (e) {
                     console.error(`[plugin] skip broken plugin ${plugin.name}:`, e);
                     continue;
@@ -76,7 +74,7 @@ export default function Recognize() {
                     const appConfigDirPath = await appConfigDir();
                     const iconPath = await join(
                         appConfigDirPath,
-                        `/plugins/recognize/${plugin.name}/${pluginInfo.icon}`
+                        `plugins/recognize/${plugin.name}/${pluginInfo.icon}`
                     );
                     pluginInfo.icon = convertFileSrc(iconPath);
                 }

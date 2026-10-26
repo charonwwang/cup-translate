@@ -98,16 +98,13 @@ test('the history page no longer leaks its internal log tag to the UI', async ()
     assert.ok(source.includes("t('config.history.update_failed')"), 'update failure must use the i18n key');
 });
 
-test('the plugin install toast uses i18n with an interpolated count', async () => {
+test('plugin installation reports localized per-package results', async () => {
     const source = await readFile('src/window/Config/pages/Service/SelectPluginModal/index.jsx', 'utf8');
     assert.ok(
         !source.includes("'Installed ' + count + ' plugins'"),
         'the plugin install toast must not be a hardcoded English string'
     );
-    assert.ok(
-        source.includes("t('config.service.installed_plugins', { count })"),
-        'the plugin install toast must pass the count through i18n'
-    );
+    assert.ok(source.includes("t('config.service.install_success')"), 'each successful package uses a localized label');
 });
 
 test('no user-facing toast or error bypasses i18n anywhere in src/', async () => {

@@ -1,3 +1,4 @@
+import { invoke } from '@tauri-apps/api/tauri';
 import { LuCopy, LuVolume2, LuSquare, LuLoader2 } from 'react-icons/lu';
 import { historyResult } from '../../../../utils/historyText';
 import { writeClipboardSafely } from '../../../../utils/clipboard';
@@ -219,10 +220,7 @@ export default function History() {
                 for (const plugin of plugins) {
                     let pluginInfo;
                     try {
-                        const infoStr = await readTextFile(`plugins/${serviceType}/${plugin.name}/info.json`, {
-                            dir: BaseDirectory.AppConfig,
-                        });
-                        pluginInfo = JSON.parse(infoStr);
+                        pluginInfo = await invoke('plugin_info', { pluginType: serviceType, pluginName: plugin.name });
                     } catch (e) {
                         console.error(`[plugin] skip broken plugin ${plugin.name}:`, e);
                         continue;
@@ -231,7 +229,7 @@ export default function History() {
                         const appConfigDirPath = await appConfigDir();
                         const iconPath = await join(
                             appConfigDirPath,
-                            `/plugins/${serviceType}/${plugin.name}/${pluginInfo.icon}`
+                            `plugins/${serviceType}/${plugin.name}/${pluginInfo.icon}`
                         );
                         pluginInfo.icon = convertFileSrc(iconPath);
                     }

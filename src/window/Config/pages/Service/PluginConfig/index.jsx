@@ -1,3 +1,6 @@
+import { savePluginInstance } from '../../../../../utils/plugin_lifecycle';
+import { store } from '../../../../../utils/store';
+import { emit } from '@tauri-apps/api/event';
 import { INSTANCE_NAME_CONFIG_KEY } from '../../../../../utils/service_instance';
 import { Button, Input } from '@nextui-org/react';
 import { DropdownTrigger } from '@nextui-org/react';
@@ -6,14 +9,16 @@ import { DropdownItem } from '@nextui-org/react';
 import { Dropdown } from '@nextui-org/react';
 import { useTranslation } from 'react-i18next';
 import { open } from '@tauri-apps/api/shell';
-import React from 'react';
+import React, { useState } from 'react';
 
 import { useConfig } from '../../../../../hooks';
 
 export function PluginConfig(props) {
-    const { instanceKey, updateServiceList, onClose, name, pluginList } = props;
+    const { instanceKey, onClose, name, pluginList } = props;
     const [pluginConfig, setPluginConfig] = useConfig(instanceKey, {}, { sync: false });
     const { t } = useTranslation();
+    const [error, setError] = useState('');
+    const [saving, setSaving] = useState(false);
 
     return (
         <>
@@ -130,14 +135,29 @@ export function PluginConfig(props) {
                 })
             )}
 
+            {error && <p role='alert'>{error}</p>}
             <div>
                 <Button
                     fullWidth
                     color='primary'
-                    onPress={() => {
-                        setPluginConfig(pluginConfig, true);
-                        updateServiceList(instanceKey);
-                        onClose();
+                    isLoading={saving}
+                    onPress={async () => {
+                        setSaving(true);
+                        setError('');
+                        try {
+                            await savePluginInstance({
+                                store,
+                                emit,
+                                kind: pluginList[name].plugin_type,
+                                key: instanceKey,
+                                config: pluginConfig,
+                            });
+                            onClose();
+                        } catch (error) {
+                            setError(String(error));
+                        } finally {
+                            setSaving(false);
+                        }
                     }}
                 >
                     {t('common.save')}

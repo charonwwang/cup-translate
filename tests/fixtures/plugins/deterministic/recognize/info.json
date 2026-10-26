@@ -1,0 +1,17 @@
+{
+  "id": "plugin.cup.fixture.recognize",
+  "plugin_type": "recognize",
+  "display": "Cup recognize fixture",
+  "homepage": "https://github.com/charonwwang/cup-translate",
+  "icon": "icon.svg",
+  "needs": [
+    {
+      "key": "prefix",
+      "display": "Prefix"
+    }
+  ],
+  "language": {
+    "en": "en",
+    "zh_cn": "zh"
+  }
+}

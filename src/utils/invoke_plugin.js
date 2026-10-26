@@ -18,8 +18,7 @@ export async function invoke_plugin(pluginType, pluginName) {
     let configDir = await appConfigDir();
     let cacheDir = await appCacheDir();
     let pluginDir = await join(configDir, 'plugins', pluginType, pluginName);
-    let entryFile = await join(pluginDir, 'main.js');
-    let script = await readTextFile(entryFile);
+    let script = await invoke('load_plugin', { pluginType, pluginName });
     async function run(cmdName, args) {
         return await invoke('run_binary', {
             pluginType,
@@ -40,5 +39,14 @@ export async function invoke_plugin(pluginType, pluginName) {
         pluginDir, // String
         osType, // "Windows_NT", "Darwin", "Linux"
     };
-    return [eval(`${script} ${pluginType}`), utils];
+    const entry = eval(`${script}\n;${pluginType}`);
+    if (typeof entry !== 'function') throw new Error(`Missing plugin entry: ${pluginType}`);
+    // Recheck on every call, including entries cached before a privacy-mode change.
+    return [
+        async (...args) => {
+            await checkPolicy(pluginType, pluginName);
+            return await entry(...args);
+        },
+        utils,
+    ];
 }
