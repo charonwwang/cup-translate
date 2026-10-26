@@ -24,6 +24,6 @@
 
 翻译服务选择器进入必应配置后为单层弹窗；暗色 OCR 选择器及 Anki 配置的文字、输入框、按钮和滚动区已原生检查。暗色验收后恢复用户原有的“跟随系统”主题，没有保存新收藏或翻译服务。视觉检查还修正了整个弹窗被当作焦点控件时的外圈、底栏圆角裁剪及后备勾选项字号。
 
-本机截图和旧应用保存在私有目录 `~/Library/Application Support/cup-translate-local-backups/20261026-164541-55ada06/`，包括 `qwen-release-confirmed.png`、`ocr-picker-dark.png`、`anki-config-dark.png`。最终视觉微调构建与安装版本在下方补充。删除仅使用临时测试目录验证，不删除用户已经安装的大模型。首次其他音色和任意新文本仍需实际推理，缓存只加速已生成内容；当前 Python SDK 路径仍是整段生成后播放。
+本机截图和旧应用保存在私有目录 `~/Library/Application Support/cup-translate-local-backups/20261026-164541-55ada06/`，包括 `qwen-release-confirmed.png`、`ocr-picker-dark.png`、`anki-config-dark.png`。最终视觉微调版本为 `d3cedb6`，再次完成 ARM64 optimized release 构建、签名校验及实际启动，最终选择器已去除整个弹窗的多余焦点外圈，底栏圆角正常。停留在 Qwen 配置界面供用户继续实测。最终截图与旧版备份在 `~/Library/Application Support/cup-translate-local-backups/20261026-165628-d3cedb6/`，含 `tts-picker-final.png`、`qwen-final.png`。本轮未推送或公开发布。删除仅使用临时测试目录验证，不删除用户已经安装的大模型。首次其他音色和任意新文本仍需实际推理，缓存只加速已生成内容；当前 Python SDK 路径仍是整段生成后播放。
 
 真实 Anki/欧路外部写入、其他模型完整下载、Windows/Linux 继续沿用此前未验收范围，本轮不扩大通过声明。
