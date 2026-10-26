@@ -71,13 +71,13 @@ export default function SourceArea(props) {
     const resolvedSourceSpeech = resolveSpeechService('source', speechPolicy, ttsServiceList);
     const sourceSpeechService =
         privacyMode === 'device_only' &&
-        !['local_tts', 'piper_tts', 'kokoro_tts'].includes(getServiceName(resolvedSourceSpeech ?? ''))
+        !['local_tts', 'piper_tts', 'kokoro_tts', 'qwen_tts'].includes(getServiceName(resolvedSourceSpeech ?? ''))
             ? null
             : resolvedSourceSpeech;
     const speak = useVoice();
-    const speech = useSpeech(`${sourceLanguage}:${speechPolicy}:${sourceText}`);
-    const speechLabel = speech.status === 'idle' ? t('translate.speak') : t('translate.stop_speaking');
     const activeSourceLanguage = getActiveSourceLanguage(sourceLanguage, detectLanguage);
+    const speech = useSpeech(JSON.stringify([sourceText, activeSourceLanguage, sourceSpeechService, privacyMode]));
+    const speechLabel = speech.status === 'idle' ? t('translate.speak') : t('translate.stop_speaking');
     const sourceMode = classifySourceText(sourceText);
 
     const inputEpoch = useRef(0);

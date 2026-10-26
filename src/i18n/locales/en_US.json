@@ -1062,7 +1062,8 @@
             "qwen_detach_confirm": "This model uses a shared directory. Remove only its registration and samples; keep shared weights, Python and service settings. You can check and install again later.",
             "qwen_remove_confirm_button": "Confirm removal",
             "qwen_removed": "Model installation removed. Service settings are kept. Check and install again before speaking.",
-            "qwen_enable_after_save": "Enable fallback after saving"
+            "qwen_enable_after_save": "Enable fallback after saving",
+            "qwen_cpu_compat_hint": "CPU compatibility mode prioritizes speech content fidelity. The app limits inference threads to control resource use."
         }
     }
 }

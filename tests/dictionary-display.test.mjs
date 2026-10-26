@@ -28,6 +28,7 @@ function render({
 }) {
     const calls = [];
     const pronunciationQueries = [];
+    const speechKeys = [];
     let state = 0;
     const env = {
         ...view,
@@ -56,13 +57,16 @@ function render({
         detectLanguageAtom: 'detectLanguage',
         useTranslation: () => ({ t: (key) => key }),
         useToastStyle: () => ({}),
-        useSpeech: () => ({
-            status: 'idle',
-            stop() {},
-            toggle: async (load) => {
-                await load();
-            },
-        }),
+        useSpeech: (key) => {
+            speechKeys.push(key);
+            return {
+                status: 'idle',
+                stop() {},
+                toggle: async (load) => {
+                    await load();
+                },
+            };
+        },
         getServiceName: (key) => key,
         getDisplayInstanceName: (_name, fallback) => fallback(),
         getServiceSouceType: () => 'builtin',
@@ -127,6 +131,7 @@ function render({
         nodes,
         calls,
         pronunciationQueries,
+        speechKeys,
         labels: nodes.map((node) => node.props['aria-label']).filter(Boolean),
         text: JSON.stringify(tree),
     };
@@ -147,6 +152,12 @@ test('language-aware input classification never infers a word from missing space
         ['One. Two.', 'en', 'paragraph'],
     ])
         assert.equal(view.classifySourceText(text, lang), mode, text);
+});
+
+test('switching the source text invalidates source, example and translated audio owners', () => {
+    const oldCard = render({ text: '这是一段旧的中文长文本。', language: 'zh_cn' });
+    const current = render({ text: 'performance', language: 'en' });
+    for (let index = 0; index < 3; index++) assert.notEqual(oldCard.speechKeys[index], current.speechKeys[index]);
 });
 
 test('W01–W03: real card render names source/target actions and only English words show missing IPA', async () => {

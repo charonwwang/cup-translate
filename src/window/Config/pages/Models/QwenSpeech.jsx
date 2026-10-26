@@ -505,6 +505,7 @@ export default function QwenSpeech({ open, onClose, mode = 'models' }) {
                                 <p>
                                     {t('models.qwen_actual_device')}: {installed?.device}
                                 </p>
+                                {installed?.device === 'cpu' && <p>{t('models.qwen_cpu_compat_hint')}</p>}
                                 <p>{installed?.python}</p>
                                 <p>{installed?.model}</p>
                                 <p>{status?.logPath}</p>

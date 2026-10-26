@@ -967,7 +967,8 @@
             "qwen_detach_confirm": "此模型來自共用目錄。僅移除此規格的安裝登記與樣音，保留共用模型檔案、Python 環境及服務設定。之後可重新檢查並安裝。",
             "qwen_remove_confirm_button": "確認移除",
             "qwen_removed": "模型安裝已移除，服務設定保留。請重新檢查並安裝後再朗讀。",
-            "qwen_enable_after_save": "儲存後啟用後備朗讀"
+            "qwen_enable_after_save": "儲存後啟用後備朗讀",
+            "qwen_cpu_compat_hint": "目前使用 CPU 相容推理，優先確保朗讀內容一致；應用限制執行緒數以控制資源使用。"
         }
     }
 }

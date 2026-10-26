@@ -1062,7 +1062,8 @@
             "qwen_detach_confirm": "此模型来自共享目录。仅移除此规格的安装登记与样音，保留共享模型文件、Python 环境和服务配置。之后可重新检查并安装。",
             "qwen_remove_confirm_button": "确认移除",
             "qwen_removed": "模型安装已移除，服务配置保留。请重新检查并安装后再朗读。",
-            "qwen_enable_after_save": "保存后启用后备朗读"
+            "qwen_enable_after_save": "保存后启用后备朗读",
+            "qwen_cpu_compat_hint": "当前使用 CPU 兼容推理，优先保证朗读内容一致；应用限制线程数以控制资源使用。"
         }
     }
 }

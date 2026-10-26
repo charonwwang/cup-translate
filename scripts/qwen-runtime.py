@@ -7,6 +7,7 @@ import importlib.metadata
 import io
 import json
 import os
+import re
 from pathlib import Path
 import sys
 from collections import OrderedDict
@@ -37,7 +38,7 @@ def probe():
                 import torchaudio
                 from qwen_tts import Qwen3TTSModel
             result['ready'] = True
-            result['device'] = 'mps' if torch.backends.mps.is_available() else 'cuda:0' if torch.cuda.is_available() else 'cpu'
+            result['device'] = preferred_device(torch)
         except Exception as error:
             result['reason'] = str(error)[-500:]
     print(json.dumps(result), flush=True)
@@ -46,6 +47,12 @@ def probe():
 def redirect_logs():
     from contextlib import redirect_stdout
     return redirect_stdout(sys.stderr)
+
+
+def preferred_device(torch):
+    # On the shipped PyTorch/SDK combination, MPS fp32 can produce valid WAVs
+    # containing unrelated speech. Use the semantically verified CPU path on Mac.
+    return 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
 
 def verified(directory, model):
@@ -70,8 +77,10 @@ def load_model(directory, device=None):
     os.environ.setdefault('PYTORCH_ENABLE_MPS_FALLBACK', '1')
     import torch
     from qwen_tts import Qwen3TTSModel
-    if not device:
-        device = 'mps' if torch.backends.mps.is_available() else 'cuda:0' if torch.cuda.is_available() else 'cpu'
+    if not device or device.startswith('mps'):
+        device = preferred_device(torch)
+    if device == 'cpu':
+        torch.set_num_threads(max(1, min(4, os.cpu_count() or 1)))
     model = Qwen3TTSModel.from_pretrained(str(directory), device_map=device,
         dtype=torch.float16 if device.startswith('cuda') else torch.float32,
         attn_implementation='sdpa', local_files_only=True)
@@ -85,11 +94,19 @@ def audio(model, text, language, voice, max_tokens=2048):
         raise ValueError('Speech text must contain 1–2000 characters')
     if language.lower() not in model.get_supported_languages() or voice.lower() not in model.get_supported_speakers():
         raise ValueError('Unsupported language or voice')
+    # End isolated dictionary words explicitly and bound runaway generation.
+    word = bool(re.fullmatch(r"[A-Za-z]+(?:[-'][A-Za-z]+)*", text.strip()))
+    spoken = text.strip() + '.' if word else text
+    budget = min(max_tokens, max(48, min(192, len(text.strip()) * 4 + 16))) if word else max_tokens
+    word_options = {'do_sample': False, 'subtalker_dosample': False} if word else {}
     with torch.inference_mode():
-        waves, rate = model.generate_custom_voice(text=text, language=language, speaker=voice, max_new_tokens=max_tokens)
+        waves, rate = model.generate_custom_voice(text=spoken, language=language, speaker=voice,
+            non_streaming_mode=True, max_new_tokens=budget, **word_options)
     import numpy as np
     if not len(waves[0]) or not np.isfinite(waves[0]).all() or float(np.max(np.abs(waves[0]))) < 1e-6:
         raise RuntimeError('Model produced empty or silent audio')
+    if word and len(waves[0]) / rate >= (budget - 2) / 12.5:
+        raise RuntimeError('Qwen single-word generation did not finish within its speech budget; audio discarded')
     output = io.BytesIO()
     sf.write(output, waves[0], rate, format='WAV', subtype='PCM_16')
     return output.getvalue()
@@ -130,7 +147,7 @@ def install(args):
     with redirect_logs():
         os.environ.setdefault('PYTORCH_ENABLE_MPS_FALLBACK', '1')
         import torch
-        device = 'mps' if torch.backends.mps.is_available() else 'cuda:0' if torch.cuda.is_available() else 'cpu'
+        device = preferred_device(torch)
         runtime = None
         fallback = False
         try:
@@ -165,13 +182,17 @@ def serve(args):
     config = json.loads(Path(args.config).read_text())
     with redirect_logs():
         runtime, device = load_model(config['model'], config.get('device'))
+    if config.get('device') != device:
+        atomic_json(args.config, {**config, 'device': device})
     print(json.dumps({'ready': True, 'device': device}), flush=True)
     # Bounded process-local audio cache: repeated dictionary words avoid inference.
     cache = OrderedDict()
     cache_bytes = 0
     for line in sys.stdin:
+        identity = {}
         try:
             request = json.loads(line)
+            identity = {'request_id': request.get('request_id'), 'text_hash': hashlib.sha256(request['text'].encode('utf-8')).hexdigest(), 'language': request['language'], 'voice': request['voice']}
             key = (request['text'], request['language'], request['voice'], bool(request.get('preview')))
             if key in cache:
                 wav = cache.pop(key)
@@ -188,11 +209,11 @@ def serve(args):
                     while len(cache) > 8 or cache_bytes > 8_000_000:
                         _, removed = cache.popitem(last=False)
                         cache_bytes -= len(removed)
-            print(json.dumps({'audio': base64.b64encode(wav).decode('ascii')}), flush=True)
+            print(json.dumps({**identity, 'audio': base64.b64encode(wav).decode('ascii')}), flush=True)
         except Exception:
             import traceback
             traceback.print_exc(file=sys.stderr)
-            print(json.dumps({'error': 'Local speech synthesis failed; see Qwen runtime log'}), flush=True)
+            print(json.dumps({**identity, 'error': 'Local speech synthesis failed; see Qwen runtime log'}), flush=True)
 
 
 def main():

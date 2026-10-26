@@ -174,14 +174,15 @@ export default function TargetArea(props) {
     const [ttsPluginInfo, setTtsPluginInfo] = useState();
     const { t } = useTranslation();
     const toastStyle = useToastStyle();
-    const speech = useSpeech(displayResult);
+    const speechContext = JSON.stringify([dictionaryKey, speechService]);
+    const speech = useSpeech(JSON.stringify([speechContext, displayResult, showBack]));
     useEffect(() => {
         speech.stop();
         exampleSpeech.stop();
         sourceWordSpeech.stop();
     }, [sourceLanguage, activeSourceLanguage, targetLanguage, speechService, privacyMode]);
-    const exampleSpeech = useSpeech('dictionary-example');
-    const sourceWordSpeech = useSpeech('source-word');
+    const exampleSpeech = useSpeech(`${speechContext}:dictionary-example`);
+    const sourceWordSpeech = useSpeech(`${speechContext}:source-word`);
     const [activeExample, setActiveExample] = useState('');
     const speechLabel =
         speech.status === 'idle'

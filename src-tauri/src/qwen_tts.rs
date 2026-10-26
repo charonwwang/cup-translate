@@ -18,6 +18,7 @@ const SCRIPT: &str = include_str!("../../scripts/qwen-runtime.py");
 const MANIFEST: &str = include_str!("../resources/qwen-models.json");
 static CANCELLED: AtomicBool = AtomicBool::new(false);
 static SPEECH_EPOCH: AtomicU64 = AtomicU64::new(0);
+static REQUEST_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 const PREVIEW_TEXT: &str = "你好，欢迎使用。";
 const VOICES: &[&str] = &[
     "Vivian", "Serena", "Uncle_Fu", "Dylan", "Eric", "Ryan", "Aiden", "Ono_Anna", "Sohee",
@@ -646,11 +647,13 @@ fn speak(
     }
     let runtime = slot.as_mut().unwrap();
     set_runtime("synthesizing", variant);
+    let request_id = REQUEST_SEQUENCE.fetch_add(1, Ordering::SeqCst).to_string();
+    let text_hash = format!("{:x}", Sha256::digest(text.as_bytes()));
     let result = (|| {
         writeln!(
             runtime.input,
             "{}",
-            json!({"text":text,"language":language,"voice":voice,"preview":text == PREVIEW_TEXT})
+            json!({"request_id":request_id,"text":text,"language":language,"voice":voice,"preview":text == PREVIEW_TEXT})
         )
         .map_err(|_| "Qwen runtime disconnected")?;
         runtime
@@ -658,6 +661,7 @@ fn speak(
             .flush()
             .map_err(|_| "Qwen runtime disconnected")?;
         let response = runtime.reply(if text == PREVIEW_TEXT { 120 } else { 600 })?;
+        validate_reply(&response, &request_id, &text_hash, &language, &voice)?;
         if let Some(error) = response["error"].as_str() {
             return Err(error.to_owned());
         }
@@ -676,6 +680,25 @@ fn speak(
         set_runtime("ready", variant);
     }
     result
+}
+fn validate_reply(
+    response: &Value,
+    request_id: &str,
+    text_hash: &str,
+    language: &str,
+    voice: &str,
+) -> Result<(), String> {
+    if response["request_id"].as_str() != Some(request_id)
+        || response["text_hash"].as_str() != Some(text_hash)
+        || response["language"].as_str() != Some(language)
+        || response["voice"].as_str() != Some(voice)
+    {
+        return Err(
+            "Qwen response does not match the requested text, language or voice; audio discarded"
+                .into(),
+        );
+    }
+    Ok(())
 }
 #[tauri::command]
 pub async fn qwen_tts_request(
@@ -870,6 +893,28 @@ pub async fn qwen_stop() -> Result<(), String> {
 #[cfg(all(test, unix))]
 mod lifecycle_tests {
     use super::*;
+    #[test]
+    fn stale_or_mismatched_worker_audio_is_rejected() {
+        let reply =
+            json!({"request_id":"42","text_hash":"expected","language":"English","voice":"Vivian"});
+        assert!(validate_reply(&reply, "42", "expected", "English", "Vivian").is_ok());
+        for key in ["request_id", "text_hash", "language", "voice"] {
+            let mut wrong = reply.clone();
+            wrong[key] = json!("different");
+            assert!(
+                validate_reply(&wrong, "42", "expected", "English", "Vivian").is_err(),
+                "{key}"
+            );
+        }
+        assert!(validate_reply(
+            &json!({"audio":"old"}),
+            "42",
+            "expected",
+            "English",
+            "Vivian"
+        )
+        .is_err());
+    }
     struct TestDirectory(PathBuf);
     impl TestDirectory {
         fn path(&self) -> &Path {

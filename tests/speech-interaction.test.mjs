@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { componentHarness } from './helpers/componentHarness.mjs';
 async function setup() {
     const code = (await readFile('src/hooks/useSpeech.js', 'utf8'))
         .replace(/^import .*$/gm, '')
@@ -79,4 +80,41 @@ test('provider failures reset state and propagate actionable errors', async () =
         /provider unavailable/
     );
     assert.equal(events.at(-1), 'idle');
+});
+
+test('a pending old text response cannot play after the content identity changes', async () => {
+    const played = [];
+    const h = await componentHarness('src/hooks/useSpeech.js', 'useSpeech', {
+        window: {
+            AudioContext: function () {
+                return {
+                    resume: async () => {},
+                    close: async () => {},
+                    decodeAudioData: async () => ({}),
+                    destination: {},
+                    createBufferSource: () => ({
+                        connect() {},
+                        disconnect() {},
+                        stop() {},
+                        start: () => played.push(true),
+                    }),
+                };
+            },
+        },
+    });
+    let finish;
+    const oldSpeech = h.render('old Chinese paragraph');
+    const pending = oldSpeech.toggle(
+        () =>
+            new Promise((resolve) => {
+                finish = resolve;
+            })
+    );
+    await new Promise(setImmediate);
+    h.render('performance:English');
+    finish([1]);
+    await pending;
+    assert.deepEqual(played, []);
+    await h.render('performance:English').toggle(async () => [2]);
+    assert.deepEqual(played, [true]);
 });
