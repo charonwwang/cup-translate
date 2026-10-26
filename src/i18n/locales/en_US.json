@@ -182,7 +182,7 @@
                 "translate": "Translate",
                 "tts": "TTS",
                 "recognize": "Recognize",
-                "collection": "Collection",
+                "collection": "Collection & export",
                 "least": "Please keep at least one",
                 "add_builtin_service": "Add Builtin Service",
                 "add_external_service": "Add Extension",
@@ -543,15 +543,57 @@
                 }
             },
             "collection": {
+                "remove_secret": "Remove saved credential",
+                "discard_prompt": "Discard unsaved changes?",
+                "keep_editing": "Continue editing",
+                "discard": "Discard changes",
                 "anki": {
-                    "title": "Anki",
-                    "port": "Port"
+                    "title": "Anki connection",
+                    "port": "Port",
+                    "api_key": "API key (optional)",
+                    "guide": "Requires Anki Desktop and the AnkiConnect add-on. Open Anki, install AnkiConnect, restart Anki, then test. Default local port: 8765. Saving and testing do not create cards. Collection uses the cup-translate deck and cup-translate Card note type."
                 },
                 "eudic": {
                     "title": "Eudic",
                     "name": "Collection Name",
-                    "token": "Token"
-                }
+                    "token": "Token",
+                    "guide": "Exports English vocabulary to your Eudic account; translations and audio are not exported. Get an OpenAPI authorization token at my.eudic.net/OpenAPI/Authorization. Testing only reads study lists; saving works offline. The named study list is created on collection."
+                },
+                "status": {
+                    "untested": "Connection not tested. Configuration can be saved offline.",
+                    "checking": "Checking connection (read only)…",
+                    "connected": "This connection test passed.",
+                    "failed": "Connection test failed.",
+                    "saving": "Saving configuration…",
+                    "saved_connected": "Configuration saved. This connection test passed.",
+                    "saved_offline": "Configuration saved; connection not verified.",
+                    "save_failed": "Could not save configuration. Your draft is retained; retry.",
+                    "load_failed": "Could not read configuration. Reopen this editor to retry."
+                },
+                "errors": {
+                    "ANKI_UNREACHABLE": "Cannot connect to Anki. Open Anki Desktop with AnkiConnect installed, then retry.",
+                    "ANKI_TIMEOUT": "Anki connection timed out. Check Anki and the port, then retry.",
+                    "ANKI_AUTH": "AnkiConnect rejected authorization. Check its API key and access settings.",
+                    "ANKI_HTTP": "Anki returned an HTTP error. Check the port and AnkiConnect.",
+                    "ANKI_PROTOCOL": "This port did not return a valid AnkiConnect v6 response. Check the port or update AnkiConnect.",
+                    "ANKI_MODEL": "The Anki deck or note type has incompatible fields. Check “cup-translate Card” in Anki.",
+                    "ANKI_DUPLICATE": "This entry already exists in Anki.",
+                    "ANKI_WRITE_FAILED": "Anki rejected this request. Check Anki and its configuration.",
+                    "ANKI_WRITE_UNKNOWN": "Collection result unconfirmed. Check Anki before retrying; this request was not resent.",
+                    "EUDIC_AUTH": "Eudic authorization is missing or expired. Check your OpenAPI token.",
+                    "EUDIC_LIMIT": "Eudic rate limit reached. Try again later.",
+                    "EUDIC_TIMEOUT": "Eudic connection timed out. Try again later.",
+                    "EUDIC_UNREACHABLE": "Cannot connect to Eudic. Check your network and privacy settings.",
+                    "EUDIC_HTTP": "Eudic returned an HTTP error. Try again later.",
+                    "EUDIC_PROTOCOL": "Eudic returned an invalid response. Connection not confirmed.",
+                    "EUDIC_WRITE_UNKNOWN": "Export result unconfirmed. Check the Eudic study list before retrying; no automatic resend.",
+                    "COLLECTION_EMPTY": "There is no text to collect.",
+                    "COLLECTION_FAILED": "Collection failed. Check the service and configuration."
+                },
+                "test": "Test connection",
+                "save": "Save configuration",
+                "secret_saved": "Credential saved; enter to replace, clear to remove",
+                "collect_to": "Collect to {{name}}"
             }
         },
         "translate": {

@@ -1,6 +1,6 @@
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Button, Spacer } from '@nextui-org/react';
 import { useTranslation } from 'react-i18next';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 import {
     ServiceSourceType,
@@ -14,6 +14,18 @@ import { PluginConfig } from '../../PluginConfig';
 export default function ConfigModal(props) {
     const { serviceInstanceKey, pluginList, isOpen, onOpenChange, updateServiceInstanceList } = props;
 
+    const [editorState, setEditorState] = useState({ dirty: false, saving: false });
+    const [discardPrompt, setDiscardPrompt] = useState(false);
+    useEffect(() => {
+        setEditorState({ dirty: false, saving: false });
+        setDiscardPrompt(false);
+    }, [isOpen, serviceInstanceKey]);
+    const requestClose = () => {
+        if (editorState.saving) return;
+        if (editorState.dirty) setDiscardPrompt(true);
+        else onOpenChange(false);
+    };
+
     const serviceSourceType = getServiceSouceType(serviceInstanceKey);
     const pluginServiceFlag = whetherPluginService(serviceInstanceKey);
     const serviceName = getServiceName(serviceInstanceKey);
@@ -25,7 +37,7 @@ export default function ConfigModal(props) {
     ) : (
         <Modal
             isOpen={isOpen}
-            onOpenChange={onOpenChange}
+            onOpenChange={(open) => (open ? onOpenChange(true) : requestClose())}
             scrollBehavior='inside'
         >
             <ModalContent className='max-h-[75vh]'>
@@ -63,17 +75,50 @@ export default function ConfigModal(props) {
                                 pluginType='collection'
                                 pluginList={pluginList}
                                 updateServiceList={updateServiceInstanceList}
-                                onClose={onClose}
+                                onClose={requestClose}
+                                onEditorStateChange={(state) => {
+                                    setEditorState(state);
+                                    if (!state.dirty) setDiscardPrompt(false);
+                                }}
                             />
                         </ModalBody>
-                        <ModalFooter>
-                            <Button
-                                color='danger'
-                                variant='light'
-                                onPress={onClose}
+                        {discardPrompt && (
+                            <p
+                                role='alert'
+                                className='px-6 text-sm'
                             >
-                                {t('common.cancel')}
-                            </Button>
+                                {t('services.collection.discard_prompt')}
+                            </p>
+                        )}
+                        <ModalFooter>
+                            {discardPrompt ? (
+                                <>
+                                    <Button
+                                        variant='light'
+                                        onPress={() => setDiscardPrompt(false)}
+                                    >
+                                        {t('services.collection.keep_editing')}
+                                    </Button>
+                                    <Button
+                                        color='danger'
+                                        isDisabled={editorState.saving}
+                                        onPress={() => {
+                                            if (!editorState.saving) onOpenChange(false);
+                                        }}
+                                    >
+                                        {t('services.collection.discard')}
+                                    </Button>
+                                </>
+                            ) : (
+                                <Button
+                                    color='danger'
+                                    variant='light'
+                                    isDisabled={editorState.saving}
+                                    onPress={requestClose}
+                                >
+                                    {t('common.cancel')}
+                                </Button>
+                            )}
                         </ModalFooter>
                     </>
                 )}

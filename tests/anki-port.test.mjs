@@ -95,7 +95,7 @@ test('parseInt-style lenient parsing is not used', () => {
 test('the collection service no longer uses nullish coalescing for the port', async () => {
     // 接线护栏：删掉 resolveAnkiPort 调用、退回 `?? 8765` 会让上面所有测试
     // 依然通过（它们只测纯函数）。这里直接扫源码，确保调用点存在。
-    const source = await readFile('src/services/collection/anki/index.jsx', 'utf8');
+    const source = await readFile('src/services/collection/anki/client.js', 'utf8');
     assert.match(
         source,
         /resolveAnkiPort\s*\(/,
@@ -110,7 +110,7 @@ test('the collection service no longer uses nullish coalescing for the port', as
         !/\?\?\s*8765/.test(code),
         'anki/index.jsx must not fall back to `?? 8765`: it does not catch the empty string'
     );
-    assert.match(code, /const port = resolveAnkiPort\(/, 'the port must come from resolveAnkiPort');
+    assert.match(code, /resolveAnkiPort\(/, 'the port must come from resolveAnkiPort');
 });
 
 test('the settings input validates before writing to config', async () => {

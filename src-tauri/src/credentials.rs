@@ -90,7 +90,7 @@ where
 }
 #[tauri::command]
 pub async fn seal_service_config(key: String, config: Value) -> Result<Value, String> {
-    if !["openai", "ollama"].contains(&key.split('@').next().unwrap_or("")) {
+    if !["openai", "ollama", "anki", "eudic"].contains(&key.split('@').next().unwrap_or("")) {
         return Err("Unsupported secret schema".into());
     }
     tauri::async_runtime::spawn_blocking(move || {
@@ -166,6 +166,33 @@ mod tests {
         );
     }
     #[test]
+    fn collection_credentials_are_sealed_and_backup_scrubbed() {
+        for (key, field) in [("anki@fixture", "apiKey"), ("eudic@fixture", "token")] {
+            let mut input = json!({"port": 8765});
+            input[field] = json!("fake-only");
+            let mut writes = 0;
+            let safe = seal_with(key, input.clone(), |_, secret| {
+                assert_eq!(secret, "fake-only");
+                writes += 1;
+                Ok(())
+            })
+            .unwrap();
+            assert_eq!(writes, 1);
+            assert!(safe.get(field).is_none());
+            assert!(safe["secretRefs"][field]
+                .as_str()
+                .unwrap()
+                .starts_with("cup:"));
+            let repeated = seal_with(key, safe.clone(), |_, _| panic!("already sealed")).unwrap();
+            assert_eq!(repeated, safe);
+            let mut backup = json!({key: safe});
+            scrub(&mut backup);
+            assert!(!backup.to_string().contains("fake-only"));
+            assert!(backup[key].get("secretRefs").is_none());
+            assert!(seal_with(key, input, |_, _| Err("unavailable".into())).is_err());
+        }
+    }
+    #[test]
     fn backup_removes_legacy_secrets_headers_and_unknown_plugins() {
         let mut data = json!({"openai@a":{"apiKey":"fake", "secretRefs":{"apiKey":"ref"}, "headers":{"X-Custom":"fake"},"model":"m"},"plugin-translate-x":{"arbitrary":"fake"}});
         scrub(&mut data);
@@ -189,7 +216,8 @@ pub async fn save_config_atomic(
             .ok_or("Expected configuration object")?;
         // Supported schemas may never reintroduce plaintext at commit time.
         for (key, value) in object {
-            if ["openai", "ollama"].contains(&key.split('@').next().unwrap_or("")) {
+            if ["openai", "ollama", "anki", "eudic"].contains(&key.split('@').next().unwrap_or(""))
+            {
                 if let Some(fields) = value.as_object() {
                     if fields.iter().any(|(field, value)| {
                         field != "secretRefs"

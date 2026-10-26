@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/tauri';
-export const supportedSecretService = (key) => ['openai', 'ollama'].includes(key.split('@')[0]);
+export const supportedSecretService = (key) => ['openai', 'ollama', 'anki', 'eudic'].includes(key.split('@')[0]);
 export async function sealConfig(key, config) {
     return supportedSecretService(key) ? invoke('seal_service_config', { key, config }) : config;
 }

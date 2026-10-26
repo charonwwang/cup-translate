@@ -1,81 +1,15 @@
-import { fetchWithTimeout as fetch, Body } from '../../../utils/fetchWithTimeout';
-
+import { createCollectionTransport } from '../transport';
+import { fetchWithTimeout, Body, ResponseType } from '../../../utils/fetchWithTimeout';
+import { resolveSecrets } from '../../../utils/credentials';
+import { store } from '../../../utils/store';
+import { createEudicClient } from './client';
+const transport = createCollectionTransport(fetchWithTimeout, Body, ResponseType);
+export async function testConnection(config) {
+    return createEudicClient(transport, await resolveSecrets(config)).testConnection();
+}
 export async function collection(source, target, options = {}) {
-    const { config } = options;
-    const name = config['name'] ?? 'pot';
-    const token = config['token'] ?? '';
-
-    let categoryId = await checkCategory(name, token);
-    return await addWordToCategory(categoryId, source, token);
+    const config = await resolveSecrets(options.config ?? (await store.get('eudic')) ?? {});
+    return createEudicClient(transport, config).collect(source);
 }
-
-async function checkCategory(name, token) {
-    let res = await fetch('https://api.frdic.com/api/open/v1/studylist/category', {
-        method: 'GET',
-        query: {
-            language: 'en',
-        },
-        headers: {
-            'Content-Type': 'application/json',
-            Authorization: token,
-        },
-    });
-    if (!res.ok) {
-        throw `Get Category Failed: HTTP ${res.status}`;
-    }
-
-    let result = res.data;
-    if (result.data) {
-        for (let i of result.data) {
-            if (i.name === name) {
-                return i.id;
-            }
-        }
-
-        let res1 = await fetch('https://api.frdic.com/api/open/v1/studylist/category', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: token,
-            },
-            body: Body.json({
-                language: 'en',
-                name: name,
-            }),
-        });
-        if (!res1.ok) {
-            throw `Create Category Failed: HTTP ${res1.status}`;
-        }
-        let result1 = res1.data;
-        if (result1.data) {
-            return result1.data.id;
-        } else {
-            throw 'Create Category Failed';
-        }
-    } else {
-        throw 'Get Category Failed';
-    }
-}
-
-async function addWordToCategory(id, word, token) {
-    let res = await fetch('https://api.frdic.com/api/open/v1/studylist/words', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            Authorization: token,
-        },
-        body: Body.json({
-            id: id,
-            language: 'en',
-            words: [word],
-        }),
-    });
-    if (!res.ok) {
-        throw `Add Word Failed: HTTP ${res.status}`;
-    }
-    let result = res.data;
-    return result.message;
-}
-
 export * from './Config';
 export * from './info';
