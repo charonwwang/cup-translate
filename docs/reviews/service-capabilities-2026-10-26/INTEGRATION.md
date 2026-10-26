@@ -1,6 +1,6 @@
 # 服务修复合并与验证结果
 
-完成日期：2026-10-26（Asia/Shanghai）。四个修复分支和评审回修已合并到本地工作主分支 `master`；最终运行时代码提交为 `a8439879c26cdf6c6ab13e4e604631a82d7c6d96`，本文与证据在后续文档提交中保存。没有推送、发布或替换用户已安装应用。
+完成日期：2026-10-26（Asia/Shanghai）。四个修复分支和评审回修已合并到本地工作主分支 `master`；最终运行时代码提交为 `a8439879c26cdf6c6ab13e4e604631a82d7c6d96`，本文与证据在后续文档提交中保存。最初合并验证阶段没有推送、发布或替换用户已安装应用；随后按用户要求完成本机替换，见文末记录。
 
 ## 修复与合并记录
 
@@ -76,3 +76,9 @@ python3 tests/test_qwen_runtime.py
 ## 仍需独立环境验收的范围
 
 本轮修复、分支合并、组合自动化和上述原生交互验证已完成。以下外部能力不在本次通过声明中：已签名发行安装包升级、Windows/Linux 实机、完整 ECDICT 数据包、真实在线 Lingva、隔离 Anki profile 收卡、欧路测试账号写入、Qwen 大模型重新下载及真实推理。缺少对应环境与资源时不将其标记为已验证，也不将 Pot 插件目录整体标为兼容。
+
+## 本机已安装应用替换
+
+2026-10-26 按用户要求，将源码 `7e039ed` 构建为 ARM64 optimized release 应用，内嵌生产前端资源，不依赖 Vite。安装到 `/Applications/cup-translate.app`，应用标识保持 `com.cup-translate.app`，版本号保持 3.0.13，Info.plist 额外记录 CupTranslateSourceCommit。已通过本地签名完整性校验并实际启动，设置页使用 `tauri://localhost/service`，停留在语音服务页供用户实测。没有推送或公开发布。
+
+旧应用和配置的私有备份保存在 `~/Library/Application Support/cup-translate-local-backups/20261026-161030-7e039ed/`。旧应用通过移动完整 bundle 保留，配置在替换前另存快照，现有模型目录保持原位。`installation.json` 记录新旧可执行文件摘要和替换结果；本机截图只保存在该备份目录，不随仓库公开。
