@@ -1,5 +1,6 @@
+import { uninstallPlugin, installPlugins } from '../../../../../utils/plugin_lifecycle';
+import { store } from '../../../../../utils/store';
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Button } from '@nextui-org/react';
-import { removeDir, BaseDirectory } from '@tauri-apps/api/fs';
 import { open as openInBrowser } from '@tauri-apps/api/shell';
 import toast, { Toaster } from 'react-hot-toast';
 import { MdDeleteOutline } from 'react-icons/md';
@@ -13,8 +14,9 @@ import { useToastStyle } from '../../../../../hooks';
 import { emit } from '@tauri-apps/api/event';
 
 export default function SelectPluginModal(props) {
-    const { isOpen, onOpenChange, setCurrentConfigKey, onConfigOpen, pluginType, pluginList, deleteService } = props;
+    const { isOpen, onOpenChange, setCurrentConfigKey, onConfigOpen, pluginType, pluginList } = props;
     const [installing, setInstalling] = useState(false);
+    const [installResults, setInstallResults] = useState([]);
     const { t } = useTranslation();
     const toastStyle = useToastStyle();
 
@@ -30,6 +32,16 @@ export default function SelectPluginModal(props) {
                     <>
                         <ModalHeader>{t('config.service.add_service')}</ModalHeader>
                         <ModalBody>
+                            <p className='text-sm'>{t('config.service.plugin_notice')}</p>
+                            {installResults.map((result, index) => (
+                                <p
+                                    key={index}
+                                    role='status'
+                                    className='text-sm break-all'
+                                >
+                                    {result.path}: {result.success ? t('config.service.install_success') : result.error}
+                                </p>
+                            ))}
                             {Object.keys(pluginList).length === 0 && (
                                 <Button
                                     fullWidth
@@ -68,32 +80,27 @@ export default function SelectPluginModal(props) {
                                             isIconOnly
                                             color='danger'
                                             variant='flat'
-                                            onPress={() => {
-                                                // 先问配置层「能不能删」再动文件：deleteService
-                                                // 在「仅剩最后一个服务实例」时会拒绝并返回 false。
-                                                // 原实现先 removeDir 再调 deleteService，导致被拒时
-                                                // 文件已删、配置仍在，且同时弹出「卸载成功」与
-                                                // 「至少保留一个服务」两条自相矛盾的提示。
-                                                if (!deleteService(x)) {
-                                                    return;
+                                            onPress={async () => {
+                                                try {
+                                                    await uninstallPlugin({
+                                                        store,
+                                                        emit,
+                                                        kind: pluginType,
+                                                        name: x,
+                                                        removePackage: () =>
+                                                            invoke('uninstall_plugin', { pluginType, pluginName: x }),
+                                                    });
+                                                    toast.success(t('config.service.uninstall_success'), {
+                                                        style: toastStyle,
+                                                    });
+                                                } catch (error) {
+                                                    toast.error(
+                                                        error.message === 'PLUGIN_LAST_SERVICE'
+                                                            ? t('config.service.least')
+                                                            : String(error),
+                                                        { style: toastStyle }
+                                                    );
                                                 }
-                                                removeDir(`plugins/${pluginType}/${x}`, {
-                                                    dir: BaseDirectory.AppConfig,
-                                                    recursive: true,
-                                                }).then(
-                                                    (v) => {
-                                                        toast.success(t('config.service.uninstall_success'), {
-                                                            style: toastStyle,
-                                                        });
-                                                        emit('reload_plugin_list');
-                                                    },
-                                                    (e) => {
-                                                        // 配置已删、文件残留：不影响功能
-                                                        //（不再被引用，且可覆盖重装），
-                                                        // 但要如实告知用户。
-                                                        toast.error(e.toString(), { style: toastStyle });
-                                                    }
-                                                );
                                             }}
                                         >
                                             <MdDeleteOutline className='text-xl' />
@@ -109,35 +116,25 @@ export default function SelectPluginModal(props) {
                                     variant='flat'
                                     onPress={async () => {
                                         setInstalling(true);
-                                        const selected = await open({
-                                            multiple: true,
-                                            directory: false,
-                                            filters: [
-                                                {
-                                                    name: '*.potext',
-                                                    extensions: ['potext'],
-                                                },
-                                            ],
-                                        });
-                                        if (selected !== null) {
-                                            invoke('install_plugin', {
-                                                pathList: selected,
-                                            }).then(
-                                                (count) => {
-                                                    setInstalling(false);
-                                                    // 修复前是硬编码英文 'Installed N plugins'，
-                                                    // 中文用户也会看到英文。改走 i18n 并支持复数插值。
-                                                    toast.success(t('config.service.installed_plugins', { count }), {
-                                                        style: toastStyle,
-                                                    });
-                                                    emit('reload_plugin_list');
-                                                },
-                                                (e) => {
-                                                    setInstalling(false);
-                                                    toast.error(e.toString(), { style: toastStyle });
-                                                }
-                                            );
-                                        } else {
+                                        setInstallResults([]);
+                                        try {
+                                            const selected = await open({
+                                                multiple: true,
+                                                directory: false,
+                                                filters: [{ name: '*.potext', extensions: ['potext'] }],
+                                            });
+                                            if (selected !== null) {
+                                                const results = await installPlugins({
+                                                    invoke,
+                                                    paths: Array.isArray(selected) ? selected : [selected],
+                                                });
+                                                setInstallResults(results);
+                                                if (results.some((result) => result.success))
+                                                    await emit('reload_plugin_list');
+                                            }
+                                        } catch (error) {
+                                            toast.error(String(error), { style: toastStyle });
+                                        } finally {
                                             setInstalling(false);
                                         }
                                     }}

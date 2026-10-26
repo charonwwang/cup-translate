@@ -189,7 +189,9 @@
                 "add_service": "添加服务",
                 "test_failed": "测试失败",
                 "install_plugin": "安装外部插件",
-                "view_plugin_list": "查看插件列表",
+                "view_plugin_list": "Pot 社区插件目录（第三方，兼容性未逐项验证）",
+                "plugin_notice": "仅安装可信的 .potext 包。插件可访问文件、网络和程序；设备内模式禁止运行插件。当前不支持 npm 安装。",
+                "install_success": "安装包已安装",
                 "uninstall_success": "插件卸载成功",
                 "homepage": "插件主页",
                 "installed_plugins": "已安装 {{count}} 个插件"

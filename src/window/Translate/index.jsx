@@ -220,10 +220,7 @@ export default function Translate() {
                 for (const plugin of plugins) {
                     let pluginInfo;
                     try {
-                        const infoStr = await readTextFile(`plugins/${serviceType}/${plugin.name}/info.json`, {
-                            dir: BaseDirectory.AppConfig,
-                        });
-                        pluginInfo = JSON.parse(infoStr);
+                        pluginInfo = await invoke('plugin_info', { pluginType: serviceType, pluginName: plugin.name });
                     } catch (e) {
                         console.error(`[plugin] skip broken plugin ${plugin.name}:`, e);
                         continue;
@@ -232,7 +229,7 @@ export default function Translate() {
                         const appConfigDirPath = await appConfigDir();
                         const iconPath = await join(
                             appConfigDirPath,
-                            `/plugins/${serviceType}/${plugin.name}/${pluginInfo.icon}`
+                            `plugins/${serviceType}/${plugin.name}/${pluginInfo.icon}`
                         );
                         pluginInfo.icon = convertFileSrc(iconPath);
                     }

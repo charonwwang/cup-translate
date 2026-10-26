@@ -5,15 +5,12 @@ use crate::StringWrapper;
 use crate::APP;
 use log::{error, info};
 use serde_json::{json, Value};
-use std::io::Read;
 use tauri::Manager;
 
 const PLUGIN_TYPES: &[&str] = &["recognize", "translate", "tts", "collection"];
 
-/// info.json 解压大小上限，防止恶意 .potext 用 zip 炸弹撑爆内存
-const MAX_PLUGIN_INFO_BYTES: u64 = 64 * 1024;
-
 /// 纯函数：检查 zip 条目是否为符号链接（用于单元测试，不依赖全局状态）
+#[cfg(test)]
 fn is_symlink_entry(unix_mode: Option<u32>) -> bool {
     unix_mode.is_some_and(|mode| mode & 0o170000 == 0o120000)
 }
@@ -32,6 +29,7 @@ fn is_symlink_entry(unix_mode: Option<u32>) -> bool {
 /// 之所以仍然拒绝，是**纵深防御与可预期性**：插件归档里出现 setuid/sticky
 /// 这类位没有任何正当用途，属于「不该出现的东西」，应当像符号链接一样被显式拦下，
 /// 而不是默默写进用户配置目录。
+#[cfg(test)]
 fn has_special_permission_bits(unix_mode: Option<u32>) -> bool {
     unix_mode.is_some_and(|mode| mode & 0o7000 != 0)
 }
@@ -47,6 +45,7 @@ fn has_special_permission_bits(unix_mode: Option<u32>) -> bool {
 /// 返回 true 表示路径已被 symlink 占位，调用方应拒绝安装。
 /// 注意：路径不存在，或已存在的是**普通文件/目录**（正常重装插件的情形）
 /// 都返回 false，不改变既有语义。
+#[cfg(test)]
 fn target_is_symlinked(path: &std::path::Path) -> bool {
     path.symlink_metadata()
         .is_ok_and(|meta| meta.file_type().is_symlink())
@@ -56,25 +55,9 @@ fn valid_plugin_type(value: &str) -> bool {
     PLUGIN_TYPES.contains(&value)
 }
 
-/// 插件目录名是否合法。
-///
-/// 这是**安装侧与列表侧共用的唯一判据**：`install_plugin` 用它拒绝非法
-/// .potext 文件名，`config.rs::is_installed_plugin_dir` 用同一套规则决定
-/// `plugins/<type>/` 下的目录是否算已安装插件。
-///
-/// 修复前列表侧只判 `starts_with("plugin")`，于是 `plugin..` / `plugin$x`
-/// 这类**永远装不出来**的名字会被收进 plugin_list 并渲染成插件服务
-/// （实测确认的不对称）。
-///
-/// 注：`!value.is_empty()` 是**死条件**——`starts_with("plugin")` 为真时
-/// 长度必然 >= 6。保留它只为让意图显式；变异测试确认删掉它不改变任何行为
-/// （属等价变异）。
+/// Shared portable ID contract for installation, discovery and execution.
 pub(crate) fn valid_plugin_name(value: &str) -> bool {
-    value.starts_with("plugin")
-        && !value.is_empty()
-        && value
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
+    crate::plugin_package::valid_name(value)
 }
 
 fn crop_in_bounds(
@@ -251,89 +234,62 @@ pub fn unset_proxy() -> Result<bool, ()> {
 }
 
 #[tauri::command]
-pub fn install_plugin(path_list: Vec<String>) -> Result<i32, Error> {
-    let mut success_count = 0;
+pub fn inspect_plugin_entry(path: String) -> Result<Value, String> {
+    crate::plugin_package::entry_info(std::path::Path::new(&path)).map_err(|e| e.to_string())
+}
 
-    for path in path_list {
-        let path = std::path::Path::new(&path);
-        if path.extension().and_then(|extension| extension.to_str()) != Some("potext") {
-            continue;
-        }
-        let file_name = path
-            .file_stem()
-            .and_then(|name| name.to_str())
-            .ok_or_else(|| Error::Error("Invalid Plugin: invalid file name".into()))?;
-        if !valid_plugin_name(file_name) {
-            return Err(Error::Error(
-                "Invalid Plugin: file name must start with plugin and contain only letters, numbers, '-' or '_'"
-                    .into(),
-            ));
-        }
+#[tauri::command]
+pub async fn install_plugin(
+    path_list: Vec<String>,
+    entry_checks: std::collections::HashMap<String, String>,
+) -> Result<Vec<Value>, Error> {
+    let root = plugin_root()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::plugin_package::install_many(&root, &path_list, &entry_checks)
+    }).await.map_err(|e| Error::Error(e.to_string().into()))
+}
 
-        let mut zip = zip::ZipArchive::new(std::fs::File::open(path)?)?;
-        // 拒绝符号链接条目：zip.extract 在 Unix 上会照常创建 symlink，
-        // 恶意 .potext 可借此指向任意系统文件（restore_archive 已做同样校验，
-        // install_plugin 此前漏掉，见 cmd.rs tests::plugin_archive_rejects_symlink_entries）。
-        for index in 0..zip.len() {
-            let entry = zip.by_index(index)?;
-            if is_symlink_entry(entry.unix_mode()) {
-                return Err(Error::Error(
-                    "Invalid Plugin: contains a symbolic link".into(),
-                ));
-            }
-            // setuid / setgid / sticky 位：zip 会原样 set_permissions 落盘
-            //（实测 external_attr=0o4755 -> 磁盘 4755），插件归档里没有正当用途。
-            if has_special_permission_bits(entry.unix_mode()) {
-                return Err(Error::Error(
-                    "Invalid Plugin: contains a file with setuid/setgid/sticky bits".into(),
-                ));
-            }
-        }
-        #[allow(unused_mut)]
-        let mut plugin_type: String;
-        if let Ok(info) = zip.by_name("info.json") {
-            let mut content = String::new();
-            // 限制 info.json 大小，防止 zip 炸弹
-            info.take(MAX_PLUGIN_INFO_BYTES)
-                .read_to_string(&mut content)?;
-            let json: serde_json::Value = serde_json::from_str(&content)?;
-            plugin_type = json["plugin_type"]
-                .as_str()
-                .ok_or(Error::Error("can't find plugin type in info.json".into()))?
-                .to_string();
-        } else {
-            return Err(Error::Error("Invalid Plugin: miss info.json".into()));
-        }
-        if zip.by_name("main.js").is_err() {
-            return Err(Error::Error("Invalid Plugin: miss main.js".into()));
-        }
-        if !valid_plugin_type(&plugin_type) {
-            return Err(Error::Error(
-                "Invalid Plugin: unsupported plugin type".into(),
-            ));
-        }
-        let config_path =
-            dirs::config_dir().ok_or_else(|| Error::Error("Get Config Dir Error".into()))?;
-        let app_handle = APP
-            .get()
-            .ok_or_else(|| Error::Error("App is not initialized".into()))?;
-        let config_path = config_path.join(app_handle.config().tauri.bundle.identifier.clone());
-        let config_path = config_path.join("plugins");
-        let config_path = config_path.join(plugin_type);
-        let plugin_path = config_path.join(file_name);
-        // 落盘目标若已被 symlink 占位，extract 会顺着它写到插件目录之外
-        // （见 target_is_symlinked 的说明）。必须在解压前拦下。
-        if target_is_symlinked(&plugin_path) {
-            return Err(Error::Error(
-                "Invalid Plugin: target path is a symbolic link".into(),
-            ));
-        }
-        std::fs::create_dir_all(&config_path)?;
-        zip.extract(&plugin_path)?;
+fn plugin_root() -> Result<std::path::PathBuf, Error> {
+    let config = dirs::config_dir().ok_or_else(|| Error::Error("Get Config Dir Error".into()))?;
+    let app = APP
+        .get()
+        .ok_or_else(|| Error::Error("App is not initialized".into()))?;
+    Ok(config
+        .join(&app.config().tauri.bundle.identifier)
+        .join("plugins"))
+}
 
-        success_count += 1;
+#[tauri::command]
+pub fn uninstall_plugin(plugin_type: String, plugin_name: String) -> Result<(), String> {
+    crate::plugin_package::uninstall(
+        &plugin_root().map_err(|e| e.to_string())?,
+        &plugin_type,
+        &plugin_name,
+    )
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn plugin_info(plugin_type: String, plugin_name: String) -> Result<Value, String> {
+    let root = plugin_root()
+        .map_err(|e| e.to_string())?
+        .join(&plugin_type)
+        .join(&plugin_name);
+    crate::plugin_package::metadata(&root, &plugin_type, &plugin_name).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn load_plugin(plugin_type: String, plugin_name: String) -> Result<String, String> {
+    if crate::config::get_str("privacy_mode").as_deref() == Some("device_only") {
+        return Err("Plugins are blocked by device-only policy".into());
     }
-    Ok(success_count)
+    let root = plugin_root()
+        .map_err(|e| e.to_string())?
+        .join(&plugin_type)
+        .join(&plugin_name);
+    crate::plugin_package::metadata(&root, &plugin_type, &plugin_name)
+        .map_err(|e| e.to_string())?;
+    std::fs::read_to_string(root.join("main.js")).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -380,15 +336,14 @@ fn run_binary_blocking(
         .ok_or_else(|| Error::Error("App is not initialized".into()))?;
     let config_path = config_path.join(app_handle.config().tauri.bundle.identifier.clone());
     let config_path = config_path.join("plugins");
-    let config_path = config_path.join(plugin_type);
-    let plugin_path = config_path.join(plugin_name);
+    let config_path = config_path.join(&plugin_type);
+    let plugin_path = config_path.join(&plugin_name);
 
-    #[cfg(target_os = "windows")]
-    let mut cmd = Command::new(&cmd_name);
+    crate::plugin_package::metadata(&plugin_path, &plugin_type, &plugin_name)?;
+    let executable = crate::plugin_package::executable(&plugin_path, &cmd_name)?;
+    let mut cmd = Command::new(executable.canonicalize()?);
     #[cfg(target_os = "windows")]
     let cmd = cmd.creation_flags(0x08000000);
-    #[cfg(not(target_os = "windows"))]
-    let mut cmd = Command::new(&cmd_name);
 
     let output = cmd.args(args).current_dir(plugin_path).output()?;
     Ok(json!({
@@ -437,70 +392,6 @@ mod tests {
         assert!(!is_symlink_entry(Some(0o100644)));
         assert!(!is_symlink_entry(Some(0o040755)));
         assert!(!is_symlink_entry(None));
-    }
-
-    /// 取出 `needle` 起点到**下一个顶层项**之间的源码切片（用于接线护栏）。
-    ///
-    /// 必须按「行首不得有空白」来判定顶层边界：测试模块里的函数是缩进的
-    /// （`    fn xxx`），若只找 `"\nfn "` 会匹配不到，切片一路吃到文件末尾，
-    /// 护栏就会把整个文件（含测试本身）算进去而形同虚设——本项目 round 45
-    /// 实际踩过这个坑（切片 14432 字符 vs 应为 3524）。
-    fn function_body(source: &'static str, needle: &str) -> &'static str {
-        let start = source.find(needle).expect("the function should exist");
-        let rest = &source[start..];
-        let mut end = rest.len();
-        for (offset, _) in rest.match_indices('\n') {
-            let after = &rest[offset + 1..];
-            // 顶层项：行首无缩进，且是 fn / pub fn / #[attr]
-            if !after.starts_with([' ', '\t'])
-                && (after.starts_with("fn ")
-                    || after.starts_with("pub fn ")
-                    || after.starts_with("pub async fn ")
-                    || after.starts_with("#["))
-            {
-                end = offset + 1;
-                break;
-            }
-        }
-        let body = &rest[..end];
-        // 双向自检：切片既不能吃到文件末尾（切太长），也不能在函数开头就断掉（切太短）。
-        // 只查上界是不够的——把边界条件写成「每个 \n 都算边界」时切片只剩 70 字符，
-        // 依然通过 len 检查，护栏会静默失效（round 45 实测踩到）。
-        assert!(
-            body.len() > 200,
-            "the slice for {needle:?} is only {} chars — the boundary logic cut it short",
-            body.len()
-        );
-        assert!(
-            body.trim_end().ends_with('}'),
-            "the slice for {needle:?} should end at the function's closing brace"
-        );
-        body
-    }
-
-    /// **接线**护栏：确认 `install_plugin` 真的调用了特殊权限位校验。
-    ///
-    /// 为什么需要单独一条：`special_permission_bits_are_flagged` 测的是**纯函数**，
-    /// 把 `has_special_permission_bits` 从 `install_plugin` 里删掉，它照样通过。
-    /// 这正是本项目 round 34 踩过的「测纯函数 ≠ 测接线」。
-    #[test]
-    fn install_plugin_actually_calls_the_special_permission_check() {
-        let body = function_body(include_str!("cmd.rs"), "pub fn install_plugin(");
-        // 自检：切片必须真的只覆盖这一个函数（见 function_body 的说明）
-        assert!(
-            body.len() < 6000,
-            "the slice is {} chars, so it ran past install_plugin",
-            body.len()
-        );
-        assert!(
-            body.contains("has_special_permission_bits("),
-            "install_plugin must call has_special_permission_bits — otherwise a .potext \
-             with setuid/setgid/sticky bits is written to disk verbatim"
-        );
-        assert!(
-            body.contains("is_symlink_entry("),
-            "install_plugin must keep rejecting symbolic links"
-        );
     }
 
     #[test]

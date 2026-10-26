@@ -27,3 +27,9 @@ test('plugin types reject unknown and traversing values', () => {
     assert.equal(validPluginType(''), false);
     assert.equal(validPluginType(undefined), false);
 });
+
+test('frontend uses the same portable ID corpus as the Rust installer', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const cases = JSON.parse(await readFile('tests/fixtures/plugins/id-contract.json', 'utf8'));
+    for (const entry of cases) assert.equal(validPluginName(entry.id), entry.valid, JSON.stringify(entry.id));
+});

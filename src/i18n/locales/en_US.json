@@ -189,7 +189,9 @@
                 "add_service": "Add Service",
                 "test_failed": "Test Failed",
                 "install_plugin": "Install Plugin",
-                "view_plugin_list": "View Plugin List",
+                "view_plugin_list": "Pot community directory (third party; compatibility not verified)",
+                "plugin_notice": "Install only trusted .potext packages. Plugins can access files, network and programs; they are blocked in device-only mode. npm installation is not supported.",
+                "install_success": "Package installed",
                 "uninstall_success": "Plugin Uninstall Successfully",
                 "homepage": "Homepage",
                 "installed_plugins": "Installed {{count}} plugin(s)"

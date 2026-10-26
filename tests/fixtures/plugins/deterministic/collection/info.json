@@ -1,0 +1,13 @@
+{
+  "id": "plugin.cup.fixture.collection",
+  "plugin_type": "collection",
+  "display": "Cup collection fixture",
+  "homepage": "https://github.com/charonwwang/cup-translate",
+  "icon": "icon.svg",
+  "needs": [
+    {
+      "key": "prefix",
+      "display": "Prefix"
+    }
+  ]
+}

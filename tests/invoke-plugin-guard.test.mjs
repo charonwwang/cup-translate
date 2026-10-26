@@ -57,7 +57,7 @@ async function loadRealInvokePlugin({ onCall } = {}) {
         // `... ; translate translate` -> 语法错误（实测踩过）。
         readTextFile: async () => 'const translate = () => "stub-entry";',
         readBinaryFile: async () => new Uint8Array(),
-        invoke: async () => ({}),
+        invoke: async (command) => (command === 'load_plugin' ? 'const translate = () => "stub-entry";' : {}),
         Database: class Database {},
         http: { fetch: async () => ({}) },
         CryptoJS: { MD5: () => 'x' },
@@ -143,9 +143,9 @@ test('a valid plugin reaches the filesystem in the expected order', async () => 
     const names = calls.map((c) => c.name);
     // 顺序必须是：先拿到目录，再拼路径，再读文件。
     assert.ok(names.includes('appConfigDir'), 'a valid plugin must reach appConfigDir');
-    assert.ok(names.includes('readTextFile'), 'a valid plugin must read its entry file');
+    assert.ok(names.includes('invoke'), 'a valid plugin must request a validated entry');
     assert.ok(
-        names.indexOf('appConfigDir') < names.indexOf('readTextFile'),
+        names.indexOf('appConfigDir') < names.indexOf('invoke'),
         `config dir must be resolved before reading the entry file, order was: ${names.join(' -> ')}`
     );
 });

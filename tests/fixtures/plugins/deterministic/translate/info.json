@@ -1,0 +1,17 @@
+{
+  "id": "plugin.cup.fixture.translate",
+  "plugin_type": "translate",
+  "display": "Cup translate fixture",
+  "homepage": "https://github.com/charonwwang/cup-translate",
+  "icon": "icon.svg",
+  "needs": [
+    {
+      "key": "prefix",
+      "display": "Prefix"
+    }
+  ],
+  "language": {
+    "en": "en",
+    "zh_cn": "zh"
+  }
+}

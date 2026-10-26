@@ -16,7 +16,7 @@ export function validPluginName(value) {
     return (
         typeof value === 'string' &&
         value.startsWith('plugin') &&
-        value.length > 0 &&
-        [...value].every((c) => /[A-Za-z0-9_-]/.test(c))
+        value.length <= 128 &&
+        value.split('.').every((part) => /^[A-Za-z0-9_-]+$/.test(part))
     );
 }

@@ -1,0 +1,51 @@
+[
+  {
+    "id": "plugin.cup.fixture.collection",
+    "kind": "collection",
+    "source": "deterministic/collection",
+    "sha256": "0940ad3fa952b7676f3494afc2c024274c9cb69038bb03ac1350aac74e2d2c6f",
+    "package": "plugin.cup.fixture.collection.potext"
+  },
+  {
+    "id": "plugin.cup.fixture.recognize",
+    "kind": "recognize",
+    "source": "deterministic/recognize",
+    "sha256": "ebe6583996fcaaf675aec753b1721d97b000fd1dfbe91da7a7d64710dc1a244e",
+    "package": "plugin.cup.fixture.recognize.potext"
+  },
+  {
+    "id": "plugin.cup.fixture.translate",
+    "kind": "translate",
+    "source": "deterministic/translate",
+    "sha256": "5f64e606113987a9cdf9d1262f37dd02a49fe06241a80f37c8f9ceecaeef7f3e",
+    "package": "plugin.cup.fixture.translate.potext"
+  },
+  {
+    "id": "plugin.cup.fixture.tts",
+    "kind": "tts",
+    "source": "deterministic/tts",
+    "sha256": "9805387ef9186e1c742ebc1b987ca191accda716bcd0c7faa69ac8eaa8849f76",
+    "package": "plugin.cup.fixture.tts.potext"
+  },
+  {
+    "id": "plugin.com.pot-app.anki",
+    "kind": "collection",
+    "source": "upstream/pot-app-collection-plugin-template",
+    "sha256": "8e9a859408809e35904fddff8ca2fcbb42b2cfdf018877a95f183f4ede902e2e",
+    "package": "plugin.com.pot-app.anki.potext"
+  },
+  {
+    "id": "plugin.com.pot-app.ecdict",
+    "kind": "translate",
+    "source": "upstream/pot-app-translate-plugin-ecdict",
+    "sha256": "1636d6dacc4b897c6b5eb5871dfcbfe7b4e4f4a54b1e10d32d8523325d34e8d8",
+    "package": "plugin.com.pot-app.ecdict.potext"
+  },
+  {
+    "id": "plugin.com.pot-app.lingva_tts",
+    "kind": "tts",
+    "source": "upstream/pot-app-tts-plugin-template",
+    "sha256": "adf84b674bfa72c414d17911de4119b95b83f107aff82c92436ef748fcd74c75",
+    "package": "plugin.com.pot-app.lingva_tts.potext"
+  }
+]

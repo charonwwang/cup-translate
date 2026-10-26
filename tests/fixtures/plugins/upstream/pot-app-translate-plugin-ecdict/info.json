@@ -1,0 +1,14 @@
+{
+  "id": "plugin.com.pot-app.ecdict",
+  "plugin_type": "translate",
+  "icon": "icon.svg",
+  "display": "ECDict",
+  "homepage": "https://github.com/pot-app/pot-app-translate-plugin-ecdict",
+  "needs": [],
+  "language": {
+    "auto": "auto",
+    "zh_cn": "zh",
+    "zh_tw": "zh",
+    "en": "en"
+  }
+}

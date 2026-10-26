@@ -1,0 +1,70 @@
+[
+  {
+    "id": "plugin",
+    "valid": true
+  },
+  {
+    "id": "pluginA",
+    "valid": true
+  },
+  {
+    "id": "plugin-demo_2",
+    "valid": true
+  },
+  {
+    "id": "plugin.com.pot-app.lingva_tts",
+    "valid": true
+  },
+  {
+    "id": "plugin.com.pot-app.ecdict",
+    "valid": true
+  },
+  {
+    "id": "plugin.com.pot-app.anki",
+    "valid": true
+  },
+  {
+    "id": "",
+    "valid": false
+  },
+  {
+    "id": "openai",
+    "valid": false
+  },
+  {
+    "id": "Plugin.demo",
+    "valid": false
+  },
+  {
+    "id": "plugin..x",
+    "valid": false
+  },
+  {
+    "id": "plugin.",
+    "valid": false
+  },
+  {
+    "id": "plugin/x",
+    "valid": false
+  },
+  {
+    "id": "plugin\\x",
+    "valid": false
+  },
+  {
+    "id": "plugin:x",
+    "valid": false
+  },
+  {
+    "id": "plugin x",
+    "valid": false
+  },
+  {
+    "id": "plugin\u0000x",
+    "valid": false
+  },
+  {
+    "id": "pluginaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "valid": false
+  }
+]

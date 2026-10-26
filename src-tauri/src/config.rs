@@ -335,21 +335,8 @@ pub fn check_service_available() -> Result<(), Error> {
     Ok(())
 }
 
-/// 判断 `plugins/<type>/` 下的某个目录是否应当被清理。
-///
-/// 安装侧 `cmd.rs::valid_plugin_name` 强制目录名以 `plugin` 开头
-/// （且只允许字母/数字/`-`/`_`），所以**不以 plugin 开头的目录一定不是本应用装的**，
-/// 而是用户手工放进来的（旧插件、自建插件、手动备份等）。
-///
-/// 判据**复用安装侧的** `cmd::valid_plugin_name`（前缀 + 字符白名单），
-/// 而不是只判前缀——两侧必须完全一致，否则会出现「装不出来、却被列成插件」的
-/// 名字（修复前 `plugin..` / `plugin$x` 就有这个不对称）。
-///
-/// 注意它仍然是**大小写敏感**的：`Plugin-demo` / `my-plugin` 都会被判为
-/// 「需清理」。这一点由单元测试钉住，避免以后有人误以为它是宽松匹配。
-///
-/// 抽成纯函数是为了可测：原先这段逻辑内联在 `get_plugin_list` 里，
-/// 而 `get_plugin_list` 依赖 `APP` 全局句柄与真实配置目录，无法单测。
+/// Historical validator tests; discovery now skips invalid directories without deleting data.
+#[cfg(test)]
 fn should_remove_plugin_dir(name: &str) -> bool {
     !crate::cmd::valid_plugin_name(name)
 }
@@ -361,35 +348,7 @@ pub fn get_plugin_list(plugin_type: &str) -> Option<Vec<String>> {
     let plugin_dir = config_dir.join("plugins");
     let plugin_dir = plugin_dir.join(plugin_type);
 
-    // dirs in plugin_dir
-    let mut plugin_list = vec![];
-    if plugin_dir.exists() {
-        let read_dir = std::fs::read_dir(plugin_dir).ok()?;
-        for entry in read_dir {
-            let entry = entry.ok()?;
-
-            if entry.path().is_dir() {
-                let name = entry.file_name().to_str()?.to_string();
-                if should_remove_plugin_dir(&name) {
-                    // 清理不是本应用安装的目录（安装侧 valid_plugin_name 强制
-                    // 'plugin' 前缀，所以这里的东西一定是用户手工放进去的）。
-                    // **必须记日志**：这是对用户数据的递归删除，且发生在每次启动。
-                    // 修复前是 `let _ = std::fs::remove_dir_all(...)`——
-                    // 成功无痕迹、失败被吞，用户发现目录消失时无从排查。
-                    warn!(
-                        "Removing unrecognized directory in plugin folder: {:?}",
-                        entry.path()
-                    );
-                    if let Err(e) = std::fs::remove_dir_all(entry.path()) {
-                        warn!("Failed to remove {:?}: {:?}", entry.path(), e);
-                    }
-                } else {
-                    plugin_list.push(name);
-                }
-            }
-        }
-    }
-    Some(plugin_list)
+    Some(crate::plugin_package::discover(plugin_dir.parent()?, plugin_type))
 }
 
 pub fn get(key: &str) -> Option<Value> {
@@ -559,56 +518,6 @@ mod tests {
                 "{valid:?} is a legal plugin directory name"
             );
         }
-    }
-
-    /// 清理用户目录时**必须留下日志**。
-    ///
-    /// 这是可测性缺口兜底：`warn!` 位于 `get_plugin_list` 内，而它依赖
-    /// `APP` 全局句柄与真实配置目录，无法单测（所以 `no_log` 变异会逃逸）。
-    /// 用源码扫描确认「删除」与「记日志」成对出现——
-    /// 手法与 fetch-timeout / anki-port / proxy 等接线护栏一致。
-    #[test]
-    fn removing_a_user_directory_always_logs_it() {
-        let source = include_str!("config.rs");
-        let start = source
-            .find("if should_remove_plugin_dir(&name) {")
-            .expect("the branch must exist");
-        let rest = &source[start..];
-        // 分支体到 `} else {` 为止（该 else 属于同一个 if）
-        let end = rest.find("} else {").expect("the branch must have an else") + "} else {".len();
-        let branch = &rest[..end];
-
-        // 分支里必须真的删除那个目录
-        assert!(
-            branch.contains("std::fs::remove_dir_all(entry.path())"),
-            "the branch must actually remove the directory"
-        );
-        // 删除之前必须先记日志（否则用户目录消失时无从排查）
-        let remove_at = branch
-            .find("std::fs::remove_dir_all(entry.path())")
-            .unwrap();
-        let before = &branch[..remove_at];
-        assert!(
-            before.contains("warn!") && before.contains("Removing unrecognized directory"),
-            "the removal must be preceded by an explanatory warn!"
-        );
-        // 删除失败也必须记日志，不能被 `let _ =` 吞掉。
-        // 注意：`"std::fs::remove_dir_all(entry.path())"` 这个子串在
-        // `if let Err(e) = std::fs::remove_dir_all(...)` 里也出现，
-        // 所以 remove_at 实际指向的是**那一行**（我第一版按它切尾部，
-        // 结果边界全错、断言必然失败）。这里直接整段检查更稳。
-        assert!(
-            !branch.contains("let _ = std::fs::remove_dir_all(entry.path())"),
-            "the removal result must not be discarded silently"
-        );
-        assert!(
-            branch.contains("if let Err(e) = std::fs::remove_dir_all(entry.path())"),
-            "a failed removal must be logged, not swallowed"
-        );
-        assert!(
-            branch.contains("Failed to remove"),
-            "the failure log must identify what could not be removed"
-        );
     }
 
     /// 空名字与空白名字不该被当成插件。
