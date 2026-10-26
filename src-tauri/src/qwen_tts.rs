@@ -8,7 +8,7 @@ use std::{
     path::{Path, PathBuf},
     process::{Child, ChildStdin, ChildStdout, Command, Stdio},
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, Condvar, Mutex, OnceLock,
     },
     time::{Duration, Instant},
@@ -17,6 +17,18 @@ use std::{
 const SCRIPT: &str = include_str!("../../scripts/qwen-runtime.py");
 const MANIFEST: &str = include_str!("../resources/qwen-models.json");
 static CANCELLED: AtomicBool = AtomicBool::new(false);
+static SPEECH_EPOCH: AtomicU64 = AtomicU64::new(0);
+const PREVIEW_TEXT: &str = "你好，欢迎使用。";
+const VOICES: &[&str] = &[
+    "Vivian", "Serena", "Uncle_Fu", "Dylan", "Eric", "Ryan", "Aiden", "Ono_Anna", "Sohee",
+];
+fn runtime_state() -> &'static Mutex<Value> {
+    static STATE: OnceLock<Mutex<Value>> = OnceLock::new();
+    STATE.get_or_init(|| Mutex::new(json!({"state":"unloaded"})))
+}
+fn set_runtime(state: &str, variant: &str) {
+    *runtime_state().lock().unwrap() = json!({"state":state,"variant":variant});
+}
 fn task() -> &'static Mutex<Value> {
     static TASK: OnceLock<Mutex<Value>> = OnceLock::new();
     TASK.get_or_init(|| Mutex::new(json!({"state":"idle"})))
@@ -194,11 +206,11 @@ fn environments(root: &Path) -> Vec<Value> {
     values
 }
 fn installed(root: &Path, variant: &str) -> Option<Value> {
-    let config = read_json(&root.join(format!("installed-{variant}.json")))?;
+    let mut config = read_json(&root.join(format!("installed-{variant}.json")))?;
     if !Path::new(config["python"].as_str()?).is_file() {
         return None;
     }
-    let directory = Path::new(config["model"].as_str()?);
+    let directory = PathBuf::from(config["model"].as_str()?);
     let model = manifest(variant).ok()?;
     if config["revision"] != model["revision"] {
         return None;
@@ -209,6 +221,13 @@ fn installed(root: &Path, variant: &str) -> Option<Value> {
     }) {
         return None;
     }
+    config["modelBytes"] = json!(model["files"]
+        .as_array()?
+        .iter()
+        .filter_map(|f| f["bytes"].as_u64())
+        .sum::<u64>());
+    config["managedFiles"] =
+        json!(directory == root.join(format!("model-{variant}")) && !directory.is_symlink());
     Some(config)
 }
 fn check(root: &Path, variant: &str) -> Result<Value, String> {
@@ -525,7 +544,7 @@ pub async fn qwen_status(app: tauri::AppHandle) -> Result<Value, String> {
             .min(status["total"].as_u64().unwrap_or(u64::MAX)));
     }
     Ok(
-        json!({"task":status,"models":{"0.6B":installed(&root,"0.6B"),"1.7B":installed(&root,"1.7B")},"logPath":root.join("install.log")}),
+        json!({"task":status,"models":{"0.6B":installed(&root,"0.6B"),"1.7B":installed(&root,"1.7B")},"runtime":runtime_state().lock().unwrap().clone(),"logPath":root.join("runtime.log"),"installLogPath":root.join("install.log")}),
     )
 }
 struct Worker {
@@ -544,17 +563,20 @@ impl Drop for Worker {
     }
 }
 impl Worker {
-    fn reply(&mut self) -> Result<Value, String> {
+    fn reply(&mut self, timeout: u64) -> Result<Value, String> {
         let completed = Arc::new((Mutex::new(false), Condvar::new()));
         let watchdog = completed.clone();
+        let timed_out = Arc::new(AtomicBool::new(false));
+        let expired = timed_out.clone();
         let child = self.child.clone();
         let guard = std::thread::spawn(move || {
             let (lock, wake) = &*watchdog;
             let done = lock.lock().unwrap();
             let (done, _) = wake
-                .wait_timeout_while(done, Duration::from_secs(600), |v| !*v)
+                .wait_timeout_while(done, Duration::from_secs(timeout), |v| !*v)
                 .unwrap();
             if !*done {
+                expired.store(true, Ordering::SeqCst);
                 let _ = child.lock().unwrap().kill();
             }
         });
@@ -566,6 +588,9 @@ impl Worker {
             wake.notify_one();
         }
         let _ = guard.join();
+        if timed_out.load(Ordering::SeqCst) {
+            return Err(format!("Qwen operation timed out after {timeout}s; runtime stopped. Try a shorter text or use system speech for faster reading."));
+        }
         result.map_err(|_| "Cannot read Qwen worker response")?;
         serde_json::from_str(&line).map_err(|_| "Qwen worker stopped; inspect runtime.log".into())
     }
@@ -576,18 +601,23 @@ fn speak(
     text: String,
     language: String,
     voice: String,
+    epoch: u64,
 ) -> Result<Vec<u8>, String> {
     if text.trim().is_empty() || text.chars().count() > 2000 {
         return Err("Speech text must contain 1–2000 characters".into());
     }
-    let config = installed(root, variant).ok_or("Install this Qwen model in Settings first")?;
     let mut slot = worker()
         .lock()
         .map_err(|_| "Qwen worker lock unavailable")?;
+    if SPEECH_EPOCH.load(Ordering::SeqCst) != epoch {
+        return Err("Qwen synthesis cancelled".into());
+    }
+    let config = installed(root, variant).ok_or("Install this Qwen model in Settings first")?;
     if slot.as_ref().is_some_and(|w| w.variant != variant) {
         *slot = None;
     }
     if slot.is_none() {
+        set_runtime("loading", variant);
         let log = fs::OpenOptions::new()
             .create(true)
             .append(true)
@@ -609,24 +639,25 @@ fn speak(
             variant: variant.into(),
         };
         *worker_process().lock().unwrap() = Some(runtime.child.clone());
-        if runtime.reply()?["ready"] != true {
+        if runtime.reply(120)?["ready"] != true {
             return Err("Qwen runtime startup failed".into());
         }
         *slot = Some(runtime);
     }
     let runtime = slot.as_mut().unwrap();
+    set_runtime("synthesizing", variant);
     let result = (|| {
         writeln!(
             runtime.input,
             "{}",
-            json!({"text":text,"language":language,"voice":voice})
+            json!({"text":text,"language":language,"voice":voice,"preview":text == PREVIEW_TEXT})
         )
         .map_err(|_| "Qwen runtime disconnected")?;
         runtime
             .input
             .flush()
             .map_err(|_| "Qwen runtime disconnected")?;
-        let response = runtime.reply()?;
+        let response = runtime.reply(if text == PREVIEW_TEXT { 120 } else { 600 })?;
         if let Some(error) = response["error"].as_str() {
             return Err(error.to_owned());
         }
@@ -640,6 +671,9 @@ fn speak(
     })();
     if result.is_err() {
         *slot = None;
+        set_runtime("unloaded", variant);
+    } else {
+        set_runtime("ready", variant);
     }
     result
 }
@@ -653,9 +687,161 @@ pub async fn qwen_tts_request(
 ) -> Result<Vec<u8>, String> {
     let root = root(&app)?;
     manifest(&variant)?;
-    tauri::async_runtime::spawn_blocking(move || speak(&root, &variant, text, language, voice))
-        .await
-        .map_err(|e| e.to_string())?
+    let epoch = SPEECH_EPOCH.load(Ordering::SeqCst);
+    tauri::async_runtime::spawn_blocking(move || {
+        let result = speak(&root, &variant, text, language, voice, epoch);
+        if result.is_err() && SPEECH_EPOCH.load(Ordering::SeqCst) == epoch {
+            set_runtime("unloaded", &variant);
+        }
+        result
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+fn preview_path(root: &Path, variant: &str, voice: &str) -> Result<PathBuf, String> {
+    manifest(variant)?;
+    if !VOICES.contains(&voice) {
+        return Err("Unsupported Qwen voice".into());
+    }
+    // Vivian's installation sample already passed real synthesis verification.
+    let revision = manifest(variant)?["revision"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    Ok(root.join(if voice == "Vivian" {
+        format!("preview-{variant}.wav")
+    } else {
+        format!("preview-{variant}-{voice}-{revision}.wav")
+    }))
+}
+fn preview_bytes(path: &Path) -> Option<Vec<u8>> {
+    if fs::metadata(path).ok()?.len() > 8_000_000 {
+        return None;
+    }
+    let bytes = fs::read(path).ok()?;
+    if !non_silent_pcm16(&bytes) {
+        return None;
+    }
+    Some(bytes)
+}
+fn non_silent_pcm16(bytes: &[u8]) -> bool {
+    if bytes.len() < 44 || &bytes[..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
+        return false;
+    }
+    let mut offset = 12;
+    let mut format_ok = false;
+    let mut audible = false;
+    while offset + 8 <= bytes.len() {
+        let tag = &bytes[offset..offset + 4];
+        let size = u32::from_le_bytes(bytes[offset + 4..offset + 8].try_into().unwrap()) as usize;
+        offset += 8;
+        let Some(end) = offset.checked_add(size).filter(|end| *end <= bytes.len()) else {
+            return false;
+        };
+        let data = &bytes[offset..end];
+        if tag == b"fmt " {
+            format_ok = size >= 16
+                && data[..2] == [1, 0]
+                && data[14..16] == [16, 0]
+                && data[2..4] != [0, 0];
+        } else if tag == b"data" {
+            if size % 2 != 0 {
+                return false;
+            }
+            audible |= data
+                .chunks_exact(2)
+                .any(|v| i16::from_le_bytes([v[0], v[1]]).unsigned_abs() > 32);
+        }
+        offset = end + size % 2;
+    }
+    format_ok && audible
+}
+#[tauri::command]
+pub async fn qwen_preview(
+    app: tauri::AppHandle,
+    variant: String,
+    voice: String,
+) -> Result<Vec<u8>, String> {
+    let root = root(&app)?;
+    let path = preview_path(&root, &variant, &voice)?;
+    let epoch = SPEECH_EPOCH.load(Ordering::SeqCst);
+    tauri::async_runtime::spawn_blocking(move || {
+        installed(&root, &variant).ok_or("Install this Qwen model in Settings first")?;
+        if let Some(bytes) = preview_bytes(&path) {
+            return Ok(bytes);
+        }
+        let result = speak(
+            &root,
+            &variant,
+            PREVIEW_TEXT.into(),
+            "Chinese".into(),
+            voice,
+            epoch,
+        );
+        if let Ok(bytes) = &result {
+            // Uninstall and cancellation cannot resurrect preview files after completion.
+            let _slot = worker()
+                .lock()
+                .map_err(|_| "Qwen worker lock unavailable")?;
+            if SPEECH_EPOCH.load(Ordering::SeqCst) == epoch && installed(&root, &variant).is_some()
+            {
+                let _ = fs::write(path, bytes);
+            }
+        } else if SPEECH_EPOCH.load(Ordering::SeqCst) == epoch {
+            set_runtime("unloaded", &variant);
+        }
+        result
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+// Only application-owned weights may be removed. Shared Hugging Face caches and
+// user-selected Python environments are never deleted by this command.
+fn remove_model_files(root: &Path, variant: &str) -> Result<(), String> {
+    manifest(variant)?;
+    let marker = root.join(format!("installed-{variant}.json"));
+    let config = read_json(&marker).ok_or("Qwen model registration is missing")?;
+    let owned = root.join(format!("model-{variant}"));
+    if config["model"].as_str().map(Path::new) == Some(owned.as_path()) {
+        if owned.is_symlink() {
+            return Err("Refusing to remove a linked model directory".into());
+        }
+        if owned.exists() {
+            fs::remove_dir_all(&owned)
+                .map_err(|e| format!("Cannot remove Qwen model files: {e}"))?;
+        }
+    }
+    fs::remove_file(marker).map_err(|e| e.to_string())?;
+    for voice in VOICES {
+        if let Ok(path) = preview_path(root, variant, voice) {
+            let _ = fs::remove_file(path);
+        }
+    }
+    Ok(())
+}
+#[tauri::command]
+pub async fn qwen_remove(app: tauri::AppHandle, variant: String) -> Result<(), String> {
+    manifest(&variant)?;
+    let root = root(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut current = task().lock().unwrap();
+        if active(current["state"].as_str().unwrap_or("")) {
+            return Err("Wait for the Qwen installation to finish or cancel it first".into());
+        }
+        SPEECH_EPOCH.fetch_add(1, Ordering::SeqCst);
+        terminate_worker();
+        let mut slot = worker()
+            .lock()
+            .map_err(|_| "Qwen worker lock unavailable")?;
+        *slot = None;
+        set_runtime("unloaded", &variant);
+        remove_model_files(&root, &variant)?;
+        *current = json!({"state":"idle"});
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 pub fn shutdown() {
     CANCELLED.store(true, Ordering::SeqCst);
@@ -668,20 +854,117 @@ pub fn shutdown() {
     }
 }
 #[tauri::command]
-pub async fn qwen_stop() {
+pub async fn qwen_stop() -> Result<(), String> {
+    SPEECH_EPOCH.fetch_add(1, Ordering::SeqCst);
     tauri::async_runtime::spawn_blocking(|| {
         terminate_worker();
         if let Ok(mut slot) = worker().lock() {
             *slot = None;
         }
+        *runtime_state().lock().unwrap() = json!({"state":"unloaded"});
     })
     .await
-    .ok();
+    .map_err(|e| e.to_string())
 }
 
 #[cfg(all(test, unix))]
 mod lifecycle_tests {
     use super::*;
+    struct TestDirectory(PathBuf);
+    impl TestDirectory {
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+    impl Drop for TestDirectory {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+    fn test_directory() -> TestDirectory {
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let path = std::env::temp_dir().join(format!(
+            "cup-qwen-test-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::SeqCst)
+        ));
+        fs::create_dir(&path).unwrap();
+        TestDirectory(path)
+    }
+    fn sample(value: i16) -> Vec<u8> {
+        let mut bytes = b"RIFF".to_vec();
+        bytes.extend(38u32.to_le_bytes());
+        bytes.extend(b"WAVEfmt ");
+        bytes.extend(16u32.to_le_bytes());
+        bytes.extend([1, 0, 1, 0]);
+        bytes.extend(24000u32.to_le_bytes());
+        bytes.extend(48000u32.to_le_bytes());
+        bytes.extend([2, 0, 16, 0]);
+        bytes.extend(b"data");
+        bytes.extend(2u32.to_le_bytes());
+        bytes.extend(value.to_le_bytes());
+        bytes
+    }
+    #[test]
+    fn preview_rejects_silence_corruption_and_invalid_voice_paths() {
+        let root = test_directory();
+        assert!(preview_path(root.path(), "0.6B", "../../outside").is_err());
+        assert!(preview_path(root.path(), "unknown", "Vivian").is_err());
+        let path = preview_path(root.path(), "0.6B", "Vivian").unwrap();
+        fs::write(&path, sample(0)).unwrap();
+        assert!(preview_bytes(&path).is_none());
+        fs::write(&path, sample(1000)).unwrap();
+        assert_eq!(preview_bytes(&path).unwrap(), sample(1000));
+        let mut truncated = sample(1000);
+        truncated.pop();
+        fs::write(path, truncated).unwrap();
+        assert!(preview_bytes(&preview_path(root.path(), "0.6B", "Vivian").unwrap()).is_none());
+    }
+    #[test]
+    fn removal_only_deletes_selected_owned_weights_and_keeps_runtime() {
+        let root = test_directory();
+        let model = root.path().join("model-0.6B");
+        fs::create_dir(&model).unwrap();
+        fs::write(model.join("weights"), b"test").unwrap();
+        fs::create_dir(root.path().join("environment")).unwrap();
+        fs::create_dir(root.path().join("model-1.7B")).unwrap();
+        fs::write(
+            root.path().join("installed-0.6B.json"),
+            serde_json::to_vec(&json!({"model":model})).unwrap(),
+        )
+        .unwrap();
+        fs::write(root.path().join("preview-0.6B.wav"), sample(1000)).unwrap();
+        remove_model_files(root.path(), "0.6B").unwrap();
+        assert!(!model.exists());
+        assert!(!root.path().join("installed-0.6B.json").exists());
+        assert!(!root.path().join("preview-0.6B.wav").exists());
+        assert!(root.path().join("environment").exists());
+        assert!(root.path().join("model-1.7B").exists());
+    }
+    #[test]
+    fn removal_never_deletes_shared_or_symlinked_models() {
+        let root = test_directory();
+        let shared = test_directory();
+        fs::write(shared.path().join("weights"), b"keep").unwrap();
+        let marker = root.path().join("installed-0.6B.json");
+        fs::write(
+            &marker,
+            serde_json::to_vec(&json!({"model":shared.path()})).unwrap(),
+        )
+        .unwrap();
+        remove_model_files(root.path(), "0.6B").unwrap();
+        assert!(shared.path().join("weights").exists());
+        let linked = root.path().join("model-0.6B");
+        std::os::unix::fs::symlink(shared.path(), &linked).unwrap();
+        fs::write(
+            &marker,
+            serde_json::to_vec(&json!({"model":linked})).unwrap(),
+        )
+        .unwrap();
+        assert!(remove_model_files(root.path(), "0.6B").is_err());
+        assert!(shared.path().join("weights").exists());
+        assert!(marker.exists());
+    }
     #[test]
     fn unload_can_terminate_a_child_while_the_worker_is_busy() {
         let mut child = command("cat")

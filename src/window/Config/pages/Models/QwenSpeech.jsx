@@ -38,6 +38,11 @@ export default function QwenSpeech({ open, onClose, mode = 'models' }) {
     const [discarding, setDiscarding] = useState(false);
     const [saving, setSaving] = useState(false);
     const [ready, setReady] = useState(false);
+    const [enableAfterSave, setEnableAfterSave] = useState(false);
+    const [removing, setRemoving] = useState(false);
+    const [notice, setNotice] = useState('');
+    const [previewStarted, setPreviewStarted] = useState(0);
+    const [elapsed, setElapsed] = useState(0);
     const speech = useSpeech('qwen-settings');
     const installed = status?.models?.[variant];
     const task = status?.task?.variant === variant ? status.task : {};
@@ -55,6 +60,10 @@ export default function QwenSpeech({ open, onClose, mode = 'models' }) {
         setBusy(false);
         setDevice(null);
         setAccepted(false);
+        setEnableAfterSave(false);
+        setRemoving(false);
+        setNotice('');
+        setPreviewStarted(0);
         Promise.all([store.get('qwen_tts'), invoke('qwen_status')])
             .then(([config, value]) => {
                 if (id !== generation.current) return;
@@ -81,7 +90,10 @@ export default function QwenSpeech({ open, onClose, mode = 'models' }) {
             pending = true;
             try {
                 const value = await invoke('qwen_status');
-                if (live) setStatus(value);
+                if (live) {
+                    setStatus(value);
+                    if (previewStarted) setElapsed(Math.floor((Date.now() - previewStarted) / 1000));
+                }
             } catch {
                 /* Preserve status during a transient IPC failure. */
             } finally {
@@ -92,7 +104,13 @@ export default function QwenSpeech({ open, onClose, mode = 'models' }) {
             live = false;
             clearInterval(timer);
         };
-    }, [open]);
+    }, [open, previewStarted]);
+    const stopPreview = async () => {
+        const loading = speech.status === 'loading';
+        speech.stop();
+        setPreviewStarted(0);
+        if (loading) await invoke('qwen_stop');
+    };
     const check = async () => {
         setStep(2);
         setBusy(true);
@@ -112,9 +130,9 @@ export default function QwenSpeech({ open, onClose, mode = 'models' }) {
         }
     };
     const close = () => {
-        if (saving) return;
-        speech.stop();
-        if (ready && (voice !== original.current.voice || variant !== original.current.variant)) {
+        if (saving || busy) return;
+        void stopPreview().catch((failure) => setError(String(failure)));
+        if (ready && (voice !== original.current.voice || variant !== original.current.variant || enableAfterSave)) {
             setDiscarding(true);
             return;
         }
@@ -135,23 +153,74 @@ export default function QwenSpeech({ open, onClose, mode = 'models' }) {
             if (id === generation.current) setBusy(false);
         }
     };
-    const test = async () => {
+    const test = async (live = false) => {
         const id = generation.current;
         setError('');
+        setNotice('');
         try {
+            if (speech.status !== 'idle') {
+                await stopPreview();
+                return;
+            }
+            setPreviewStarted(Date.now());
+            setElapsed(0);
             await speech.toggle(() =>
-                invoke('qwen_tts_request', { variant, text: '你好，这是语音测试。 Hello.', language: 'Chinese', voice })
+                live
+                    ? invoke('qwen_tts_request', { variant, text: '你好。', language: 'Chinese', voice })
+                    : invoke('qwen_preview', { variant, voice })
             );
         } catch (failure) {
             if (id === generation.current) setError(String(failure));
+        }
+    };
+    const release = async () => {
+        const id = generation.current;
+        speech.stop();
+        setBusy(true);
+        setError('');
+        setNotice('');
+        setPreviewStarted(0);
+        try {
+            await invoke('qwen_stop');
+            const value = await invoke('qwen_status');
+            if (id === generation.current) {
+                setStatus(value);
+                setNotice(t('models.qwen_released'));
+            }
+        } catch (failure) {
+            if (id === generation.current) setError(String(failure));
+        } finally {
+            if (id === generation.current) setBusy(false);
+        }
+    };
+    const remove = async () => {
+        const id = generation.current;
+        speech.stop();
+        setBusy(true);
+        setError('');
+        setNotice('');
+        try {
+            await invoke('qwen_remove', { variant });
+            const value = await invoke('qwen_status');
+            if (id !== generation.current) return;
+            setStatus(value);
+            setRemoving(false);
+            setDevice(null);
+            setAccepted(false);
+            setStep(1);
+            setNotice(t('models.qwen_removed'));
+        } catch (failure) {
+            if (id === generation.current) setError(String(failure));
+        } finally {
+            if (id === generation.current) setBusy(false);
         }
     };
     const save = async (enable = false) => {
         if (saving) return;
         setSaving(true);
         setError('');
-        speech.stop();
         try {
+            await stopPreview();
             await saveQwenSettings(store, emit, { variant, voice }, { register: mode === 'service', enable });
             generation.current++;
             onClose();
@@ -166,16 +235,16 @@ export default function QwenSpeech({ open, onClose, mode = 'models' }) {
             disableAnimation
             isOpen={open}
             onClose={close}
-            isDismissable={!saving}
-            isKeyboardDismissDisabled={saving}
-            hideCloseButton={saving}
+            isDismissable={!saving && !busy}
+            isKeyboardDismissDisabled={saving || busy}
+            hideCloseButton={saving || busy}
             size='3xl'
             scrollBehavior='inside'
             classNames={{
                 base: 'model-install-dialog',
                 header: 'model-install-header',
                 body: 'model-install-body',
-                footer: 'model-install-footer',
+                footer: 'model-install-footer qwen-ready-footer',
             }}
         >
             <ModalContent>
@@ -296,7 +365,15 @@ export default function QwenSpeech({ open, onClose, mode = 'models' }) {
                     {step === 3 && (
                         <>
                             {installed && (
-                                <div className='service-install-success'>{t('models.qwen_install_verified')}</div>
+                                <div className='qwen-ready-card'>
+                                    <strong>{t('models.qwen_files_ready')}</strong>
+                                    <p>{t('models.qwen_already_downloaded', { size: gb(installed.modelBytes) })}</p>
+                                    <p>
+                                        {t(
+                                            `models.qwen_runtime_${status?.runtime?.variant && status.runtime.variant !== variant ? 'unloaded' : status?.runtime?.state || 'unloaded'}`
+                                        )}
+                                    </p>
+                                </div>
                             )}
                             {!installed && <p>{t('models.qwen_install_plan')}</p>}
                             {(running || ['failed', 'cancelled'].includes(task?.state)) && (
@@ -328,24 +405,102 @@ export default function QwenSpeech({ open, onClose, mode = 'models' }) {
                             )}
                             {installed && (
                                 <>
-                                    <Select
-                                        label={t('models.qwen_voice')}
-                                        selectedKeys={[voice]}
-                                        isDisabled={busy || saving || !ready}
-                                        onSelectionChange={(keys) => {
-                                            speech.stop();
-                                            setVoice([...keys][0] || 'Vivian');
-                                        }}
-                                    >
-                                        {voices.map((name) => (
-                                            <SelectItem key={name}>{name}</SelectItem>
-                                        ))}
-                                    </Select>
-                                    <p>{t('models.qwen_autostart_hint')}</p>
+                                    <div className='qwen-preview-row'>
+                                        <Select
+                                            label={t('models.qwen_voice')}
+                                            selectedKeys={[voice]}
+                                            isDisabled={busy || saving || !ready}
+                                            onSelectionChange={(keys) => {
+                                                void stopPreview().catch((failure) => setError(String(failure)));
+                                                setVoice([...keys][0] || 'Vivian');
+                                            }}
+                                        >
+                                            {voices.map((name) => (
+                                                <SelectItem key={name}>{name}</SelectItem>
+                                            ))}
+                                        </Select>
+                                        <Button
+                                            isDisabled={busy || saving || !ready}
+                                            onPress={() => test(false)}
+                                        >
+                                            {t(
+                                                speech.status === 'idle'
+                                                    ? 'models.qwen_test'
+                                                    : 'models.qwen_preview_stop'
+                                            )}
+                                        </Button>
+                                    </div>
+                                    <p className='qwen-state-note'>{t('models.qwen_preview_cache_hint')}</p>
                                 </>
                             )}
                             <details className='models-details'>
-                                <summary>{t('models.version_details')}</summary>
+                                <summary>{t('models.qwen_storage_settings')}</summary>
+                                {installed && (
+                                    <>
+                                        <p>{t('models.qwen_autostart_hint')}</p>
+                                        <p>{t('models.qwen_save_hint')}</p>
+                                        <div className='qwen-resource-actions'>
+                                            <Button
+                                                isDisabled={busy || saving || !ready || speech.status !== 'idle'}
+                                                onPress={() => test(true)}
+                                            >
+                                                {t('models.qwen_live_test')}
+                                            </Button>
+                                            <Button
+                                                isDisabled={busy || saving || !ready}
+                                                onPress={release}
+                                            >
+                                                {t('models.catalog_unload')}
+                                            </Button>
+                                            <Button
+                                                isDisabled={busy || saving || !ready}
+                                                onPress={() => {
+                                                    void stopPreview().catch((failure) => setError(String(failure)));
+                                                    setStep(1);
+                                                }}
+                                            >
+                                                {t('models.qwen_other_variant')}
+                                            </Button>
+                                            <Button
+                                                className='qwen-danger'
+                                                isDisabled={busy || saving || !ready || active(status?.task?.state)}
+                                                onPress={() => setRemoving(true)}
+                                            >
+                                                {t('models.qwen_remove_model')}
+                                            </Button>
+                                        </div>
+                                        {removing && (
+                                            <div
+                                                className='qwen-remove-confirm'
+                                                role='alert'
+                                            >
+                                                <p>
+                                                    {t(
+                                                        installed.managedFiles
+                                                            ? 'models.qwen_remove_confirm'
+                                                            : 'models.qwen_detach_confirm',
+                                                        { size: gb(installed.modelBytes) }
+                                                    )}
+                                                </p>
+                                                <div className='qwen-resource-actions'>
+                                                    <Button
+                                                        isDisabled={busy}
+                                                        onPress={() => setRemoving(false)}
+                                                    >
+                                                        {t('common.cancel')}
+                                                    </Button>
+                                                    <Button
+                                                        className='qwen-danger'
+                                                        isDisabled={busy}
+                                                        onPress={remove}
+                                                    >
+                                                        {t('models.qwen_remove_confirm_button')}
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
                                 <p>{t('models.qwen_dependencies_detail')}</p>
                                 <p>
                                     {t('models.qwen_actual_device')}: {installed?.device}
@@ -353,10 +508,26 @@ export default function QwenSpeech({ open, onClose, mode = 'models' }) {
                                 <p>{installed?.python}</p>
                                 <p>{installed?.model}</p>
                                 <p>{status?.logPath}</p>
+                                <p>{status?.installLogPath}</p>
                             </details>
                         </>
                     )}
-                    {speech.status !== 'idle' && <p role='status'>{t(`models.qwen_preview_${speech.status}`)}</p>}
+                    {speech.status !== 'idle' && (
+                        <p
+                            className='qwen-preview-status'
+                            role='status'
+                        >
+                            {t(`models.qwen_preview_${speech.status}`, { seconds: elapsed })}
+                        </p>
+                    )}
+                    {notice && (
+                        <p
+                            className='qwen-preview-status'
+                            role='status'
+                        >
+                            {notice}
+                        </p>
+                    )}
                     {error && (
                         <div role='alert'>
                             <p>{t('models.qwen_action_failed')}</p>
@@ -443,48 +614,33 @@ export default function QwenSpeech({ open, onClose, mode = 'models' }) {
                     )}
                     {step === 3 && installed && (
                         <>
-                            <Button
-                                variant='light'
+                            <Checkbox
+                                isSelected={enableAfterSave}
                                 isDisabled={busy || saving || !ready}
-                                onPress={() => setStep(1)}
+                                onValueChange={setEnableAfterSave}
                             >
-                                {t('models.qwen_other_variant')}
-                            </Button>
-                            <Button
-                                isDisabled={busy || saving || !ready}
-                                onPress={test}
-                            >
-                                {t(speech.status === 'idle' ? 'models.qwen_test' : 'models.qwen_preview_stop')}
-                            </Button>
-                            <Button
-                                variant='light'
-                                isDisabled={busy || saving || !ready}
-                                onPress={() => invoke('qwen_stop').catch((failure) => setError(String(failure)))}
-                            >
-                                {t('models.catalog_unload')}
-                            </Button>
+                                {t('models.qwen_enable_after_save')}
+                            </Checkbox>
+                        </>
+                    )}
+                    <div className='qwen-footer-actions'>
+                        <Button
+                            variant='light'
+                            isDisabled={saving || busy}
+                            onPress={close}
+                        >
+                            {t(active(status?.task?.state) ? 'models.close_background' : 'common.close')}
+                        </Button>
+                        {step === 3 && installed && (
                             <Button
                                 className='service-primary-button'
                                 isDisabled={busy || saving || !ready}
-                                onPress={() => save(false)}
+                                onPress={() => save(enableAfterSave)}
                             >
                                 {t('common.save')}
                             </Button>
-                            <Button
-                                isDisabled={busy || saving || !ready}
-                                onPress={() => save(true)}
-                            >
-                                {t('models.qwen_save_enable')}
-                            </Button>
-                        </>
-                    )}
-                    <Button
-                        variant='light'
-                        isDisabled={saving}
-                        onPress={close}
-                    >
-                        {t(active(status?.task?.state) ? 'models.close_background' : 'common.close')}
-                    </Button>
+                        )}
+                    </div>
                 </ModalFooter>
             </ModalContent>
         </Modal>

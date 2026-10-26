@@ -98,6 +98,27 @@ class RuntimeTest(unittest.TestCase):
             self.assertIn('audio', replies[3])
             self.assertEqual(len(events), 1)
 
+    def test_worker_reuses_audio_and_evicts_old_entries(self):
+        app = runtime()
+        calls = []
+        def audio(_model, text, language, voice, **kwargs):
+            calls.append((text, language, voice, kwargs))
+            return b'RIFF' + text.encode()
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / 'installed.json'
+            config.write_text(json.dumps({'model': '/local/model', 'device': 'cpu'}))
+            def req(text, voice='Vivian', preview=False):
+                return json.dumps({'text': text, 'language': 'Chinese', 'voice': voice, 'preview': preview})
+            lines = [req('one'), req('one'), req('one', 'Ryan'), req('one', preview=True)]
+            lines += [req(str(i)) for i in range(8)] + [req('one')]
+            with patch.object(app, 'load_model', return_value=(object(), 'cpu')), patch.object(app, 'audio', side_effect=audio), patch.object(app.sys, 'stdin', io.StringIO('\n'.join(lines))), contextlib.redirect_stdout(io.StringIO()) as output:
+                app.serve(types.SimpleNamespace(config=str(config)))
+            replies = [json.loads(line) for line in output.getvalue().splitlines()]
+            self.assertEqual(replies[1], replies[2])
+            self.assertEqual(len(calls), len(lines) - 1)
+            self.assertEqual(calls[2][-1], {'max_tokens': 192})
+            self.assertEqual(calls[-1][0], 'one', 'An evicted phrase must synthesize again')
+
 
 if __name__ == '__main__':
     unittest.main()

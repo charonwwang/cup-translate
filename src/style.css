@@ -28,15 +28,18 @@ html {
 
 /* Cup reading-first design. Font sizes in the result follow the user's app_font_size. */
 :root {
-    --cup-brand: #24735c;
-    --cup-brand-soft: #eaf4ee;
-    --cup-border: #e5ebe7;
-    --cup-text-soft: #697971;
-    --cup-sidebar: #f7f9f7;
+    --cup-brand: #286b59;
+    --cup-brand-solid: #286b59;
+    --cup-brand-soft: #edf5f1;
+    --cup-border: #e1e8e4;
+    --cup-text: hsl(var(--nextui-foreground));
+    --cup-text-soft: #61736b;
+    --cup-sidebar: #f6f8f7;
     --cup-shadow: 0 18px 50px -20px #243c2e24;
 }
 .dark {
     --cup-brand: #90d4b5;
+    --cup-brand-solid: #326d59;
     --cup-brand-soft: #2c4438;
     --cup-border: #35453c;
     --cup-text-soft: #a5b5ab;

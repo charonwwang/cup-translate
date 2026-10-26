@@ -82,3 +82,7 @@ python3 tests/test_qwen_runtime.py
 2026-10-26 按用户要求，将源码 `7e039ed` 构建为 ARM64 optimized release 应用，内嵌生产前端资源，不依赖 Vite。安装到 `/Applications/cup-translate.app`，应用标识保持 `com.cup-translate.app`，版本号保持 3.0.13，Info.plist 额外记录 CupTranslateSourceCommit。已通过本地签名完整性校验并实际启动，设置页使用 `tauri://localhost/service`，停留在语音服务页供用户实测。没有推送或公开发布。
 
 旧应用和配置的私有备份保存在 `~/Library/Application Support/cup-translate-local-backups/20261026-161030-7e039ed/`。旧应用通过移动完整 bundle 保留，配置在替换前另存快照，现有模型目录保持原位。`installation.json` 记录新旧可执行文件摘要和替换结果；本机截图只保存在该备份目录，不随仓库公开。
+
+## 用户实测后的配置与语音回修
+
+步骤样式缺失、试听等待、内存及磁盘语义、配置弹窗一致性的后续修复与真实模型证据见 [模型配置交互与 Qwen 试听回修](UX-AND-RUNTIME-FOLLOWUP.md)。该记录在上述初次替换之后执行，包含本机真实推理验证。

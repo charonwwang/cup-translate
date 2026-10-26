@@ -9,6 +9,9 @@ import { osType, appVersion } from '../../utils/env';
 import routes from './routes';
 import { useConfig } from '../../hooks';
 import './style.css';
+// Resource managers are also opened directly from the service settings route.
+import './pages/Models/models.css';
+import './dialogs.css';
 
 export default function Config() {
     const [transparent] = useConfig('transparent', true);

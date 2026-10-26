@@ -12,6 +12,12 @@ export default function SelectModal(props) {
 
     return (
         <Modal
+            classNames={{
+                base: 'service-config-dialog service-picker-dialog',
+                header: 'service-config-header',
+                body: 'service-config-body',
+                footer: 'service-config-footer',
+            }}
             isOpen={isOpen}
             onOpenChange={onOpenChange}
             scrollBehavior='inside'
@@ -27,6 +33,7 @@ export default function SelectModal(props) {
                                         <Button
                                             fullWidth
                                             onPress={() => {
+                                                onClose();
                                                 setCurrentConfigKey(createServiceInstanceKey(x));
                                                 onConfigOpen();
                                             }}
@@ -51,7 +58,6 @@ export default function SelectModal(props) {
                         </ModalBody>
                         <ModalFooter>
                             <Button
-                                color='danger'
                                 variant='light'
                                 onPress={onClose}
                             >

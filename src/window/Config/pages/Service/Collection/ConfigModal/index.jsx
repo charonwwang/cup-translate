@@ -36,6 +36,12 @@ export default function ConfigModal(props) {
         <></>
     ) : (
         <Modal
+            classNames={{
+                base: 'service-config-dialog',
+                header: 'service-config-header',
+                body: 'service-config-body',
+                footer: 'service-config-footer',
+            }}
             isOpen={isOpen}
             onOpenChange={(open) => (open ? onOpenChange(true) : requestClose())}
             scrollBehavior='inside'
@@ -111,7 +117,6 @@ export default function ConfigModal(props) {
                                 </>
                             ) : (
                                 <Button
-                                    color='danger'
                                     variant='light'
                                     isDisabled={editorState.saving}
                                     onPress={requestClose}

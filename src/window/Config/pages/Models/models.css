@@ -151,7 +151,7 @@
 .service-add-row > div { flex:1; }
 .service-add-row strong { font-size:11px; font-weight:600; }
 .service-plus-circle { width:34px; height:34px; border:1px dashed var(--cup-brand); display:grid; place-items:center; flex:none; border-radius:10px; color:var(--cup-brand); }
-.models-page .service-primary-button,.service-primary-button { background:var(--cup-brand) !important; color:#fff !important; border-radius:9px; height:32px; min-height:32px; font-size:10px; padding:0 14px; box-shadow:0 4px 10px #1e74591c; }
+.models-page .service-primary-button,.service-primary-button { background:var(--cup-brand-solid) !important; color:#fff !important; border-radius:9px; height:32px; min-height:32px; font-size:10px; padding:0 14px; box-shadow:0 4px 10px #1e74591c; }
 .models-page .service-secondary-button { height:32px; min-height:32px; font-size:10px; border:1px solid var(--cup-border); border-radius:9px; background:transparent; padding:0 13px; }
 .service-add-row.unavailable { background:var(--cup-sidebar); }
 .service-add-row.unavailable .service-plus-circle { border-color:var(--cup-border); color:var(--cup-text-soft); }
@@ -188,7 +188,7 @@
 .model-choice-footer { padding:13px 24px; border-top:1px solid var(--cup-border); display:flex; align-items:center; gap:9px; }
 .model-choice-footer > span { font-size:9px; color:var(--cup-text-soft); margin-right:auto; }
 .model-wizard-steps { display:flex; align-items:center; gap:14px; flex-shrink:0; }
-.model-wizard-steps span { display:flex; align-items:center; gap:5px; font-size:9px; color:var(--cup-text-soft); white-space:nowrap; }
+.model-wizard-steps li { display:flex; align-items:center; gap:5px; font-size:9px; color:var(--cup-text-soft); white-space:nowrap; }
 .model-wizard-steps i { width:19px; height:19px; font-size:9px; font-style:normal; border:1px solid var(--cup-border); border-radius:50%; display:grid; place-items:center; }
 .model-wizard-steps .active,.model-wizard-steps .complete { color:var(--cup-brand); }
 .model-wizard-steps .active i { background:var(--cup-brand); color:white; border-color:var(--cup-brand); }

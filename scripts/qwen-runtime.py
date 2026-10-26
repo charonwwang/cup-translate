@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import sys
+from collections import OrderedDict
 
 
 def atomic_json(path, value):
@@ -77,7 +78,7 @@ def load_model(directory, device=None):
     return model, device
 
 
-def audio(model, text, language, voice):
+def audio(model, text, language, voice, max_tokens=2048):
     import torch
     import soundfile as sf
     if not isinstance(text, str) or not text.strip() or len(text) > 2000:
@@ -85,7 +86,7 @@ def audio(model, text, language, voice):
     if language.lower() not in model.get_supported_languages() or voice.lower() not in model.get_supported_speakers():
         raise ValueError('Unsupported language or voice')
     with torch.inference_mode():
-        waves, rate = model.generate_custom_voice(text=text, language=language, speaker=voice, max_new_tokens=2048)
+        waves, rate = model.generate_custom_voice(text=text, language=language, speaker=voice, max_new_tokens=max_tokens)
     import numpy as np
     if not len(waves[0]) or not np.isfinite(waves[0]).all() or float(np.max(np.abs(waves[0]))) < 1e-6:
         raise RuntimeError('Model produced empty or silent audio')
@@ -165,11 +166,28 @@ def serve(args):
     with redirect_logs():
         runtime, device = load_model(config['model'], config.get('device'))
     print(json.dumps({'ready': True, 'device': device}), flush=True)
+    # Bounded process-local audio cache: repeated dictionary words avoid inference.
+    cache = OrderedDict()
+    cache_bytes = 0
     for line in sys.stdin:
         try:
             request = json.loads(line)
-            with redirect_logs():
-                wav = audio(runtime, request['text'], request['language'], request['voice'])
+            key = (request['text'], request['language'], request['voice'], bool(request.get('preview')))
+            if key in cache:
+                wav = cache.pop(key)
+                cache[key] = wav
+            else:
+                with redirect_logs():
+                    if request.get('preview'):
+                        wav = audio(runtime, request['text'], request['language'], request['voice'], max_tokens=192)
+                    else:
+                        wav = audio(runtime, request['text'], request['language'], request['voice'])
+                if len(wav) <= 2_000_000:
+                    cache[key] = wav
+                    cache_bytes += len(wav)
+                    while len(cache) > 8 or cache_bytes > 8_000_000:
+                        _, removed = cache.popitem(last=False)
+                        cache_bytes -= len(removed)
             print(json.dumps({'audio': base64.b64encode(wav).decode('ascii')}), flush=True)
         except Exception:
             import traceback

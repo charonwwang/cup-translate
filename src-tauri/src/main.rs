@@ -262,6 +262,8 @@ fn main() {
             piper_preview,
             tts_inventory,
             qwen_tts_request,
+            qwen_preview,
+            qwen_remove,
             native_speech_device_check,
             qwen_device_check,
             qwen_install,

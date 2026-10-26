@@ -64,13 +64,15 @@ async function setup({ installed = true, fail = false, statusError = '', request
                 if (statusError) throw new Error(statusError);
                 return status;
             }
-            if (cmd === 'qwen_tts_request' && requestError) throw new Error(requestError);
-            if (cmd === 'qwen_tts_request')
+            if (['qwen_tts_request', 'qwen_preview'].includes(cmd) && requestError) throw new Error(requestError);
+            if (['qwen_tts_request', 'qwen_preview'].includes(cmd))
                 return new Promise((resolve) => {
                     finish = resolve;
                 });
             if (cmd === 'qwen_device_check')
                 return { supported: true, diskAvailable: 100e9, modelBytes: 1, environments: [] };
+            if (cmd === 'qwen_remove') status = { ...status, models: {}, runtime: { state: 'unloaded' } };
+            if (cmd === 'qwen_stop') status = { ...status, runtime: { state: 'unloaded' } };
             if (cmd === 'qwen_install')
                 status = { ...status, task: { variant: '0.6B', state: 'model', fallback: 'cpu' } };
         },
@@ -253,10 +255,47 @@ test('Q08: missing model, dependency and corrupt model synthesis failures preser
         assert.equal(h.closed(), 0);
     }
 });
-test('Q03: the separate enable button changes fallback policy only after saving', async () => {
+test('Q03: the explicit fallback checkbox changes fallback policy only after saving', async () => {
     const h = await setup();
-    await h.button('models.qwen_save_enable').props.onPress();
+    h.find(
+        h.render(),
+        (n) => n.type === 'Checkbox' && n.props.children.includes('models.qwen_enable_after_save')
+    ).props.onValueChange(true);
+    await h.button('common.save').props.onPress();
     assert.equal(h.memory.get('speech_policy'), 'qwen');
     assert.deepEqual(h.memory.get('tts_service_list'), ['google_tts', 'qwen_tts']);
     assert.equal(h.closed(), 1);
+});
+test('preview requests the cached sample; stopping pending inference calls the native stop command', async () => {
+    const h = await setup();
+    const pending = h.button('models.qwen_test').props.onPress();
+    await flush();
+    assert.ok(h.calls.includes('qwen_preview'));
+    assert.ok(!h.calls.includes('qwen_tts_request'));
+    await h.button('models.qwen_preview_stop').props.onPress();
+    assert.ok(h.calls.includes('qwen_stop'));
+    h.finish();
+    await pending;
+    assert.deepEqual(h.playback, []);
+});
+test('release reports completed process shutdown without removing files or changing service settings', async () => {
+    const h = await setup();
+    await h.button('models.catalog_unload').props.onPress();
+    h.find(h.render(), (n) => n.props.role === 'status' && n.props.children.includes('models.qwen_released'));
+    assert.ok(h.calls.includes('qwen_stop'));
+    assert.ok(!h.calls.includes('qwen_remove'));
+    assert.equal(h.voice().props.selectedKeys[0], 'Vivian');
+    assert.equal(h.memory.get('speech_policy'), 'engine');
+});
+test('model removal requires confirmation and returns to the install wizard without saving a service', async () => {
+    const h = await setup();
+    h.button('models.qwen_remove_model').props.onPress();
+    assert.ok(!h.calls.includes('qwen_remove'));
+    h.find(h.render(), (n) => n.type === 'div' && n.props.className === 'qwen-remove-confirm');
+    await h.button('models.qwen_remove_confirm_button').props.onPress();
+    assert.ok(h.calls.includes('qwen_remove'));
+    h.button('models.wizard_next');
+    assert.equal(h.closed(), 0);
+    assert.equal(h.memory.get('speech_policy'), 'engine');
+    assert.deepEqual(h.events, []);
 });

@@ -44,6 +44,9 @@ export function useSpeech(contentKey) {
             } // speech-dispatcher plays itself
             const buffer = await current.context.decodeAudioData(new Uint8Array(data).buffer);
             if (current.cancelled) return;
+            // A long local synthesis may outlive the WebView's active audio session.
+            await current.context.resume();
+            if (current.cancelled) return;
             const source = current.context.createBufferSource();
             current.source = source;
             source.buffer = buffer;
