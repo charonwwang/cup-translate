@@ -1,3 +1,7 @@
+import { canonicalQwenKey, canonicalQwenList } from '../../../../../utils/qwenConfig.js';
+import { store } from '../../../../../utils/store';
+import { emit } from '@tauri-apps/api/event';
+import { commitServiceSettings } from '../../../../../utils/serviceConfigCommit.js';
 import { DragDropContext, Draggable, Droppable } from 'react-beautiful-dnd';
 import { Card, Spacer, Button, useDisclosure, Select, SelectItem } from '@nextui-org/react';
 import toast, { Toaster } from 'react-hot-toast';
@@ -49,16 +53,16 @@ export default function Tts(props) {
             return false;
         }
         setTtsServiceInstanceList(ttsServiceInstanceList.filter((x) => x !== instanceKey));
-        deleteKey(instanceKey);
+        // Removing the singleton reference must not erase its global model preferences.
+        if (instanceKey !== 'qwen_tts') deleteKey(instanceKey);
         return true;
     };
-    const updateServiceInstanceList = (instanceKey) => {
-        if (ttsServiceInstanceList.includes(instanceKey)) {
-            return;
-        } else {
-            const newList = [...ttsServiceInstanceList, instanceKey];
-            setTtsServiceInstanceList(newList);
-        }
+    const updateServiceInstanceList = async (instanceKey, config) => {
+        instanceKey = canonicalQwenKey(instanceKey);
+        const list = canonicalQwenList((await store.get('tts_service_list')) || ['google_tts']);
+        const changes = config ? { [instanceKey]: config } : {};
+        if (!list.includes(instanceKey)) changes.tts_service_list = [...list, instanceKey];
+        if (Object.keys(changes).length) await commitServiceSettings(store, emit, changes);
     };
 
     return (

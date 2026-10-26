@@ -47,6 +47,9 @@ export default function ServiceItem(props) {
                             <h2 className='my-auto'>
                                 {serviceInstanceConfig[INSTANCE_NAME_CONFIG_KEY] ||
                                     t(`services.tts.${serviceName}.title`)}
+                                {serviceName === 'qwen_tts' && !serviceInstanceConfig.configured && (
+                                    <small className='block'>{t('models.qwen_needs_config')}</small>
+                                )}
                             </h2>
                         </>
                     )}

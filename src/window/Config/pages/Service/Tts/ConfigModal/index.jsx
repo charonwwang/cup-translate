@@ -20,6 +20,16 @@ export default function ConfigModal(props) {
     const { t } = useTranslation();
     const ConfigComponent = pluginServiceFlag ? PluginConfig : builtinServices[serviceName].Config;
 
+    // Qwen owns its resource-manager Modal; never wrap it in the generic shell.
+    if (serviceName === 'qwen_tts') {
+        return (
+            <ConfigComponent
+                open={isOpen}
+                onClose={() => onOpenChange(false)}
+            />
+        );
+    }
+
     return pluginServiceFlag && !(serviceName in pluginList) ? (
         <></>
     ) : (
@@ -60,7 +70,7 @@ export default function ConfigModal(props) {
                             <ConfigComponent
                                 name={serviceName}
                                 instanceKey={serviceInstanceKey}
-                                pluginType='translate'
+                                pluginType='tts'
                                 pluginList={pluginList}
                                 updateServiceList={updateServiceInstanceList}
                                 onClose={onClose}

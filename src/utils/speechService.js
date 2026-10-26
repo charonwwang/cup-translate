@@ -1,3 +1,4 @@
+import { canonicalQwenKey } from './qwenConfig.js';
 // Translation and speech providers have different capabilities; never invent a provider API.
 export function resolveSpeechService(engine, policy, configured = []) {
     configured = configured || [];
@@ -10,7 +11,7 @@ export function resolveSpeechService(engine, policy, configured = []) {
     if (policy === 'piper') return 'piper_tts';
     if (policy === 'qwen') return 'qwen_tts';
     if (policy === 'local') return 'local_tts';
-    return configured[0] || null;
+    return canonicalQwenKey(configured[0]) || null;
 }
 export function speechText(result) {
     if (typeof result === 'string') return result.trim();
