@@ -1,6 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
-  <rect x="2" y="2" width="96" height="96" rx="25" fill="#21634e"/>
-  <rect x="57" y="34" width="25" height="31" rx="12" stroke="#f0f6e8" stroke-width="7"/>
-  <path d="M23 29h42v29a20 20 0 0 1-20 20h-2a20 20 0 0 1-20-20V29Z" fill="#f0f6e8"/>
-  <path d="M34 46h21m-6-6 6 6-6 6M55 62H34m6-6-6 6 6 6" stroke="#21634e" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <defs>
+    <linearGradient id="tile" x1="50" y1="10" x2="50" y2="90" gradientUnits="userSpaceOnUse"><stop stop-color="#34836a"/><stop offset="1" stop-color="#123e34"/></linearGradient>
+    <linearGradient id="porcelain" x1="45" y1="34" x2="45" y2="76" gradientUnits="userSpaceOnUse"><stop stop-color="#fffdf5"/><stop offset="1" stop-color="#e2dac7"/></linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dy="1.7" stdDeviation="1.4" flood-color="#001d13" flood-opacity=".3"/></filter>
+  </defs>
+  <rect x="10" y="10" width="80" height="80" rx="18" fill="url(#tile)" filter="url(#shadow)"/>
+  <rect x="10.4" y="10.4" width="79.2" height="79.2" rx="17.7" stroke="#ccefd7" stroke-opacity=".33" stroke-width=".45"/>
+  <g filter="url(#shadow)">
+    <rect x="59.25" y="41.25" width="15.5" height="20.5" rx="7.75" stroke="#e5decc" stroke-width="6.5"/>
+    <path d="M26 35.5h38V60a16 16 0 0 1-16 16h-6a16 16 0 0 1-16-16Z" fill="url(#porcelain)"/>
+    <ellipse cx="45" cy="35.5" rx="19" ry="5" fill="#fffbef"/>
+    <ellipse cx="45" cy="35.6" rx="16" ry="2.8" fill="#b8a681"/>
+    <ellipse cx="45" cy="36.25" rx="15.4" ry="2.15" fill="#544f3a"/>
+  </g>
+  <path d="M35 49h20m-5-5 5 5-5 5M55 63H35m5-5-5 5 5 5" stroke="#174e40" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

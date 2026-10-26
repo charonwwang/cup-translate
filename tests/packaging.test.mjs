@@ -170,7 +170,7 @@ test('AppStream metainfo carries cup-translate branding, not the upstream identi
     assert.equal(metainfo.includes('pot-app.com'), false);
     // fork provenance must be stated, and upstream release links retained for GPL credit
     assert.match(metainfo, /pot-app\/pot-desktop/);
-    assert.match(metainfo, /<launchable type="desktop-id">com\.cup-translate\.app\.desktop<\/launchable>/);
+    assert.match(metainfo, /<launchable type="desktop-id">cup-translate\.desktop<\/launchable>/);
 });
 
 test('Tauri shell API permits opening links without its command execution feature', async () => {

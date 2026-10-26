@@ -97,7 +97,14 @@
                     "libjavascriptcoregtk-4.1-0",
                     "libgtk-3-0",
                     "libayatana-appindicator3-1"
-                ]
+                ],
+                "desktopTemplate": "../packaging/linux.desktop.hbs",
+                "files": {
+                    "/usr/share/metainfo/com.cup-translate.app.metainfo.xml": "../packaging/cup-translate.metainfo.xml",
+                    "/usr/share/doc/cup-translate/LICENSE": "../LICENSE"
+                },
+                "section": "utils",
+                "priority": "optional"
             },
             "rpm": {
                 "depends": [
@@ -105,7 +112,13 @@
                     "libxcb",
                     "libXrandr",
                     "tesseract"
-                ]
+                ],
+                "desktopTemplate": "../packaging/linux.desktop.hbs",
+                "files": {
+                    "/usr/share/metainfo/com.cup-translate.app.metainfo.xml": "../packaging/cup-translate.metainfo.xml",
+                    "/usr/share/doc/cup-translate/LICENSE": "../LICENSE"
+                },
+                "license": "GPL-3.0-only"
             },
             "macOS": {
                 "entitlements": null,
@@ -117,17 +130,18 @@
             },
             "dmg": {
                 "appPosition": {
-                    "x": 180,
-                    "y": 170
+                    "x": 382,
+                    "y": 254
                 },
                 "applicationFolderPosition": {
-                    "x": 480,
-                    "y": 170
+                    "x": 650,
+                    "y": 254
                 },
                 "windowSize": {
-                    "width": 660,
-                    "height": 400
-                }
+                    "width": 800,
+                    "height": 512
+                },
+                "background": "../packaging/dmg-background.png"
             }
         },
         "security": {

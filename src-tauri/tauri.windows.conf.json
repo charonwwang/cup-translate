@@ -18,7 +18,19 @@
                     "installerIcon": "icons/icon.ico",
                     "license": "../LICENSE",
                     "installMode": "perMachine",
-                    "languages": ["SimpChinese", "TradChinese", "English"]
+                    "languages": [
+                        "SimpChinese",
+                        "TradChinese",
+                        "English"
+                    ],
+                    "headerImage": "../packaging/windows/nsis-header.bmp",
+                    "sidebarImage": "../packaging/windows/nsis-sidebar.bmp"
+                },
+                "wix": {
+                    "language": "en-US",
+                    "license": "../LICENSE",
+                    "bannerPath": "../packaging/windows/wix-banner.bmp",
+                    "dialogImagePath": "../packaging/windows/wix-dialog.bmp"
                 }
             }
         }

@@ -18,6 +18,10 @@ function releaseAssets(version) {
             'windows_x86.msi',
             'linux_x64.tar.gz',
             'linux_arm64.tar.gz',
+            'linux_x64.deb',
+            'linux_x64.rpm',
+            'linux_arm64.deb',
+            'linux_arm64.rpm',
         ].map(name),
         updater: [
             'mac_arm64.app.tar.gz',
@@ -184,7 +188,7 @@ export async function publishDesktop({ env = process.env, fetch = globalThis.fet
     if (!readable)
         throw new Error('Published manifest is not yet publicly readable. Check the release before retrying.');
     console.log(
-        `Published v${version}: 9 installers in the main release; updater payloads in ${updaterTag}; source and manifests included.`
+        `Published v${version}: ${assets.main.length - 1} installers in the main release; updater payloads in ${updaterTag}; source and manifests included.`
     );
 }
 

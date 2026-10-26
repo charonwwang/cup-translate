@@ -60,12 +60,14 @@
 | Windows x86 | `cup-translate_<版本>_windows_x86_setup.exe` |
 | Windows ARM64 | `cup-translate_<版本>_windows_arm64_setup.exe` |
 | Windows x64/x86（MSI） | `cup-translate_<版本>_windows_<架构>.msi` |
-| Linux x64 | `cup-translate_<版本>_linux_x64.tar.gz`（内含 AppImage） |
-| Linux ARM64 | `cup-translate_<版本>_linux_arm64.tar.gz`（内含 deb/rpm） |
+| Linux x64 | `cup-translate_<版本>_linux_x64.deb` 或 `.rpm` |
+| Linux ARM64 | `cup-translate_<版本>_linux_arm64.deb` 或 `.rpm` |
 
 macOS 打开 DMG 后将 App 拖入 Applications。当前 macOS 包使用 ad-hoc 签名，尚无 Developer ID 和 Apple 公证，首次打开可能出现系统安全提示。发布说明、对应源码包及校验和均随版本提供；旧更新地址的客户端请手动安装一次新版本。详见 [发布说明](docs/MACOS_RELEASE.md)。
 
 Windows 安装包未做代码签名，SmartScreen 可能提示“未知发布者”；请先核对 Release 中的 `SHA256SUMS`。
+
+Windows 按原生安装向导完成语言、许可、目录、开始菜单及安装步骤；Linux 使用软件中心或包管理器安装。具体操作及卸载方式见 [安装与卸载](docs/INSTALLATION.md)。以上原生 Linux 包名将在下一次发布流程生效，旧版本仍可下载 `.tar.gz` 组合包。
 
 ### Linux：构建并安装
 
@@ -75,7 +77,7 @@ Windows 安装包未做代码签名，SmartScreen 可能提示“未知发布者
 # 1) 构建 + 打包（脚本会自动修正 .deb 的幽灵依赖）
 bash packaging/build-linux.sh deb        # 也可选 rpm、appimage 或 all
 
-# 2) 安装（无需任何额外包）
+# 2) 安装（APT 自动解析运行时依赖）
 sudo apt install ./src-tauri/target/release/bundle/deb/cup-translate_*.deb
 ```
 

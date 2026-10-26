@@ -44,6 +44,10 @@ const mainFiles = [
     'windows_x86.msi',
     'linux_x64.tar.gz',
     'linux_arm64.tar.gz',
+    'linux_x64.deb',
+    'linux_x64.rpm',
+    'linux_arm64.deb',
+    'linux_arm64.rpm',
 ];
 
 test('desktop workflow builds all platforms and separates updater payloads', async () => {
@@ -199,7 +203,7 @@ test('desktop publisher keeps installers and updater payloads in separate releas
         assert.equal(mainPublished, true);
         assert.equal(updaterPublished, true);
         assert.equal(uploaded.get(1).length, 12);
-        assert.equal(uploaded.get(2).length, 12);
+        assert.equal(uploaded.get(2).length, mainFiles.length + 2);
         for (const name of uploaded.get(2)) {
             assert.ok(!name.endsWith('.sig'));
             assert.ok(!name.endsWith('.nsis.zip'));
@@ -218,7 +222,14 @@ test('desktop publisher keeps installers and updater payloads in separate releas
             )
         );
         const checksums = await readFile('release-assets/SHA256SUMS', 'utf8');
-        assert.equal(checksums.trim().split('\n').length, 11);
+        assert.equal(checksums.trim().split('\n').length, mainFiles.length + 1);
+        for (const arch of ['x64', 'arm64']) {
+            for (const extension of ['deb', 'rpm']) {
+                const name = `cup-translate_3.0.11_linux_${arch}.${extension}`;
+                assert.ok(uploaded.get(2).includes(name), `native installer must be downloadable: ${name}`);
+                assert.ok(checksums.includes(`  ${name}\n`), `native installer must have a checksum: ${name}`);
+            }
+        }
         let requests = 0;
         await writeFile('release-assets/cup-translate_3.0.11_mac_x64.app.tar.gz', 'tampered');
         await assert.rejects(

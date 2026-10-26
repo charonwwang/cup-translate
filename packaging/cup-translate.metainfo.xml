@@ -39,7 +39,9 @@
             <li xml:lang="zh-Hans">多语言支持</li>
         </ul>
     </description>
-    <launchable type="desktop-id">com.cup-translate.app.desktop</launchable>
+    <launchable type="desktop-id">cup-translate.desktop</launchable>
+    <icon type="stock">cup-translate</icon>
+    <categories><category>Utility</category></categories>
     <screenshots>
         <screenshot type="default">
             <image>https://github.com/charonwwang/cup-translate/raw/master/asset/1.png</image>
