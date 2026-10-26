@@ -40,4 +40,8 @@
 
 ## 安装与原生验收
 
-本轮生产构建及本机替换完成后在此补充安装提交和真实界面结果。已有用户配置、模型及插件保留；只停止本应用拥有的旧推理进程，使旧缓存不再继续使用。
+已将 `efb2ab7` 构建为 ARM64 optimized release 并替换 `/Applications/cup-translate.app`，本地签名和签名后可执行文件摘要校验通过，版本号仍为 3.0.13。旧应用、配置和固定测试音频保存在私有目录 `~/Library/Application Support/cup-translate-local-backups/20261026-172933-efb2ab7/`。没有推送或公开发布。
+
+原生结果页打开 performance、展开 HY-MT1.5 卡，使用 Qwen3-TTS 朗读原文；安装登记实际迁移为 CPU，旧进程已退出。用户随后明确反馈“ok,听了下朗读没问题了”，内容级验收通过。验收为稳定窗口临时关闭了失焦自动关闭，结束后已恢复原有设置。模型、服务配置和插件保持原样，没有重新下载 TTS 模型。
+
+最终私有 worker 按英文 → 中文 → 相同英文执行，前两次生成约 4.27 秒、2.04 秒，第三次缓存命中约 0.00044 秒；最终两个 WAV 分别转写为 Performance 与 表現成績。详细机器记录见 [内容级验证证据](integration-evidence/speech-content-followup.json)。

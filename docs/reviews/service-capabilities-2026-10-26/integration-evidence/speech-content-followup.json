@@ -1,0 +1,128 @@
+{
+  "date": "2026-10-26",
+  "timezone": "Asia/Shanghai",
+  "installedSourceCommit": "efb2ab7f8d88df3c35b7fb8ec4c8159011ad0219",
+  "weightsSha256Verified": [
+    "model.safetensors",
+    "speech_tokenizer/model.safetensors"
+  ],
+  "baselineMps": [
+    {
+      "file": "/tmp/cup-actual-word.wav",
+      "transcript": " Performance."
+    },
+    {
+      "file": "/tmp/cup-performance-seed-0.wav",
+      "transcript": "and civil trunk sin tò sheng heng"
+    },
+    {
+      "file": "/tmp/cup-performance-seed-1.wav",
+      "transcript": "這間你歐諾的覽區中服處的長框其命你搞得多的,恰帶到違編的解骨針當萬年的七步樓審中的光索我了或者之"
+    },
+    {
+      "file": "/tmp/cup-performance-seed-2.wav",
+      "transcript": " Performance"
+    },
+    {
+      "file": "/tmp/cup-compare-greedy-2.wav",
+      "transcript": "是塑格建前巨逐界。"
+    }
+  ],
+  "cpuControl": [
+    {
+      "file": "/tmp/cup-cpu-0.wav",
+      "transcript": " Performance"
+    },
+    {
+      "file": "/tmp/cup-cpu-1.wav",
+      "transcript": " Hello! This is a speech test."
+    },
+    {
+      "file": "/tmp/cup-cpu-2.wav",
+      "transcript": "表現和成績。"
+    }
+  ],
+  "cpuWordControl": [
+    {
+      "file": "/tmp/cup-cpu-word-0.wav",
+      "transcript": " Performance"
+    },
+    {
+      "file": "/tmp/cup-cpu-word-1.wav",
+      "transcript": " Performance."
+    },
+    {
+      "file": "/tmp/cup-cpu-word-2.wav",
+      "transcript": " Dictionary"
+    },
+    {
+      "file": "/tmp/cup-cpu-word-3.wav",
+      "transcript": " Apple."
+    },
+    {
+      "file": "/tmp/cup-cpu-word-4.wav",
+      "transcript": " Performance"
+    },
+    {
+      "file": "/tmp/cup-cpu-word-5.wav",
+      "transcript": " Dictionary."
+    },
+    {
+      "file": "/tmp/cup-cpu-word-6.wav",
+      "transcript": " Apple"
+    }
+  ],
+  "finalProtocol": [
+    {
+      "startup": {
+        "ready": true,
+        "device": "cpu"
+      }
+    },
+    {
+      "input": "performance",
+      "language": "English",
+      "request_id": "0",
+      "seconds": 4.273285375034902,
+      "sha256": "0cbca3beb1932c7811b04d8e299a9a37af67ee01a3eadf2d683cb5d4804fc958",
+      "wav": "/tmp/cup-protocol-0.wav"
+    },
+    {
+      "input": "表现/成绩",
+      "language": "Chinese",
+      "request_id": "1",
+      "seconds": 2.0440347919939086,
+      "sha256": "4c2bac28fee097bcfc68ef316a8e015c8a996759a4c5d7f531df266d423bb33d",
+      "wav": "/tmp/cup-protocol-1.wav"
+    },
+    {
+      "input": "performance",
+      "language": "English",
+      "request_id": "2",
+      "seconds": 0.00044249999336898327,
+      "sha256": "0cbca3beb1932c7811b04d8e299a9a37af67ee01a3eadf2d683cb5d4804fc958",
+      "wav": "/tmp/cup-protocol-2.wav"
+    }
+  ],
+  "finalProtocolTranscripts": [
+    {
+      "file": "/tmp/cup-protocol-0.wav",
+      "transcript": " Performance."
+    },
+    {
+      "file": "/tmp/cup-protocol-1.wav",
+      "transcript": "表現成績"
+    }
+  ],
+  "verification": {
+    "nodePassed": 582,
+    "rustPassed": 199,
+    "rustIgnored": 6,
+    "pythonPassed": 8,
+    "nativeResultPage": "performance in HY-MT result card with Qwen3-TTS",
+    "installedRuntimeDevice": "cpu",
+    "userConfirmedSpeechCorrect": true,
+    "originalCloseOnBlurRestored": true
+  },
+  "asr": "openai/whisper-base; downloaded to temporary cache, transcribed locally, not a product dependency"
+}
