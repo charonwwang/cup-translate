@@ -1,0 +1,41 @@
+{
+  "upstreamPluginNames": [
+    {
+      "id": "plugin.com.pot-app.lingva_tts",
+      "accepted": true
+    },
+    {
+      "id": "plugin.com.pot-app.ecdict",
+      "accepted": true
+    },
+    {
+      "id": "plugin.com.pot-app.anki",
+      "accepted": true
+    }
+  ],
+  "ankiBusinessError": {
+    "requests": [
+      "version"
+    ],
+    "rejected": true
+  },
+  "sourceClassification": [
+    {
+      "text": "hello",
+      "language": "en",
+      "mode": "word"
+    },
+    {
+      "text": "卸载向导",
+      "language": "zh_cn",
+      "mode": "text"
+    },
+    {
+      "text": "uninstall wizard",
+      "language": "en",
+      "mode": "phrase"
+    }
+  ],
+  "qwenConfigEmbedsModalOwner": true,
+  "qwenCloseButtonSaves": false
+}

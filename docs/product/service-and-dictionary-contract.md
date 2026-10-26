@@ -1,5 +1,7 @@
 # 服务与词典功能交互规范
 
+实施状态：对应 P1 修复已合并到本地 master；版本发布及外部环境验收状态见 [合并与验证结果](../reviews/service-capabilities-2026-10-26/INTEGRATION.md)。
+
 维护对象：Cup 翻译服务、语音服务、收藏连接、插件与词典补全。建立日期：2026-10-26。本文定义后续实现应遵守的目标行为；3.0.13 的已知偏差与实施状态见 [问题评审](../reviews/service-capabilities-2026-10-26/README.md) 和 [执行计划](../reviews/service-capabilities-2026-10-26/EXECUTION.md)。其他模块保持现有行为，修改前需补充对应规范。
 
 ## 产品词汇
