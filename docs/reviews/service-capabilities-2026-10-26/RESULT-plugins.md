@@ -49,3 +49,7 @@
 - 二进制执行范围收紧会拒绝依赖系统 PATH 的旧插件；清单不承诺这些插件兼容。自定义符号链接配置目录也会被拒绝。严格离线场景需要退出应用后在设备内模式启动。
 - 原目录评审/产品规范以及所有带“ 2”的文件均未修改；未推送、发布或合并。新测试源码保留第三方许可证。
 - 可能冲突的共享文件：`src-tauri/src/{main,cmd,config}.rs`，三语资源 `src/i18n/locales/{en_US,zh_CN,zh_TW}.json`，`src/window/{Translate,Recognize}/index.jsx`，`src/window/Config/pages/{History,Service}/index.jsx`，`Service/{PluginConfig,SelectPluginModal}/index.jsx`，`src/utils/{plugin_validation,invoke_plugin}.js` 及对应现有测试。新模块和 fixtures 专属于本任务；主 session 应统一 review 这些局部改动后集成。
+
+## 主 session 回修 R3
+
+重装只独立核对旧 manifest 身份，不再要求旧 main.js 或图标健康。规范 ID 目录允许用正确包修复缺失或损坏 manifest，旧目录进入 previous 备份；可读且不同的身份仍拒绝。旧别名只有确认 ID 与类别后才修复，身份不可读时明确提示恢复 info.json 或移除旧包。新增实际 ZIP 安装测试覆盖缺入口、缺图标、缺 manifest、坏 JSON、备份保留和别名身份保护。Rust plugin 定向测试 24 通过。

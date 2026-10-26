@@ -55,3 +55,7 @@ async function translate(text, from, to, { config, utils }) {
 工具包括 `tauriFetch`、`http`、`readTextFile`、`readBinaryFile`、`Database`、`CryptoJS`、`run`、`pluginDir`、`cacheDir`、`osType`。请通过 `utils.http.Body` 构造请求体，不能假设存在全局 `Body`。不同平台二进制和数据库资源须分别验证、记录许可证和摘要；安装结构校验不能代替这些验证。
 
 可参考 [确定性测试插件](../../tests/fixtures/plugins/deterministic)；它们只验证宿主协议，TTS 样本返回的是可预测测试字节，不能当成可播放音频演示。运行 `python3 tests/fixtures/plugins/build-fixtures.py` 可离线重建固定时间戳的源码包；该脚本不下载任何资源。
+
+## 损坏安装的恢复
+
+规范 ID 目录中的入口、图标或 manifest 损坏时，可重新导入同 ID 的完整包修复；新包仍完整验证，旧目录保留为上一版本，已有服务配置不改名。能读取到不同身份的目录不会被静默覆盖。历史重命名目录需要可读且一致的 info.json 才能升级；若身份无法确认，请先恢复原 manifest，或备份配置后移除旧包，再使用规范文件名重装。

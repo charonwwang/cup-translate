@@ -137,6 +137,21 @@ pub fn metadata(root: &Path, kind: &str, directory: &str) -> Result<Value> {
     Ok(value)
 }
 
+// Reinstall needs the old identity, not healthy old code/icons. A canonical
+// directory can be repaired even when its manifest is missing or malformed.
+fn existing_manifest(root: &Path) -> Result<Option<Value>> {
+    let info = root.join("info.json");
+    no_links(&info)?;
+    if !info.exists() {
+        return Ok(None);
+    }
+    let file = fs::File::open(info)?;
+    if file.metadata()?.len() > 64 * 1024 {
+        return Ok(None);
+    }
+    Ok(serde_json::from_reader(file.take(64 * 1024)).ok())
+}
+
 fn recover(parent: &Path, name: &str) -> Result<()> {
     let marker = parent.join(format!(".{name}.pending"));
     if !marker.exists() {
@@ -282,11 +297,24 @@ fn install_checked(root: &Path, package: &Path, expected_entry: Option<&str>) ->
     if backup.exists() && !target.exists() {
         fs::rename(&backup, &target)?;
     }
+    let previous = if target.exists() {
+        Some(existing_manifest(&target)?)
+    } else {
+        None
+    };
+    let old_id = previous
+        .as_ref()
+        .and_then(|v| v.as_ref())
+        .and_then(|v| v["id"].as_str());
+    let old_kind = previous
+        .as_ref()
+        .and_then(|v| v.as_ref())
+        .and_then(|v| v["plugin_type"].as_str());
     if name != id {
-        if !target.is_dir() || metadata(&target, kind, name)?["id"].as_str() != Some(id) {
-            return Err("Package name differs from info.id; restore its original filename. Legacy renamed upgrades must retain their existing directory and manifest ID".into());
+        if !target.is_dir() || old_id != Some(id) || old_kind != Some(kind) {
+            return Err("Cannot confirm legacy plugin identity; restore its info.json or remove the old package before reinstalling. Existing configuration preserved".into());
         }
-    } else if target.exists() && metadata(&target, kind, name)?["id"].as_str() != Some(id) {
+    } else if old_id.is_some_and(|old| old != id) || old_kind.is_some_and(|old| old != kind) {
         return Err("Upgrade changes manifest identity; existing configuration preserved".into());
     }
     let stage = parent.join(format!(
@@ -613,6 +641,75 @@ mod tests {
             assert!(install(&root, &original).is_err());
             assert!(discover(&root, "translate").is_empty());
         }
+        fs::remove_dir_all(base).unwrap();
+    }
+    #[test]
+    fn reinstall_repairs_damaged_resources_and_manifest_but_keeps_backup() {
+        for missing in ["main.js", "icon.svg", "info.json"] {
+            let base = sandbox();
+            let root = base.join("plugins");
+            let id = "plugin.cup.fixture.translate";
+            let package = fixtures().join("packages").join(format!("{id}.potext"));
+            install(&root, &package).unwrap();
+            let target = root.join("translate").join(id);
+            fs::remove_file(target.join(missing)).unwrap();
+            assert!(discover(&root, "translate").is_empty());
+            assert_eq!(install(&root, &package).unwrap(), id);
+            assert_eq!(discover(&root, "translate"), vec![id]);
+            assert!(target.join(missing).is_file());
+            assert!(root
+                .join("translate")
+                .join(format!(".{id}.previous"))
+                .is_dir());
+            fs::remove_dir_all(base).unwrap();
+        }
+        let base = sandbox();
+        let root = base.join("plugins");
+        let id = "plugin.cup.fixture.translate";
+        let package = fixtures().join("packages").join(format!("{id}.potext"));
+        install(&root, &package).unwrap();
+        let target = root.join("translate").join(id);
+        fs::write(target.join("info.json"), b"{broken").unwrap();
+        install(&root, &package).unwrap();
+        assert_eq!(discover(&root, "translate"), vec![id]);
+        assert_eq!(
+            fs::read(
+                root.join("translate")
+                    .join(format!(".{id}.previous/info.json"))
+            )
+            .unwrap(),
+            b"{broken"
+        );
+        let mut manifest = metadata(&target, "translate", id).unwrap();
+        manifest["id"] = serde_json::json!("plugin.other");
+        fs::write(
+            target.join("info.json"),
+            serde_json::to_vec(&manifest).unwrap(),
+        )
+        .unwrap();
+        assert!(install(&root, &package)
+            .unwrap_err()
+            .to_string()
+            .contains("identity"));
+        fs::remove_dir_all(base).unwrap();
+    }
+    #[test]
+    fn damaged_legacy_resources_repair_only_with_confirmed_identity() {
+        let base = sandbox();
+        let root = base.join("plugins");
+        let id = "plugin.cup.fixture.translate";
+        let package = fixtures().join("packages").join(format!("{id}.potext"));
+        install(&root, &package).unwrap();
+        let alias = root.join("translate/plugin-old");
+        fs::rename(root.join("translate").join(id), &alias).unwrap();
+        let renamed = base.join("plugin-old.potext");
+        fs::copy(&package, &renamed).unwrap();
+        fs::remove_file(alias.join("main.js")).unwrap();
+        install(&root, &renamed).unwrap();
+        fs::write(alias.join("info.json"), b"{broken").unwrap();
+        let error = install(&root, &renamed).unwrap_err().to_string();
+        assert!(error.contains("restore its info.json"));
+        assert_eq!(fs::read(alias.join("info.json")).unwrap(), b"{broken");
         fs::remove_dir_all(base).unwrap();
     }
     #[test]
