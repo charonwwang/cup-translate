@@ -666,11 +666,10 @@ export default function TargetArea(props) {
     };
 
     const resultMode = classifySourceText(sourceText, activeSourceLanguage);
-    const isSingleWord = resultMode === 'word';
     const serviceModule = builtinServices[getServiceName(currentTranslateServiceInstanceKey)];
     const serviceLanguage = serviceModule?.Language;
     const effectiveTargetLanguage = targetLanguage;
-    const singleWordPronunciation = isSingleWord
+    const sourcePronunciation = sourceText.trim()
         ? serviceModule?.translate?.pronunciationFor?.(
               sourceText.trim(),
               serviceLanguage?.[activeSourceLanguage] ?? activeSourceLanguage,
@@ -711,7 +710,7 @@ export default function TargetArea(props) {
     };
 
     const wordEntry = useMemo(() => {
-        const base = buildWordEntry(result, sourceText, singleWordPronunciation);
+        const base = buildWordEntry(result, sourceText, sourcePronunciation);
         if (!dictionarySupplement) return base;
         const extra = buildWordEntry(
             dictionarySupplement,
@@ -728,14 +727,7 @@ export default function TargetArea(props) {
             examples: base.examples.length ? base.examples : extra.examples,
             senses: base.senses,
         };
-    }, [
-        result,
-        sourceText,
-        singleWordPronunciation,
-        dictionarySupplement,
-        activeSourceLanguage,
-        effectiveTargetLanguage,
-    ]);
+    }, [result, sourceText, sourcePronunciation, dictionarySupplement, activeSourceLanguage, effectiveTargetLanguage]);
     const supplementDictionary = () =>
         dictionaryRequest.current.run({
             key: dictionaryKey,
@@ -763,6 +755,42 @@ export default function TargetArea(props) {
                     publish
                 ),
         });
+    const pronunciationDetails = wordEntry.pronunciations.length > 0 && (
+        <div className='cup-phonetics'>
+            {wordEntry.pronunciations.map((pronunciation, index) => (
+                <span
+                    className='cup-phonetic'
+                    key={`${pronunciation.region}-${pronunciation.symbol}-${index}`}
+                >
+                    {pronunciation.region && <span className='cup-phonetic-region'>{pronunciation.region}</span>}
+                    {pronunciation.symbol}
+                    {speechService && dictionaryAudioBytes(pronunciation.voice, privacyMode) && (
+                        <button
+                            type='button'
+                            className='cup-speak-button'
+                            aria-label={
+                                sourceWordSpeech.status === 'idle'
+                                    ? t('translate.play_recording', {
+                                          region: pronunciation.region,
+                                      })
+                                    : t('translate.stop_speaking')
+                            }
+                            data-active={sourceWordSpeech.status !== 'idle'}
+                            onClick={() => speakSourceWord(pronunciation.voice)}
+                        >
+                            {sourceWordSpeech.status === 'loading' ? (
+                                <LuLoader2 className='animate-spin text-[11px]' />
+                            ) : sourceWordSpeech.status === 'playing' ? (
+                                <LuSquare className='text-[9px]' />
+                            ) : (
+                                <LuVolume2 className='text-[12px]' />
+                            )}
+                        </button>
+                    )}
+                </span>
+            ))}
+        </div>
+    );
     const phraseEntry = useMemo(
         () =>
             showBack
@@ -978,6 +1006,8 @@ export default function TargetArea(props) {
                     </div>
                 )}
 
+                {resultMode !== 'word' && result && pronunciationDetails}
+
                 {resultMode !== 'word' && result && speechService && (
                     <button
                         type='button'
@@ -1027,45 +1057,7 @@ export default function TargetArea(props) {
                                         </button>
                                     )}
                                 </h3>
-                                {wordEntry.pronunciations.length > 0 && (
-                                    <div className='cup-phonetics'>
-                                        {wordEntry.pronunciations.map((pronunciation, index) => (
-                                            <span
-                                                className='cup-phonetic'
-                                                key={`${pronunciation.region}-${pronunciation.symbol}-${index}`}
-                                            >
-                                                {pronunciation.region && (
-                                                    <span className='cup-phonetic-region'>{pronunciation.region}</span>
-                                                )}
-                                                {pronunciation.symbol}
-                                                {speechService &&
-                                                    dictionaryAudioBytes(pronunciation.voice, privacyMode) && (
-                                                        <button
-                                                            type='button'
-                                                            className='cup-speak-button'
-                                                            aria-label={
-                                                                sourceWordSpeech.status === 'idle'
-                                                                    ? t('translate.play_recording', {
-                                                                          region: pronunciation.region,
-                                                                      })
-                                                                    : t('translate.stop_speaking')
-                                                            }
-                                                            data-active={sourceWordSpeech.status !== 'idle'}
-                                                            onClick={() => speakSourceWord(pronunciation.voice)}
-                                                        >
-                                                            {sourceWordSpeech.status === 'loading' ? (
-                                                                <LuLoader2 className='animate-spin text-[11px]' />
-                                                            ) : sourceWordSpeech.status === 'playing' ? (
-                                                                <LuSquare className='text-[9px]' />
-                                                            ) : (
-                                                                <LuVolume2 className='text-[12px]' />
-                                                            )}
-                                                        </button>
-                                                    )}
-                                            </span>
-                                        ))}
-                                    </div>
-                                )}
+                                {pronunciationDetails}
                             </div>
                             <span className='cup-word-kind'>
                                 {t('translate.mode_word')} · {t(`languages.${activeSourceLanguage || 'auto'}`)}

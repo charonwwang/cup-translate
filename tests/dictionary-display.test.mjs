@@ -23,8 +23,10 @@ function render({
     privacyMode = 'normal',
     speech = 'local_tts',
     dictionaryState,
+    cachedPronunciation = '',
 }) {
     const calls = [];
+    const pronunciationQueries = [];
     let state = 0;
     const env = {
         ...view,
@@ -65,7 +67,19 @@ function render({
         ServiceSourceType: { PLUGIN: 'plugin' },
         whetherPluginService: () => false,
         INSTANCE_NAME_CONFIG_KEY: 'name',
-        builtinServices: { local_mt: { info: { icon: '' }, Language: {} }, google: { translate() {}, Language: {} } },
+        builtinServices: {
+            local_mt: {
+                info: { icon: '' },
+                Language: { en: 'en', zh_cn: 'zh-CN' },
+                translate: {
+                    pronunciationFor: (...args) => {
+                        pronunciationQueries.push(args);
+                        return cachedPronunciation;
+                    },
+                },
+            },
+            google: { translate() {}, Language: {} },
+        },
         builtinTtsServices: {
             local_tts: { Language: { en: 'en', zh_cn: 'zh_cn' }, tts: async (...args) => calls.push(args) },
         },
@@ -110,6 +124,7 @@ function render({
         tree,
         nodes,
         calls,
+        pronunciationQueries,
         labels: nodes.map((node) => node.props['aria-label']).filter(Boolean),
         text: JSON.stringify(tree),
     };
@@ -290,4 +305,35 @@ test('failed optional metadata leaves the rendered translation and original/targ
     card.nodes.find((node) => node.props['aria-label'] === 'translate.speak_target').props.onClick();
     await tick();
     assert.deepEqual(card.calls[0].slice(0, 2), ['成功译文', 'zh_cn']);
+});
+
+test('supplied non-English pronunciations remain visible without missing-English-IPA warnings', () => {
+    for (const [text, language, symbol] of [
+        ['卸载向导', 'zh_cn', 'Xièzài xiàngdǎo'],
+        ['bonjour', 'fr', '/bɔ̃ʒuʁ/'],
+        ['请卸载向导。', 'zh_cn', 'Qǐng xièzài xiàngdǎo'],
+    ]) {
+        const card = render({
+            text,
+            language,
+            result: { pronunciations: [{ symbol }], explanations: [{ explains: ['译文'] }] },
+        });
+        assert.ok(card.text.includes(symbol));
+        assert.ok(!card.text.includes('models.no_phonetics'));
+        assert.ok(!card.text.includes('translate.play_recording'));
+    }
+});
+
+test('cached provider pronunciation is displayed for Chinese text without an extra dictionary request', () => {
+    const card = render({
+        text: '卸载向导',
+        language: 'zh_cn',
+        result: 'Uninstall wizard',
+        cachedPronunciation: 'Xièzài xiàngdǎo',
+    });
+    assert.ok(card.text.includes('Xièzài xiàngdǎo'));
+    assert.ok(card.text.includes('Uninstall wizard'));
+    assert.ok(!card.text.includes('models.no_phonetics'));
+    assert.deepEqual(card.pronunciationQueries, [['卸载向导', 'zh-CN', 'zh-CN']]);
+    assert.deepEqual(card.calls, []);
 });
