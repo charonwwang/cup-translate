@@ -59,3 +59,7 @@ git diff --check
 4. Lingva 默认公共端点是否仍可用未验证，本分支修复配置交互与错误呈现，不承诺 DNS 或上游恢复。
 5. 容易与其他任务冲突的共享文件：`src/utils/store.js`、`src/utils/speechService.js`、`src/window/Config/pages/Models/index.jsx`、TTS 下的 ConfigModal/SelectModal/ServiceItem/index，以及 `en_US.json`、`zh_CN.json`、`zh_TW.json`。`serviceConfigCommit.js` 是本分支新增的小型持久化 helper，服务设置列表现在依赖其 Promise 结果。合并时保留其他任务的插件 ID 校验、Anki 和结果卡修改。
 6. 模型中心及服务设置的全局 Qwen 配置归属保持一致。若后续允许 Qwen 多实例，需要先实现每实例配置和共享资源协议，不能只恢复随机实例键。
+
+## 主 session 回修 R1 与 R2
+
+Lingva provider 现在拒绝非 2xx、缺失、空或非法音频字节，重新测试时清除先前成功状态。Lingva 与系统语音配置读取失败时独立展示错误、重试和关闭；重试或切换实例后旧响应失效，不用默认配置覆盖读取失败的旧值。新增测试直接连接真实 provider 与真实组件 handler，覆盖 503、非法音频、失败恢复及迟到读取。全量 Node 测试 539 通过；组合构建和桌面验收由主 session 集成后执行。

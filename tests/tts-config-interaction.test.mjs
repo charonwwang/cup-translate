@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { componentHarness } from './helpers/componentHarness.mjs';
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 async function lingva({ rejectSave = false } = {}) {
@@ -92,5 +93,105 @@ test('Google and Piper/Kokoro registration waits for commit and retains the dial
         await h.find(tree, (n) => n.type === 'Button' && n.props.color === 'primary').props.onPress();
         assert.equal(closed, false);
         assert.match(h.find(h.render(props), (n) => n.props.role === 'alert').props.children.join(''), /disk full/);
+    }
+});
+
+async function actualLingva(fetch) {
+    const code = (await readFile('src/services/tts/lingva/index.jsx', 'utf8'))
+        .replace(/^import .*$/gm, '')
+        .replace(/^export \*.*$/gm, '')
+        .replace('export async function tts', 'async function tts');
+    return new Function('fetch', `${code}; return tts;`)(fetch);
+}
+
+test('Lingva connection test rejects actual HTTP failures and invalid audio, and clears previous success', async () => {
+    for (const response of [
+        { ok: false, status: 503 },
+        { ok: true, data: {} },
+        { ok: true, data: { audio: [] } },
+        { ok: true, data: { audio: [256] } },
+        { ok: true, data: { audio: 'not bytes' } },
+    ]) {
+        let current = { ok: true, data: { audio: [82, 73, 70, 70] } };
+        const tts = await actualLingva(async () => current);
+        const h = await componentHarness('src/services/tts/lingva/Config.jsx', 'Config', {
+            INSTANCE_NAME_CONFIG_KEY: 'instanceName',
+            store: { get: async () => ({ requestPath: 'fixture.invalid' }) },
+            Language: { en: 'en' },
+            tts,
+            open() {},
+        });
+        const props = {
+            instanceKey: 'lingva_tts@test',
+            onClose() {},
+            updateServiceList() {
+                throw new Error('unexpected save');
+            },
+        };
+        h.render(props);
+        await flush();
+        const click = async () =>
+            h
+                .find(h.render(props), (n) => n.type === 'Button' && n.props.children.includes('models.speech_test'))
+                .props.onPress();
+        await click();
+        h.find(h.render(props), (n) => n.props.role === 'status' && n.props.children.includes('models.speech_test_ok'));
+        current = response;
+        await click();
+        h.find(h.render(props), (n) => n.props.role === 'alert');
+        assert.throws(() =>
+            h.find(
+                h.render(props),
+                (n) => n.props.role === 'status' && n.props.children.includes('models.speech_test_ok')
+            )
+        );
+    }
+});
+
+test('voice config read errors stay visible, retry preserves stored config and stale reads cannot replace it', async () => {
+    for (const service of ['lingva', 'local_tts']) {
+        let attempt = 0,
+            closed = 0,
+            finishOld;
+        const original = { instanceName: 'Stored voice', requestPath: 'stored.invalid' };
+        const h = await componentHarness(`src/services/tts/${service}/Config.jsx`, 'Config', {
+            INSTANCE_NAME_CONFIG_KEY: 'instanceName',
+            store: {
+                get: async () => {
+                    attempt++;
+                    if (attempt === 1) throw new Error('read unavailable');
+                    if (attempt === 2)
+                        return new Promise((resolve) => {
+                            finishOld = resolve;
+                        });
+                    return original;
+                },
+            },
+            Language: { en: 'en' },
+            tts() {},
+            open() {},
+        });
+        const props = {
+            instanceKey: `${service}@a`,
+            onClose: () => closed++,
+            updateServiceList() {
+                throw new Error('unexpected save');
+            },
+        };
+        h.render(props);
+        await flush();
+        const failed = h.render(props);
+        h.find(failed, (n) => n.props.role === 'alert');
+        assert.match(h.find(failed, (n) => n.type === 'pre').props.children.join(''), /read unavailable/);
+        h.find(failed, (n) => n.type === 'Button' && n.props.children.includes('translate.retry')).props.onPress();
+        h.render(props);
+        await flush();
+        const changed = { ...props, instanceKey: `${service}@b` };
+        h.render(changed);
+        await flush();
+        finishOld({ instanceName: 'Stale voice' });
+        await flush();
+        h.find(h.render(changed), (n) => n.type === 'Input' && n.props.value === 'Stored voice');
+        assert.equal(closed, 0);
     }
 });

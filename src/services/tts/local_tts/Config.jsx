@@ -13,9 +13,12 @@ export function Config(props) {
     const { t } = useTranslation();
     const [config, setConfig] = useState(null);
     const [error, setError] = useState('');
+    const [readAttempt, setReadAttempt] = useState(0);
     const [saving, setSaving] = useState(false);
     useEffect(() => {
         let live = true;
+        setConfig(null);
+        setError('');
         store
             .get(instanceKey)
             .then((value) => {
@@ -25,7 +28,25 @@ export function Config(props) {
         return () => {
             live = false;
         };
-    }, [instanceKey]);
+    }, [instanceKey, readAttempt]);
+
+    if (config === null) {
+        return error ? (
+            <div role='alert'>
+                <p>{t('models.speech_action_failed')}</p>
+                <pre className='whitespace-pre-wrap break-all select-text'>{error}</pre>
+                <Button onPress={() => setReadAttempt((attempt) => attempt + 1)}>{t('translate.retry')}</Button>
+                <Button
+                    variant='light'
+                    onPress={onClose}
+                >
+                    {t('common.close')}
+                </Button>
+            </div>
+        ) : (
+            <p role='status'>{t('models.checking')}</p>
+        );
+    }
 
     return (
         config !== null && (

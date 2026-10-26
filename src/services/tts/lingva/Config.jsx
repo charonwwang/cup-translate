@@ -14,10 +14,13 @@ export function Config(props) {
     const { t } = useTranslation();
     const [lingvaConfig, setLingvaConfig] = useState(null);
     const [error, setError] = useState('');
+    const [readAttempt, setReadAttempt] = useState(0);
     const [tested, setTested] = useState(false);
     const revision = useRef(0);
     useEffect(() => {
         let live = true;
+        setLingvaConfig(null);
+        setError('');
         store
             .get(instanceKey)
             .then((value) => {
@@ -34,7 +37,7 @@ export function Config(props) {
             live = false;
             revision.current++;
         };
-    }, [instanceKey]);
+    }, [instanceKey, readAttempt]);
     const edit = (value) => {
         revision.current++;
         setTested(false);
@@ -44,6 +47,7 @@ export function Config(props) {
         const id = revision.current;
         setIsLoading(true);
         setError('');
+        if (test) setTested(false);
         try {
             if (test) {
                 await tts('hello', Language.en, { config: lingvaConfig });
@@ -58,6 +62,24 @@ export function Config(props) {
             if (id === revision.current) setIsLoading(false);
         }
     };
+
+    if (lingvaConfig === null) {
+        return error ? (
+            <div role='alert'>
+                <p>{t('models.speech_action_failed')}</p>
+                <pre className='whitespace-pre-wrap break-all select-text'>{error}</pre>
+                <Button onPress={() => setReadAttempt((attempt) => attempt + 1)}>{t('translate.retry')}</Button>
+                <Button
+                    variant='light'
+                    onPress={onClose}
+                >
+                    {t('common.close')}
+                </Button>
+            </div>
+        ) : (
+            <p role='status'>{t('models.checking')}</p>
+        );
+    }
 
     return (
         lingvaConfig !== null && (
