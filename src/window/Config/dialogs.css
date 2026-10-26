@@ -6,7 +6,9 @@
     border-radius: 18px;
     box-shadow: var(--cup-shadow);
     max-height: calc(100dvh - 48px);
+    overflow: hidden;
 }
+.service-config-dialog:focus, .model-choice-dialog:focus { outline: none; }
 .service-config-dialog { width: calc(100vw - 48px); max-width: 560px; }
 .service-config-header { padding: 20px 24px 16px; border-bottom: 1px solid var(--cup-border); font-size: 17px; font-weight: 600; align-items: center; }
 .service-config-body { padding: 20px 24px; gap: 14px; font-size: 13px; }
@@ -48,6 +50,7 @@
 .qwen-remove-confirm { border: 1px solid #b1464650; border-radius: 10px; padding: 12px; margin-top: 10px; }
 .qwen-ready-footer { justify-content: space-between; background: var(--cup-sidebar); }
 .qwen-ready-footer > label { flex: 1; font-size: 12px; }
+.qwen-ready-footer [data-slot='label'] { font-size: 12px; line-height: 1.5; }
 .qwen-ready-footer > .qwen-footer-actions { display: flex; gap: 8px; }
 @media(max-width:560px) {
     .service-picker-dialog .service-config-body { grid-template-columns: 1fr; }
