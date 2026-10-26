@@ -1,6 +1,6 @@
 import { translationResultToText } from '../../utils/translationResult.js';
 
-export function classifySourceText(value) {
+export function classifySourceText(value, language = '') {
     const text = typeof value === 'string' ? value.trim() : '';
     if (!text) return 'phrase';
 
@@ -8,9 +8,17 @@ export function classifySourceText(value) {
     if (text.includes('\n') || sentences.length >= 2 || text.length > 180) {
         return 'paragraph';
     }
-    if (!/\s/.test(text) && text.length <= 48) {
+    if (/[。！？.!?]$/.test(text)) return 'sentence';
+    // Script alone cannot establish the language (or a word boundary).
+    if (/^en(?:[-_]|$)/i.test(language) && /^[a-z]+(?:['’-][a-z]+)*$/i.test(text) && text.length <= 48) {
         return 'word';
     }
+    if (
+        !language ||
+        language === 'auto' ||
+        /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(text)
+    )
+        return 'text';
     return 'phrase';
 }
 
