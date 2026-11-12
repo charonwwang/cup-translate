@@ -1,0 +1,17 @@
+{
+    "productName": "cup-translate",
+    "version": "3.0.14",
+    "identifier": "com.cup-translate.app",
+    "build": { "frontendDist": "web" },
+    "app": {
+        "withGlobalTauri": true,
+        "security": {
+            "capabilities": ["smoke"],
+            "csp": "default-src 'none'; script-src 'self'; connect-src ipc: http://ipc.localhost"
+        }
+    },
+    "bundle": {
+        "active": false,
+        "icon": ["../../src-tauri/icons/icon.png", "../../src-tauri/icons/icon.ico"]
+    }
+}

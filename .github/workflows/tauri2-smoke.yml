@@ -1,0 +1,78 @@
+name: Verify Tauri 2 migration smoke
+on:
+    push:
+        branches: ['codex/tauri2-migration']
+        paths:
+            - 'migration/tauri2-smoke/**'
+            - '.github/workflows/tauri2-smoke.yml'
+            - 'src-tauri/icons/**'
+permissions:
+    contents: read
+concurrency:
+    group: tauri2-smoke-${{ github.ref }}
+    cancel-in-progress: true
+jobs:
+    desktop:
+        runs-on: ${{ matrix.os }}
+        timeout-minutes: 30
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - { os: macos-15, target: aarch64-apple-darwin, binary: cup-tauri2-smoke }
+                    - { os: macos-15-intel, target: x86_64-apple-darwin, binary: cup-tauri2-smoke }
+                    - { os: windows-latest, target: x86_64-pc-windows-msvc, binary: cup-tauri2-smoke.exe }
+                    - { os: windows-latest, target: i686-pc-windows-msvc, binary: cup-tauri2-smoke.exe }
+                    - { os: windows-latest, target: aarch64-pc-windows-msvc, binary: cup-tauri2-smoke.exe }
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  persist-credentials: false
+            - uses: dtolnay/rust-toolchain@stable
+              with:
+                  targets: ${{ matrix.target }}
+            - run: cargo build --locked --release --manifest-path migration/tauri2-smoke/Cargo.toml --target ${{ matrix.target }}
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: tauri2-smoke-${{ matrix.target }}
+                  path: migration/tauri2-smoke/target/${{ matrix.target }}/release/${{ matrix.binary }}
+                  if-no-files-found: error
+    linux:
+        runs-on: ${{ matrix.os }}
+        container: rust:bookworm
+        timeout-minutes: 30
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
+                    - { os: ubuntu-latest, target: i686-unknown-linux-gnu }
+                    - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
+        env:
+            TARGET: ${{ matrix.target }}
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  persist-credentials: false
+            - name: Install WebKitGTK 4.1 for the build target
+              shell: bash
+              run: |
+                  if [ "$TARGET" = i686-unknown-linux-gnu ]; then
+                      dpkg --add-architecture i386
+                      apt-get -o APT::Update::Error-Mode=any update
+                      apt-get install -y --no-install-recommends gcc-multilib pkg-config libwebkit2gtk-4.1-dev:i386
+                      {
+                          echo PKG_CONFIG_ALLOW_CROSS=1
+                          echo PKG_CONFIG_LIBDIR=/usr/lib/i386-linux-gnu/pkgconfig:/usr/share/pkgconfig
+                      } >> "$GITHUB_ENV"
+                  else
+                      apt-get -o APT::Update::Error-Mode=any update
+                      apt-get install -y --no-install-recommends pkg-config libwebkit2gtk-4.1-dev
+                  fi
+            - run: rustup target add "$TARGET"
+            - run: cargo build --locked --release --manifest-path migration/tauri2-smoke/Cargo.toml --target "$TARGET"
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: tauri2-smoke-${{ matrix.target }}
+                  path: migration/tauri2-smoke/target/${{ matrix.target }}/release/cup-tauri2-smoke
+                  if-no-files-found: error

@@ -1,0 +1,15 @@
+[package]
+name = "cup-tauri2-smoke"
+version = "3.0.14"
+edition = "2021"
+publish = false
+
+[build-dependencies]
+tauri-build = "2.7.4"
+
+[dependencies]
+tauri = { version = "2.12.5", features = ["custom-protocol"] }
+tempfile = "3"
+
+[profile.release]
+strip = "debuginfo"

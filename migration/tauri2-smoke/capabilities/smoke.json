@@ -1,0 +1,6 @@
+{
+    "identifier": "smoke",
+    "description": "Only the smoke window may call the sample Rust command.",
+    "windows": ["smoke"],
+    "permissions": ["allow-probe"]
+}
