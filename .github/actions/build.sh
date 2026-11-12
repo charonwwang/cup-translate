@@ -9,12 +9,12 @@ if [ "${BUILD_VERIFY_ONLY:-false}" = true ]; then
         export APPIMAGE_BUNDLE_GSTREAMER=1
         bundles+=,appimage
     fi
-    pnpm tauri build --target "$INPUT_TARGET" -b "$bundles"
+    pnpm tauri build --features linux-webkitgtk-4-1 --target "$INPUT_TARGET" -b "$bundles"
 elif [ "$INPUT_TARGET" = "x86_64-unknown-linux-gnu" ]; then
     export APPIMAGE_BUNDLE_GSTREAMER=1
-    pnpm tauri build --target "$INPUT_TARGET"
+    pnpm tauri build --features linux-webkitgtk-4-1 --target "$INPUT_TARGET"
 else
-    pnpm tauri build --target "$INPUT_TARGET" -b deb,rpm
+    pnpm tauri build --features linux-webkitgtk-4-1 --target "$INPUT_TARGET" -b deb,rpm
 fi
 # A metadata rewrite cannot fix a binary still linked to the missing ABI.
 dynamic="$(readelf -d "src-tauri/target/$INPUT_TARGET/release/cup-translate")"
@@ -31,5 +31,5 @@ done
 
 # Native hosts can execute the tests; never try to run a cross-built executable.
 if [ "$(rustc -vV | sed -n 's/^host: //p')" = "$INPUT_TARGET" ]; then
-    cargo test --manifest-path src-tauri/Cargo.toml --release --features custom-protocol --target "$INPUT_TARGET"
+    cargo test --manifest-path src-tauri/Cargo.toml --release --features custom-protocol,linux-webkitgtk-4-1 --target "$INPUT_TARGET"
 fi

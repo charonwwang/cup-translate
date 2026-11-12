@@ -88,5 +88,7 @@ export PKG_CONFIG_PATH="$compat_dir${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
 for pair in webkit2gtk javascriptcoregtk; do
     ln -s "$compat_dir/lib$pair-4.1.so" "$compat_dir/lib$pair-4.0.so"
 done
+# The Wry backport uses libsoup 3 for the header object returned by 4.1.
+ln -s "/usr/lib/$multiarch/libsoup-3.0.so.0" "$compat_dir/libsoup-3.0.so"
 export LIBRARY_PATH="$compat_dir${LIBRARY_PATH:+:$LIBRARY_PATH}"
 bash .github/actions/build.sh

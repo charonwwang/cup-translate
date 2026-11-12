@@ -1545,6 +1545,7 @@ dependencies = [
  "walkdir",
  "window-shadows",
  "windows 0.58.0",
+ "wry",
  "zip 9.3.0",
 ]
 
@@ -8589,7 +8590,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -9273,8 +9274,6 @@ checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
 [[package]]
 name = "wry"
 version = "0.24.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a2a144c3ab5e83e04724bc8e67cea552ffae413185fda459fafdae173fd985d"
 dependencies = [
  "base64 0.13.1",
  "block",
