@@ -290,5 +290,7 @@ test('Google missing IPA and examples are supplemented without delaying the main
     assert.equal(enriched.sentence[0].target, '描出这条线。');
     assert.equal(enriched.dictionarySource, 'Free Dictionary');
     assert.equal(updates[0].pronunciations[0].symbol, '/treɪs/', 'IPA publishes before example translation');
+    assert.equal(updates[0].sentence[0].target, '', 'the rendered source-only result stays unchanged');
+    assert.notEqual(enriched, updates[0], 'React can observe the completed example translation');
     assert.equal(main.sentence.length, 0, 'cached main result is not mutated');
 });

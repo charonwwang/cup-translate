@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 
@@ -32,9 +32,42 @@ test('desktop verification builds installers without granting publication permis
         'x86_64-unknown-linux-gnu',
         'i686-unknown-linux-gnu',
         'aarch64-unknown-linux-gnu',
-        'armv7-unknown-linux-gnueabihf',
     ])
         assert.ok(workflow.includes(target));
+});
+
+test('no workflow keeps the unsupported ARMv7 build target', async () => {
+    const directory = '.github/workflows';
+    for (const file of (await readdir(directory)).filter((name) => /\.ya?ml$/.test(name))) {
+        const workflow = await readFile(`${directory}/${file}`, 'utf8');
+        assert.doesNotMatch(workflow, /armv7-unknown-linux-gnueabihf/, `${file} must not build ARMv7 on x64 runners`);
+    }
+});
+
+test('pnpm is pinned to the version used by every workflow', async () => {
+    const pkg = JSON.parse(await readFile('package.json', 'utf8'));
+    assert.equal(pkg.packageManager, 'pnpm@12.10.1');
+    assert.equal(pkg.pnpm, undefined, 'pnpm 12 rejects the legacy package.json pnpm field');
+    for (const file of [
+        '.github/workflows/build-desktop.yml',
+        '.github/workflows/release-desktop.yml',
+        '.github/workflows/package.yml',
+        '.github/workflows/macos-release.yml',
+    ]) {
+        const workflow = await readFile(file, 'utf8');
+        assert.match(workflow, /pnpm\/action-setup@v4/);
+        assert.match(workflow, /version: 12\.10\.1/);
+        assert.doesNotMatch(workflow, /version: 9\b/);
+    }
+});
+
+test('Linux container build installs the same pnpm as package.json', async () => {
+    const pkg = JSON.parse(await readFile('package.json', 'utf8'));
+    const pinned = pkg.packageManager;
+    const entrypoint = await readFile('.github/actions/build-for-linux/entrypoint.sh', 'utf8');
+    assert.match(entrypoint, /npm install -g pnpm@\S+/);
+    assert.ok(entrypoint.includes(`npm install -g ${pinned}`), `entrypoint must install ${pinned}`);
+    assert.doesNotMatch(entrypoint, /pnpm@9\b/, 'pnpm 9 cannot freeze-install the pnpm 12 lockfile');
 });
 
 test('unsupported native-model platforms retain IPC commands without compiling the unsupported CTranslate2 backend', async () => {

@@ -1,0 +1,56 @@
+# cargo-audit 配置
+#
+# 只压制「存在于 Cargo.lock、但不进入任何发布目标编译图」的告警。
+# 登记：2026-11-11（维护者在会话中明确授权下列 15 个 RUSTSEC ID）。
+# 复审截止：2027-02-11。
+# 依据：docs/reviews/dependency-audit-2026-11-04.md 的「2026-11-10 复核与定向升级」章节。
+#
+# 判定方法：对 8 个发布目标（Windows x64/x86/arm64、macOS x64/arm64、
+# Linux x64/i686/arm64）执行
+#   cargo tree --target <triple> -e normal,build --features custom-protocol
+# 下列 crate 均未出现。它们只由 lockfile 为可选特性记录，发布二进制不编译。
+#
+# 维护规则：
+# - 若某个可选特性被启用（例如 reqwest 改用 rustls-tls、sqlx 启用 mysql、
+#   rust_decimal 启用 rkyv），或这些 crate 进入任一发布目标编译图，
+#   必须立即删除对应条目，而不是延长复审日期。
+# - 复审到期前重跑 cargo audit；上游若已有修复版本，优先升级并删除忽略。
+# - 本文件只压制下列 ID，不压制同一 crate 的其它新公告。
+# - 进入发布产物的 8 条告警（zip / h2 / quick-xml 0.31 / libsqlite3-sys）
+#   不在本文件中，必须继续报告。它们需 Tauri 2.x 迁移才能消除
+#   （见 docs/plans/TAURI2-MIGRATION.md）。
+#
+# 运行位置：仓库根目录（cargo-audit 只读取 ./.cargo/audit.toml）：
+#   cargo audit --file src-tauri/Cargo.lock
+
+[advisories]
+ignore = [
+    # rustls 0.23.16：仅经 reqwest 0.12 的可选 rustls-tls 特性。
+    # 本应用 reqwest 使用 native-tls。
+    "RUSTSEC-2024-0399",
+    "RUSTSEC-2026-0285",
+    "RUSTSEC-2026-0346",
+    "RUSTSEC-2026-0348",
+    "RUSTSEC-2026-0349",
+
+    # rustls-webpki 0.102.8：同上，经 rustls。
+    "RUSTSEC-2026-0049",
+    "RUSTSEC-2026-0098",
+    "RUSTSEC-2026-0099",
+    "RUSTSEC-2026-0104",
+    "RUSTSEC-2026-0382",
+
+    # ring 0.17.8：仅经 rustls-webpki。
+    "RUSTSEC-2025-0009",
+
+    # rkyv 0.7.45：rust_decimal 的可选 rkyv 特性
+    # （byte-unit → tauri-plugin-log）。
+    "RUSTSEC-2026-0001",
+    "RUSTSEC-2026-0235",
+
+    # rsa 0.9.6：sqlx-mysql 的可选 mysql 特性。
+    "RUSTSEC-2023-0071",
+
+    # tracing-subscriber 0.3.18：loom → state → tauri，不在发布目标图中。
+    "RUSTSEC-2025-0055",
+]

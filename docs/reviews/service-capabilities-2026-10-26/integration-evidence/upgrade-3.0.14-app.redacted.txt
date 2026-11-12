@@ -1,0 +1,53 @@
+# 脱敏说明：仅将本机用户名路径替换为 <user>，其余行原样保留。
+# 原始 .log 按 .gitignore 规则不入库，留在本机。
+[2026-11-04][10:54:52][INFO][cup_translate] ============== Start App ==============
+[2026-11-04][10:54:52][INFO][cup_translate] MacOS Accessibility Trusted: false
+[2026-11-04][10:54:52][INFO][cup_translate] Init Config Store
+[2026-11-04][10:54:52][INFO][cup_translate::config] Load config from: "/Users/<user>/Library/Application Support/com.cup-translate.app/config.json"
+[2026-11-04][10:54:52][INFO][cup_translate::config] Config loaded
+[2026-11-04][10:54:52][INFO][cup_translate::tray] Update tray with language: zh_cn, copy mode: disable
+[2026-11-04][10:54:52][INFO][cup_translate::hotkey] Registered global shortcut: Ctrl+Shift+F for hotkey_selection_translate
+[2026-11-04][10:54:52][INFO][cup_translate::hotkey] Registered global shortcut: Ctrl+Shift+T for hotkey_clipboard_translate
+[2026-11-04][10:54:52][INFO][cup_translate::hotkey] Registered global shortcut: Ctrl+Shift+B for hotkey_input_translate
+[2026-11-04][10:54:52][INFO][cup_translate::hotkey] Registered global shortcut: Ctrl+Shift+N for hotkey_ocr_recognize
+[2026-11-04][10:54:52][INFO][cup_translate::hotkey] Registered global shortcut: Ctrl+Shift+V for hotkey_ocr_translate
+[2026-11-04][10:54:54][INFO][cup_translate::updater] New version available
+[2026-11-04][10:54:54][INFO][cup_translate::window] Mouse position: 1347, 126
+[2026-11-04][10:54:54][INFO][cup_translate::window] Current Monitor: Monitor { name: Some("Monitor #14598"), size: PhysicalSize { width: 1920, height: 1080 }, position: PhysicalPosition { x: 0, y: 0 }, scale_factor: 1.0 }
+[2026-11-04][10:54:54][INFO][cup_translate::window] Window not existence, Creating new window: updater
+[2026-11-04][11:14:11][INFO][cup_translate] ============== Start App ==============
+[2026-11-04][11:14:11][INFO][cup_translate] ============== Start App ==============
+[2026-11-04][11:14:11][INFO][cup_translate] MacOS Accessibility Trusted: true
+[2026-11-04][11:14:11][INFO][cup_translate] Init Config Store
+[2026-11-04][11:14:11][INFO][cup_translate::config] Load config from: "/Users/<user>/Library/Application Support/com.cup-translate.app/config.json"
+[2026-11-04][11:14:11][INFO][cup_translate] MacOS Accessibility Trusted: true
+[2026-11-04][11:14:11][INFO][cup_translate] Init Config Store
+[2026-11-04][11:14:11][INFO][cup_translate::config] Load config from: "/Users/<user>/Library/Application Support/com.cup-translate.app/config.json"
+[2026-11-04][11:14:11][INFO][cup_translate::config] Config loaded
+[2026-11-04][11:14:11][INFO][cup_translate::config] Config loaded
+[2026-11-04][11:14:11][INFO][cup_translate::tray] Update tray with language: zh_cn, copy mode: disable
+[2026-11-04][11:14:11][INFO][cup_translate::tray] Update tray with language: zh_cn, copy mode: disable
+[2026-11-04][11:14:11][WARN][cup_translate::server] Server start failed: Address already in use (os error 48)
+[2026-11-04][11:14:11][INFO][cup_translate::hotkey] Registered global shortcut: Ctrl+Shift+F for hotkey_selection_translate
+[2026-11-04][11:14:11][INFO][cup_translate::hotkey] Registered global shortcut: Ctrl+Shift+F for hotkey_selection_translate
+[2026-11-04][11:14:11][INFO][cup_translate::hotkey] Registered global shortcut: Ctrl+Shift+T for hotkey_clipboard_translate
+[2026-11-04][11:14:11][INFO][cup_translate::hotkey] Registered global shortcut: Ctrl+Shift+T for hotkey_clipboard_translate
+[2026-11-04][11:14:11][INFO][cup_translate::hotkey] Registered global shortcut: Ctrl+Shift+B for hotkey_input_translate
+[2026-11-04][11:14:11][INFO][cup_translate::hotkey] Registered global shortcut: Ctrl+Shift+B for hotkey_input_translate
+[2026-11-04][11:14:11][INFO][cup_translate::hotkey] Registered global shortcut: Ctrl+Shift+N for hotkey_ocr_recognize
+[2026-11-04][11:14:11][INFO][cup_translate::hotkey] Registered global shortcut: Ctrl+Shift+N for hotkey_ocr_recognize
+[2026-11-04][11:14:11][INFO][cup_translate::hotkey] Registered global shortcut: Ctrl+Shift+V for hotkey_ocr_translate
+[2026-11-04][11:14:11][INFO][cup_translate::hotkey] Registered global shortcut: Ctrl+Shift+V for hotkey_ocr_translate
+[2026-11-04][11:14:47][INFO][tauri_plugin_autostart] auto_start path /Applications/cup-translate.app/Contents/MacOS/cup-translate
+[2026-11-04][11:14:48][INFO][cup_translate] ============== Start App ==============
+[2026-11-04][11:14:48][INFO][cup_translate] MacOS Accessibility Trusted: true
+[2026-11-04][11:14:48][INFO][cup_translate] Init Config Store
+[2026-11-04][11:14:48][INFO][cup_translate::config] Load config from: "/Users/<user>/Library/Application Support/com.cup-translate.app/config.json"
+[2026-11-04][11:14:48][INFO][cup_translate::config] Config loaded
+[2026-11-04][11:14:48][INFO][cup_translate::tray] Update tray with language: zh_cn, copy mode: disable
+[2026-11-04][11:14:48][INFO][cup_translate::hotkey] Registered global shortcut: Ctrl+Shift+F for hotkey_selection_translate
+[2026-11-04][11:14:48][INFO][cup_translate::hotkey] Registered global shortcut: Ctrl+Shift+T for hotkey_clipboard_translate
+[2026-11-04][11:14:48][INFO][cup_translate::hotkey] Registered global shortcut: Ctrl+Shift+B for hotkey_input_translate
+[2026-11-04][11:14:48][INFO][cup_translate::hotkey] Registered global shortcut: Ctrl+Shift+N for hotkey_ocr_recognize
+[2026-11-04][11:14:48][INFO][cup_translate::hotkey] Registered global shortcut: Ctrl+Shift+V for hotkey_ocr_translate
+[2026-11-04][11:14:55][INFO][cup_translate::server] Handle / request

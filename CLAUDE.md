@@ -3,7 +3,7 @@
 > 本文件面向 **AI 编码助手 / 新加入的贡献者**，只写「不看就会踩坑」的硬约束。
 > 通用项目介绍见 `README.md`，构建细节见 `docs/BUILD.md`，维护路线见 `docs/MAINTENANCE.md`。
 >
-> 凡本文档中的事实均经实测确认（2025 年，Ubuntu 24.04 / Rust 1.95 / pnpm 12）。
+> 凡本文档中的事实均经实测确认（2025–2026 年，Ubuntu 24.04 / Rust 1.99 / pnpm 12.10.1）。
 
 ---
 
@@ -108,8 +108,11 @@ readelf -d src-tauri/target/release/cup-translate | grep NEEDED   # 只有 4.1
 
 - **RPM 安装未验证**：`tauri.conf.json` 的 `bundle.rpm.depends` 已改为 Fedora
   的运行包名称，但**尚未在 RPM 系发行版上实际安装运行**，发版前仍需验证。
-- **CI 未验证**：`package.yml` 已收敛为仅 `v*` tag 触发，但**从未打过 tag，因此从未真正跑通**。
-- **Windows 打包未验证**：当前仅在 Ubuntu 24.04 与 macOS (Apple Silicon) 上实测过。
+- **CI**：`v3.0.13`、`v3.0.14` 的 Release desktop 发布矩阵均成功；所有构建工作流均已移除
+  当前 runner 无法链接的 ARMv7 目标，配置回归测试通过，需在下次推送后确认远程流水线为绿。
+- **Windows 打包已在 CI 验证，运行期仍未人工验收**：x64/x86/ARM64 安装包可构建；当前实机桌面验收仍以 macOS Apple Silicon 为主。
+- **Rust 依赖审计未清零**：`zip`/`tar` 已完成定向升级，2026-11-10 定向升级后完整 lockfile 仍有 23 条 advisory；其中 15 条仅存于锁文件、不进入发布产物，已按授权登记在 `.cargo/audit.toml`（复审截止 2027-02-11），`cargo audit` 当前报告 8 条受 Tauri 1.x 约束的告警；
+  分类与下一版清理顺序见 `docs/reviews/dependency-audit-2026-11-04.md`。
 - **macOS 打包部分验证**（2026-10, M6 Mac mini / macOS 27）：`.app` 打包与启动实测通过，
   `.dmg` 需要 Finder AppleScript 授权（无 GUI 会话/未授权会报 `AppleEvent 已超时 (-1712)`，
   非编译问题；详见 `docs/BUILD.md` §6.6）。macOS 构建需要 `cmake`（ct2rs 静态编译），
@@ -210,8 +213,9 @@ ECDict（`pot-app.com/api/dict` 404/405）、Lingva 翻译（NXDOMAIN）、Bing 
      `tests/rust-feature-cfg.test.mjs` 守着这一点（含 `default` 与写法两个方向）。
 - **⚠️ 私钥不在仓库中**，必须存在于 GitHub Secrets（`TAURI_PRIVATE_KEY` / `TAURI_KEY_PASSWORD`）。
   私钥丢失＝更新器永久失效：已安装用户的二进制里烧死了旧公钥，换密钥对无法推送更新。
-- **⚠️ 整条链路从未跑通**（仓库从未打过 tag），首次发版前请按
-  `docs/MAINTENANCE.md` §7 的清单逐项确认。
+- **发布链路与应用内升级均已跑通**：`v3.0.13`、`v3.0.14` 已实际生成并公开 `update.json`、签名产物和安装包；
+  2026-11-04 已完成 macOS 3.0.13 → 3.0.14 的真实应用内升级，配置与历史记录保留。证据见
+  `docs/reviews/service-capabilities-2026-10-26/RELEASE-3.0.14.md`。
 - 改 `package.productName` 时**必须同步**改 `updater/*.mjs` 的产物名与
   `.github/workflows/package.yml` 的重命名步骤，否则更新检查会 404。
 
@@ -356,8 +360,8 @@ ci: 收敛上游发布流水线，避免误用上游身份发布
 仍需手工验证的部分：
 - **GUI 行为**（划词弹窗定位、热键实际触发、托盘交互）**没有自动化覆盖**，
   必须在真实会话下手工跑，见 §7
-- CI（`.github/workflows/package.yml`）会跑 `pnpm test`（三平台打包前各一次），
-  但**不跑 `cargo test`**，且**从未打过 tag，因此从未真正跑通**（见 §2.3）
+- Release desktop 的 preflight 会跑 `pnpm test`、Rust 全量测试和 Qwen Python 回归；
+  `Verify Windows and Linux builds` 只验证各目标构建，不替代真机安装与桌面交互验收（见 §2.3）。
 
 因此：
 - 改动后跑上面两条测试命令 + 手工验证受影响路径，并在提交信息里写清**验证方式**

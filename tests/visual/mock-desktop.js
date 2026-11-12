@@ -1,6 +1,7 @@
 import piperManifest from '../../src-tauri/resources/piper-catalog.json';
 import kokoroManifest from '../../src-tauri/resources/kokoro-model.json';
 import kokoroVoices from '../../src-tauri/resources/kokoro-voices.json';
+import { ANKI_DECK, ANKI_FIELDS, ANKI_MODEL } from '../../src/services/collection/anki/note.js';
 // Development-only fixture entry. Not referenced by either production build entry.
 // All desktop, disk and network operations terminate in memory here.
 const params = new URLSearchParams(location.search);
@@ -28,6 +29,8 @@ const settings = new Map(
         translate_source_language: params.get('source') || 'auto',
         translate_target_language: params.get('target') || 'zh_cn',
         privacy_mode: params.get('privacy') || 'standard',
+        glossary_v2: { enabled: false, entries: [], revision: 0 },
+        recognize_service_list: ['system', 'tesseract'],
         local_mt: { model: 'hymt' },
         translate_service_list:
             scenario === 'local' ? ['local_mt'] : scenario === 'multi' ? ['google', 'google@2'] : ['google'],
@@ -35,6 +38,8 @@ const settings = new Map(
         'google@2': { name: 'Google · 对照引擎' },
         tts_service_list: params.has('speech') ? ['local_tts'] : [],
         speech_policy: params.has('speech') ? 'local' : 'engine',
+        collection_service_list: params.has('collection') ? ['anki'] : [],
+        anki: {},
         history_disable: true,
         translate_close_on_blur: false,
     })
@@ -68,6 +73,35 @@ const installedVoices = new Set();
 let kokoroInstalled = false;
 let eventId = 0;
 const events = new Map();
+function silentSpeech() {
+    // Silent PCM for observing playback/stop without external services or sound.
+    const samples = 8000 * 30;
+    const bytes = new Uint8Array(44 + samples * 2);
+    const header = new DataView(bytes.buffer);
+    for (const [offset, text] of [
+        [0, 'RIFF'],
+        [8, 'WAVE'],
+        [12, 'fmt '],
+        [36, 'data'],
+    ])
+        [...text].forEach((char, index) => (bytes[offset + index] = char.charCodeAt(0)));
+    for (const [offset, value] of [
+        [4, bytes.length - 8],
+        [16, 16],
+        [24, 8000],
+        [28, 16000],
+        [40, samples * 2],
+    ])
+        header.setUint32(offset, value, true);
+    for (const [offset, value] of [
+        [20, 1],
+        [22, 1],
+        [32, 2],
+        [34, 16],
+    ])
+        header.setUint16(offset, value, true);
+    return Array.from(bytes);
+}
 window.__TAURI_METADATA__ = { __currentWindow: { label: view }, __windows: [{ label: view }] };
 window.__TAURI_IPC__ = async (args) => {
     const { cmd, callback, error, message = {}, __tauriModule: module } = args;
@@ -90,33 +124,8 @@ window.__TAURI_IPC__ = async (args) => {
                   : fixtureHistory.slice(Number(args.values?.[0] || 0), Number(args.values?.[0] || 0) + 20);
         } else if (cmd === 'plugin:sql|load') value = 'sqlite:fixture.db';
         else if (cmd === 'tts_speak') {
-            // Silent PCM for observing playback/stop without external services or sound.
-            const samples = 8000 * 30;
-            const bytes = new Uint8Array(44 + samples * 2);
-            const header = new DataView(bytes.buffer);
-            for (const [offset, text] of [
-                [0, 'RIFF'],
-                [8, 'WAVE'],
-                [12, 'fmt '],
-                [36, 'data'],
-            ])
-                [...text].forEach((char, index) => (bytes[offset + index] = char.charCodeAt(0)));
-            for (const [offset, value] of [
-                [4, bytes.length - 8],
-                [16, 16],
-                [24, 8000],
-                [28, 16000],
-                [40, samples * 2],
-            ])
-                header.setUint32(offset, value, true);
-            for (const [offset, value] of [
-                [20, 1],
-                [22, 1],
-                [32, 2],
-                [34, 16],
-            ])
-                header.setUint16(offset, value, true);
-            value = Array.from(bytes);
+            window.__fixtureSpeech = { text: args.text, lang: args.lang };
+            value = silentSpeech();
         } else if (cmd === 'get_text') value = source;
         else if (cmd === 'lang_detect') value = params.get('detect') || 'en';
         else if (cmd === 'piper_catalog')
@@ -192,6 +201,38 @@ window.__TAURI_IPC__ = async (args) => {
         } else if (module === 'Http') {
             if (message.cmd === 'createClient') value = 1;
             if (message.cmd === 'httpRequest') {
+                if (params.has('speech') && message.options?.url?.includes('/translate_tts?')) {
+                    const query = new URL(message.options.url).searchParams;
+                    window.__fixtureSpeech = { text: query.get('q'), lang: query.get('tl') };
+                    window[`_${callback}`]({
+                        url: 'fixture',
+                        status: 200,
+                        headers: {},
+                        rawHeaders: {},
+                        data: silentSpeech(),
+                    });
+                    return;
+                }
+                if (params.has('collection') && message.options?.url === 'http://127.0.0.1:8765') {
+                    const body = message.options.body?.payload;
+                    const { action, params: requestParams } = typeof body === 'string' ? JSON.parse(body) : body;
+                    const results = {
+                        version: 6,
+                        deckNames: [ANKI_DECK],
+                        modelNames: [ANKI_MODEL],
+                        modelFieldNames: ANKI_FIELDS,
+                        addNote: 1,
+                    };
+                    if (action === 'addNote') window.__fixtureAnkiNote = requestParams.note;
+                    window[`_${callback}`]({
+                        url: 'fixture',
+                        status: 200,
+                        headers: {},
+                        rawHeaders: {},
+                        data: JSON.stringify({ result: results[action], error: null }),
+                    });
+                    return;
+                }
                 await new Promise((resolve) => setTimeout(resolve, scenario === 'loading' ? 600000 : 300));
                 if (scenario === 'error') {
                     window[`_${callback}`]({
@@ -203,7 +244,23 @@ window.__TAURI_IPC__ = async (args) => {
                     });
                     return;
                 }
-                const dictionaryRequest = scenario === 'dictionary' && message.options?.query?.q === source;
+                const query = message.options?.query;
+                const dictionaryRequest = scenario === 'dictionary' && query?.q === source;
+                const exampleTranslations = {
+                    'The term starts tomorrow.': '新学期明天开始。',
+                    'This term is widely used.': '这个术语被广泛使用。',
+                };
+                const translation =
+                    (scenario === 'dictionary' && Object.hasOwn(exampleTranslations, query?.q)
+                        ? exampleTranslations[query.q]
+                        : null) ??
+                    (scenario === 'phrase'
+                        ? '考虑到；顾及'
+                        : scenario === 'paragraph'
+                          ? '好的设计让重要的内容一目了然。它消除阻力，让人们专注于真正重要的事。清晰不是装饰，而是产品的一部分。'
+                          : query?.tl === 'en'
+                            ? 'Good design makes important content clear.'
+                            : '好的设计，让重要的内容一目了然。');
                 const data = dictionaryRequest
                     ? [
                           [
@@ -215,19 +272,7 @@ window.__TAURI_IPC__ = async (args) => {
                               ['动词', null, [['称为'], ['把…叫作']]],
                           ],
                       ]
-                    : [
-                          [
-                              [
-                                  scenario === 'phrase'
-                                      ? '考虑到；顾及'
-                                      : scenario === 'paragraph'
-                                        ? '好的设计让重要的内容一目了然。它消除阻力，让人们专注于真正重要的事。清晰不是装饰，而是产品的一部分。'
-                                        : message.options?.query?.tl === 'en'
-                                          ? 'Good design makes important content clear.'
-                                          : '好的设计，让重要的内容一目了然。',
-                              ],
-                          ],
-                      ];
+                    : [[[translation]]];
                 if (scenario === 'pinyin')
                     data[0] = [
                         ['Uninstall wizard', source],
@@ -237,7 +282,7 @@ window.__TAURI_IPC__ = async (args) => {
                     data[13] = [
                         [
                             ['The <b>term</b> starts tomorrow.'],
-                            ['the musical <b>term</b> “leitmotiv”'],
+                            ['This <b>term</b> is widely used.'],
                             ['a term of abuse'],
                             ['the summer term'],
                             ['The pregnancy went to full term.'],

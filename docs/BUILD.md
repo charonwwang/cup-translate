@@ -3,7 +3,7 @@
 > 本文档记录 **从零构建 cup-translate 的完整步骤**，以及上游（Tauri v1 + pot-desktop）
 > 在新系统上构建时会踩到的**真实坑**与解决方案。
 >
-> 实测环境：Ubuntu 24.04 (GNOME)，Node 22+ / pnpm 9+ / Rust stable；2026 年已验证 Linux x86_64 的 `.deb`、`.rpm`、AppImage 构建，AppImage 已隔离启动。Windows/macOS 尚待各自 CI 运行验证。
+> 实测环境：Ubuntu 24.04 (GNOME)，Node 22+ / pnpm 12.10.1 / Rust stable；2026 年已验证 Linux x86_64 的 `.deb`、`.rpm`、AppImage 构建，AppImage 已隔离启动。Windows/macOS 构建与打包已由 v3.0.13、v3.0.14 的 CI 发布矩阵验证。
 >
 > **平台范围**：本文 §2/§3 的 pkg-config 开发包与 `.so` 软链是 **Linux 专有**的
 > WebKitGTK 兼容层，macOS/Windows 上没有对应物。macOS 构建见 §6.6。
@@ -42,7 +42,7 @@
 
 ```bash
 node -v      # 推荐 Node 22（仓库 .node-version）；本机 Node 24 亦已验证
-pnpm -v      # 需要 >= 8（pnpm 12 已验证）
+pnpm -v      # 12.10.1（package.json 的 packageManager 已固定）
 rustup show  # 需要 stable，实测 1.95
 ```
 
@@ -356,8 +356,8 @@ sudo apt install libfuse2
 | 项目 | 状态 |
 |---|---|
 | RPM 系（Fedora/RHEL）安装与依赖 | ❌ 已打包，但尚未在 Fedora/RHEL 上安装验证 |
-| CI 流水线 | ❌ 已收敛为仅 `v*` tag 触发，但从未打 tag，**从未真正运行过** |
-| Windows 构建与打包 | ❌ 仅在 Ubuntu 24.04 上验证过 |
+| CI 流水线 | ✅ v3.0.13、v3.0.14 的 Release desktop 与 Verify 流水线均已实际运行 |
+| Windows 构建与打包 | ✅ CI 已构建 x64/x86/ARM64 安装包；实机安装与运行期仍待人工验收 |
 | macOS 构建与打包 | ✅ **2026-10 在 Apple Silicon Mac mini (M6, macOS 27) 实测**：见 §6.6 |
 | 自动化测试 | ✅ 已加入前端资源、截图几何与 Rust 边界测试；跨系统 GUI 验收仍需补齐 |
 

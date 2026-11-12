@@ -552,12 +552,11 @@ mod tests {
         let _ = std::fs::remove_dir_all(&base);
     }
 
-    /// 端到端复现：预置 symlink 后直接 extract 会覆写插件目录之外的文件。
-    /// 这条测试锚定的是「zip crate 的真实行为」——即我们为什么要加那道检查；
-    /// 若将来 zip 升级后不再跟随 symlink，这条会失败，提示我们可以放宽。
+    /// 预置 symlink 后，zip 9 的 extract 必须拒绝写入而不是跟随到目录之外。
+    /// 生产安装路径仍保留额外的 target_is_symlinked 检查作为纵深防御。
     #[cfg(unix)]
     #[test]
-    fn zip_extract_would_follow_a_preexisting_symlink() {
+    fn zip_extract_rejects_a_preexisting_symlink() {
         let base = std::env::temp_dir().join(format!("ct-cmd-extract-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&base);
         let victim = base.join("victim.txt");
@@ -585,15 +584,11 @@ mod tests {
             writer.finish().unwrap();
         }
         let mut archive = zip::ZipArchive::new(std::fs::File::open(&zip_path).unwrap()).unwrap();
-        archive.extract(&dest_dir).unwrap();
-
-        // 记录 zip 的真实行为：它确实跟随了 symlink
-        let after = std::fs::read(&victim).unwrap();
-        assert_eq!(
-            after, b"EVIL",
-            "zip 0.6.6 extract follows pre-existing symlinks; if this changed, \
-             revisit target_is_symlinked in install_plugin"
+        assert!(
+            archive.extract(&dest_dir).is_err(),
+            "zip 9 must reject extraction through a pre-existing symlink"
         );
+        assert_eq!(std::fs::read(&victim).unwrap(), b"ORIGINAL");
 
         let _ = std::fs::remove_dir_all(&base);
     }

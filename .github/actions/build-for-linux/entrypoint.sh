@@ -12,7 +12,7 @@ esac
 wget "https://nodejs.org/dist/$node_version/node-$node_version-linux-$node_arch.tar.xz"
 tar -Jxf "node-$node_version-linux-$node_arch.tar.xz"
 export PATH="$(pwd)/node-$node_version-linux-$node_arch/bin:$PATH"
-npm install -g pnpm@9
+npm install -g pnpm@12.10.1
 
 # Docker action inputs are also passed as argv; accept either transport.
 INPUT_TARGET="${INPUT_TARGET:-${1:?Rust target is required}}"

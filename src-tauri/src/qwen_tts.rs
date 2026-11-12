@@ -360,7 +360,15 @@ fn bootstrap_uv(root: &Path) -> Result<PathBuf, String> {
         let index = (0..zip.len())
             .find(|i| {
                 zip.by_index(*i)
-                    .is_ok_and(|v| Path::new(v.name()).file_name().is_some_and(|s| s == name))
+                    .ok()
+                    .and_then(|v| {
+                        v.name().ok().map(|entry_name| {
+                            Path::new(entry_name.as_ref())
+                                .file_name()
+                                .is_some_and(|s| s == name)
+                        })
+                    })
+                    .unwrap_or(false)
             })
             .ok_or("Runtime executable missing")?;
         let mut bytes = Vec::new();

@@ -1,0 +1,47 @@
+{
+  "date": "2026-11-04",
+  "timezone": "Asia/Shanghai",
+  "platform": "macOS Apple Silicon",
+  "result": "passed",
+  "fromVersion": "3.0.13",
+  "toVersion": "3.0.14",
+  "sourceDMG": {
+    "url": "https://github.com/charonwwang/cup-translate/releases/download/v3.0.13/cup-translate_3.0.13_mac_arm64.dmg",
+    "size": 77564846,
+    "sha256": "d22f717adac36996377484d952eb0df0f4e1465a6c757b181019d8cf0db17190"
+  },
+  "updateAsset": {
+    "url": "https://github.com/charonwwang/cup-translate/releases/download/updater-v3.0.14/cup-translate_3.0.14_mac_arm64.app.tar.gz",
+    "size": 72325225,
+    "sha256": "00f59007ff052b8386c71d9c4942605032576ef707578c2a65a444f8fc29eb62",
+    "signatureURL": "https://github.com/charonwwang/cup-translate/releases/download/updater-v3.0.14/cup-translate_3.0.14_mac_arm64.app.tar.gz.sig",
+    "signatureSha256": "753c8f0357221beea649722ef25241d32b2b2d3dfe59dc1466f16128d431246c"
+  },
+  "detection": {
+    "log": "[2026-11-04][10:54:54][INFO][cup_translate::updater] New version available",
+    "evidence": "upgrade-3.0.13-detected-3.0.14.png"
+  },
+  "installation": {
+    "confirmationEvidence": "upgrade-3.0.13-confirm.png",
+    "restartLog": "[2026-11-04][11:14:11][INFO][cup_translate] ============== Start App ==============",
+    "installedVersion": "3.0.14",
+    "bundleIdentifier": "com.cup-translate.app",
+    "signature": "adhoc",
+    "binarySha256": "1a4b727c544defe75681bc390866b1d6ef0598562464969443358cdb738d3006",
+    "matchesOriginal314Binary": true,
+    "singleInstanceAfterManualRestart": true,
+    "listeningPort": 60828
+  },
+  "dataPreservation": {
+    "configSha256Before": "6f909763a88850a0c51e2a6c2c356008b5187b20de7a72d8539e9259c052e25f",
+    "configSha256After": "6f909763a88850a0c51e2a6c2c356008b5187b20de7a72d8539e9259c052e25f",
+    "configSemanticDiff": "empty",
+    "historyRowsBefore": 194,
+    "historyRowsAfter": 194
+  },
+  "notes": [
+    "Tauri only proceeds to installation after its embedded minisign key accepts the update signature; the in-app installation completed and relaunched.",
+    "The updater test window was operated through Computer Use. A transient second process appeared while the harness reconnected during relaunch; its cause was not conclusively established. A manual restart produced one process and one listening server. This remains a residual observation, not a proven product defect or a proven pass.",
+    "The original 3.0.14 app, config, and history were backed up outside the repository before installing 3.0.13; no user data was deleted."
+  ]
+}

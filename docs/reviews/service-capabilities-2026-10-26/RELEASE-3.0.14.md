@@ -16,7 +16,7 @@
 
 | 项目 | 结果 |
 | --- | --- |
-| 受 Git 管理的 Node 测试 | 582 通过 |
+| 受 Git 管理的 Node 测试 | 584 通过 |
 | Qwen Python 回归 | 8 通过 |
 | Rust 全量无默认 features | 199 通过、6 按原标记忽略 |
 | Vite 生产构建 | 通过 |
@@ -33,8 +33,26 @@ Python 回归加入 Release desktop 的 preflight，使语音设备选择、内�
 - 主发布 16 个附件，独立 updater 发布 12 个文件；28 个下载地址均以不含认证头的请求验证返回 200。GitHub 元数据读取使用已有登录，规避共享网络的匿名 API 配额限制；下载验证本身不依赖登录。
 - latest/update.json 的版本为 3.0.14，六个更新平台条目正确；清单 SHA-256 与 SHA256SUMS 相同，公开附件摘要与 GitHub 上传摘要逐项一致。
 - 独立下载 macOS ARM64 CI 产物，以客户端内置公钥再次验证更新签名，通过；压缩包内 CFBundleShortVersionString 为 3.0.14，应用标识保持 com.cup-translate.app。
-- 没有替换已公开的旧版本附件，没有修改更新验签公钥。此次不把每个平台人工安装、真实外部收藏账号写入或应用内完整升级操作标记为已完成。
+- 没有替换已公开的旧版本附件，没有修改更新验签公钥。此次不把每个平台人工安装或真实外部收藏账号写入标记为已完成；macOS 应用内升级另行完成验收，见下节。
 
-单独的 [Verify Windows and Linux builds](https://github.com/charonwwang/cup-translate/actions/runs/40302597939) 在六个目标成功，ARMv7 仍因既有扩展构建问题失败；上一版也存在同目标失败。本次正式发布矩阵不含 ARMv7，该失败不影响上述七个已成功的发布目标。
+单独的 [Verify Windows and Linux builds](https://github.com/charonwwang/cup-translate/actions/runs/40302597939) 在六个目标成功，ARMv7 仍因既有扩展构建问题失败；上一版也存在同目标失败。本次正式发布矩阵不含 ARMv7，该失败不影响上述七个已成功的发布目标。后续已从 Verify 工作流移除 ARMv7 目标，并加入“工作流不得重新包含 ARMv7”的配置回归测试。
 
 机器证据：[发布验证记录](integration-evidence/release-3.0.14.json)。
+
+## 应用内升级验收（2026-11-04）
+
+使用公开发布的 3.0.13 macOS ARM64 DMG 安装旧版，通过应用启动检查进入更新窗口，完成 3.0.14 的下载、Tauri 内置公钥验签、替换和重启。3.0.13 DMG 为 77,564,846 字节，SHA-256 与 release 的 `SHA256SUMS` 一致：`d22f717adac36996377484d952eb0df0f4e1465a6c757b181019d8cf0db17190`。
+
+| 验收点 | 证据 |
+| --- | --- |
+| 旧版为 3.0.13 | `CFBundleShortVersionString=3.0.13`；启动日志记录配置路径 |
+| 检测到 3.0.14 | `[2026-11-04][10:54:54][INFO][cup_translate::updater] New version available` |
+| 更新窗口展示 3.0.14 | [检测截图](integration-evidence/upgrade-3.0.13-detected-3.0.14.png) |
+| 用户确认后下载安装 | [确认截图](integration-evidence/upgrade-3.0.13-confirm.png)；未验签通过不会进入安装 |
+| 安装后重启 | `[2026-11-04][11:14:11][INFO][cup_translate] ============== Start App ==============` |
+| 安装结果为 3.0.14 | `CFBundleShortVersionString=3.0.14`；主程序 SHA-256 `1a4b727c...d3006` 与原 3.0.14 应用一致 |
+| 配置未丢失 | 升级前后配置 SHA-256 均为 `6f909763...e25f`，规范化 JSON diff 为空 |
+| 历史未丢失 | `history.db` 的 `history` 表升级前后均为 194 行 |
+| 单实例运行（**待复验**） | 11:14:11 的重启日志中同一启动块出现两份 `Start App`；第二个进程注册了全局快捷键，随后 `Server start failed: Address already in use`，说明它到达了热键注册阶段，单实例守卫没有在此时拦下它。CUA 在替换期间重连被认为是触发条件之一，但未证实；手动重启后 11:14:48 仅一套启动记录，并只有 1 个进程监听 `127.0.0.1:60828`。**在复现前不能定为产品缺陷，也不能视为通过** |
+
+完整机器记录见 [升级证据 JSON](integration-evidence/upgrade-3.0.13-to-3.0.14.json) 和 [脱敏应用日志](integration-evidence/upgrade-3.0.14-app.redacted.txt)（仅将本机用户名路径替换为 `<user>`；原始 `.log` 按 `.gitignore` 不入库）。原 3.0.14 应用、配置和历史在测试前已备份到仓库外；未删除用户数据。

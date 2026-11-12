@@ -28,19 +28,18 @@ test('selection extensions launch and publish this fork', async () => {
     assert.match(workflow, /\.scripts\/snipdo\/cup-translate\.pbar/);
 });
 
-test('fixed WebView2 installers use this fork updater and its signing key', async () => {
+test('fixed WebView2 installers inherit the main updater channel instead of a dead endpoint', async () => {
     const main = JSON.parse(await readFile('src-tauri/tauri.conf.json', 'utf8')).tauri.updater;
+    assert.ok(main.endpoints.includes('https://github.com/charonwwang/cup-translate/releases/latest/download/update.json'));
     for (const arch of ['x64', 'x86', 'arm64']) {
-        const updater = JSON.parse(await readFile(`src-tauri/webview.${arch}.json`, 'utf8')).tauri.updater;
-        assert.deepEqual(updater.endpoints, [
-            'https://github.com/charonwwang/cup-translate/releases/download/updater/update-fix-runtime.json',
-        ]);
-        assert.equal(updater.pubkey, main.pubkey);
+        const config = JSON.parse(await readFile(`src-tauri/webview.${arch}.json`, 'utf8')).tauri;
+        assert.equal(config.updater, undefined, `webview.${arch}.json must not override the updater endpoint`);
+        assert.equal(config.bundle.windows.webviewInstallMode.type, 'fixedRuntime');
     }
 });
 
 test('updater manifests resolve the triggering tag and reject missing signatures', async () => {
-    for (const path of ['updater/updater.mjs', 'updater/updater-for-fix-runtime.mjs']) {
+    for (const path of ['updater/updater.mjs']) {
         const source = await readFile(path, 'utf8');
         assert.match(source, /process\.env\.RELEASE_TAG/);
         assert.match(source, /releases\/tags\/\$\{encodeURIComponent\(tag\)\}/);
@@ -60,7 +59,7 @@ test('RPM declares Fedora runtime package names rather than Debian development p
     assert.deepEqual(config.tauri.bundle.rpm.depends, ['libxdo', 'libxcb', 'libXrandr', 'tesseract']);
 });
 
-test('workspace declaration works with the pnpm 9 used by release CI', async () => {
+test('workspace declaration uses the packages glob that pnpm 12 reads', async () => {
     const workspace = await readFile('pnpm-workspace.yaml', 'utf8');
     assert.match(workspace, /packages:\s*\n\s*- \./);
 });
@@ -213,7 +212,7 @@ test('productName, updater artifact names, and CI rename steps stay in sync', as
     assert.ok(productName && typeof productName === 'string', 'productName must be set');
 
     // updater.mjs artifact name prefixes must match productName
-    for (const path of ['updater/updater.mjs', 'updater/updater-for-fix-runtime.mjs']) {
+    for (const path of ['updater/updater.mjs']) {
         const source = await readFile(path, 'utf8');
         const artifactName = source.match(/([\w-]+)_\$\{assetVersion\}/)?.[1];
         assert.ok(artifactName, `${path} must build artifact names from a productName prefix`);
@@ -402,51 +401,13 @@ test('every updater platform entry maps to an artifact name the CI actually buil
 });
 
 /**
- * `updater-for-fix-runtime.mjs` 生成的是**固定版本 WebView2 运行时**的清单。
- * 它只有 Windows 条目（Linux/macOS 的 WebView2 概念不存在），
- * 且产物名由 CI 的 `Rename-Item` 步骤改成带 `_fix_webview2_runtime` 的形态。
- * 两者必须逐字对齐，否则该清单指向的文件不存在（404），
- * 使用固定运行时版本的用户收不到更新。
+ * 固定版 WebView2 清单已退役：该端点从未发布过任何附件（评审时 404），
+ * 固定运行时安装包现在直接使用主更新通道。这里守住"不再引用退役文件"。
  */
-test('the fixed-runtime updater manifest matches the CI rename step and stays Windows-only', async () => {
-    const source = await readFile('updater/updater-for-fix-runtime.mjs', 'utf8');
+test('the retired fixed-runtime manifest generator and endpoint are no longer referenced', async () => {
+    await assert.rejects(readFile('updater/updater-for-fix-runtime.mjs', 'utf8'));
+    const pkg = JSON.parse(await readFile('package.json', 'utf8'));
+    assert.equal(pkg.scripts['updater:fixRuntime'], undefined);
     const workflow = await readFile('.github/workflows/package.yml', 'utf8');
-
-    const entries = new Map();
-    for (const m of source.matchAll(/'(?<platform>[a-z0-9_-]+)':\s*await entry\(`(?<name>[^`]+)`\)/g)) {
-        entries.set(m.groups.platform, m.groups.name);
-    }
-
-    // 只应有 Windows 条目：WebView2 是 Windows 专有运行时
-    assert.deepEqual(
-        [...entries.keys()].sort(),
-        ['windows-aarch64', 'windows-i686', 'windows-x86_64'],
-        'the fixed-runtime manifest must contain exactly the three Windows architectures'
-    );
-
-    // 逐条对照 CI 的 Rename-Item 产物名
-    const archBySuffix = { 'windows-x86_64': 'x64', 'windows-i686': 'x86', 'windows-aarch64': 'arm64' };
-    for (const [platform, arch] of Object.entries(archBySuffix)) {
-        const expected = `cup-translate_\${assetVersion}_${arch}_fix_webview2_runtime-setup.nsis.zip`;
-        assert.equal(entries.get(platform), expected, `${platform} must match the CI rename target for arch ${arch}`);
-        // CI 的重命名命令必须是**参数化**的（用 ${{ matrix.arch }}），
-        // 而不是写死某个架构 —— 否则三个架构里只有一个会被改名，
-        // 另外两个仍是不带 _fix_webview2_runtime 的旧名，清单就会 404。
-        //
-        // 注意：CI 原文里是 `${{ matrix.arch }}`，**不是**字面量 `x64`；
-        // 本测试第一版按字面量匹配，因此永远匹配不上（假失败）。
-        assert.match(
-            workflow,
-            /cup-translate_\$\{\{needs\.change-version\.outputs\.version\}\}_\$\{\{ matrix\.arch \}\}_fix_webview2_runtime-setup\.nsis\.zip/,
-            'CI must rename the bundle to the _fix_webview2_runtime form using the matrix arch parameter'
-        );
-    }
-
-    // matrix.arch 的三个取值必须与上面的后缀集合一致
-    const archValues = new Set([...workflow.matchAll(/^\s+arch: (x64|x86|arm64)$/gm)].map((m) => m[1]));
-    assert.deepEqual(
-        [...archValues].sort(),
-        ['arm64', 'x64', 'x86'],
-        'the CI matrix must define exactly the three arches the manifest names'
-    );
+    assert.doesNotMatch(workflow, /update-fix-runtime|updater:fixRuntime/);
 });

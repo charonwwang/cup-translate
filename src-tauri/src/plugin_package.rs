@@ -233,11 +233,20 @@ fn install_checked(root: &Path, package: &Path, expected_entry: Option<&str>) ->
     let mut names = HashSet::new();
     for i in 0..archive.len() {
         let entry = archive.by_index(i)?;
-        let relative = entry.name().strip_suffix('/').unwrap_or(entry.name());
+        let entry_name = entry.name()?;
+        let relative = entry_name.strip_suffix('/').unwrap_or(entry_name.as_ref());
         if !valid_resource(relative) || !names.insert(relative.to_ascii_lowercase()) {
             return Err("Invalid or duplicate plugin archive path".into());
         }
-        let mode = entry.unix_mode().unwrap_or(0);
+        // zip 9 clears setuid/setgid/sticky bits in unix_mode(), so prefer raw
+        // Unix attributes whenever the archive supplies them, regardless of the
+        // system label. DOS-only attributes still use zip's normalized mode.
+        let raw_mode = entry.external_attributes() >> 16;
+        let mode = if raw_mode != 0 {
+            raw_mode
+        } else {
+            entry.unix_mode().unwrap_or(0)
+        };
         if mode & 0o7000 != 0 || !matches!(mode & 0o170000, 0 | 0o100000 | 0o040000) {
             return Err(
                 "Plugin contains symbolic links, special files or special permission bits".into(),
@@ -335,7 +344,7 @@ fn install_checked(root: &Path, package: &Path, expected_entry: Option<&str>) ->
         // Private empty staging tree; bounded streaming also checks CRC before replacement.
         for i in 0..archive.len() {
             let mut entry = archive.by_index(i)?;
-            let destination = stage.join(entry.name());
+            let destination = stage.join(entry.name()?.as_ref());
             if entry.is_dir() {
                 fs::create_dir_all(destination)?;
                 continue;
@@ -460,14 +469,19 @@ pub fn discover(root: &Path, kind: &str) -> Vec<String> {
 mod tests {
     use super::*;
     use std::io::Write;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static SANDBOX_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
     fn sandbox() -> PathBuf {
         let p = std::env::temp_dir().join(format!(
-            "cup-plugin-{}-{}",
+            "cup-plugin-{}-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
-                .as_nanos()
+                .as_nanos(),
+            SANDBOX_SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));
         fs::create_dir(&p).unwrap();
         p.canonicalize().unwrap()
@@ -480,12 +494,13 @@ mod tests {
         let mut writer = zip::ZipWriter::new(fs::File::create(dest).unwrap());
         for i in 0..archive.len() {
             let mut entry = archive.by_index(i).unwrap();
-            if extra.iter().any(|(name, _, _)| *name == entry.name()) {
+            let entry_name = entry.name().unwrap().into_owned();
+            if extra.iter().any(|(name, _, _)| *name == entry_name) {
                 continue;
             }
             writer
                 .start_file(
-                    entry.name(),
+                    entry_name,
                     zip::write::SimpleFileOptions::default().unix_permissions(0o644),
                 )
                 .unwrap();
@@ -510,6 +525,8 @@ mod tests {
                 continue;
             }
             let length = u16::from_le_bytes([bytes[at + 28], bytes[at + 29]]) as usize;
+            let extra_length = u16::from_le_bytes([bytes[at + 30], bytes[at + 31]]) as usize;
+            let comment_length = u16::from_le_bytes([bytes[at + 32], bytes[at + 33]]) as usize;
             let file_name = std::str::from_utf8(&bytes[at + 46..at + 46 + length]).unwrap();
             if let Some((_, _, mode)) = extra.iter().find(|(name, _, _)| *name == file_name) {
                 bytes[at + 5] = 3;
@@ -522,9 +539,29 @@ mod tests {
                         .to_le_bytes(),
                 );
             }
-            at += 46 + length;
+            at += 46 + length + extra_length + comment_length;
         }
         fs::write(dest, bytes).unwrap();
+    }
+    fn relabel_system(dest: &Path, name: &str, system: u8) {
+        let mut bytes = fs::read(dest).unwrap();
+        let mut at = 0;
+        while at + 46 <= bytes.len() {
+            if &bytes[at..at + 4] != b"PK\x01\x02" {
+                at += 1;
+                continue;
+            }
+            let length = u16::from_le_bytes([bytes[at + 28], bytes[at + 29]]) as usize;
+            let extra_length = u16::from_le_bytes([bytes[at + 30], bytes[at + 31]]) as usize;
+            let comment_length = u16::from_le_bytes([bytes[at + 32], bytes[at + 33]]) as usize;
+            if &bytes[at + 46..at + 46 + length] == name.as_bytes() {
+                bytes[at + 5] = system;
+                fs::write(dest, bytes).unwrap();
+                return;
+            }
+            at += 46 + length + extra_length + comment_length;
+        }
+        panic!("archive entry {name} not found");
     }
     #[test]
     fn all_four_types_install_discover_restore_config_execute_binary_and_uninstall() {
@@ -624,6 +661,12 @@ mod tests {
             assert_eq!(fs::read(directory.join("main.js")).unwrap(), old);
             assert!(!base.join("escape").exists());
         }
+        altered(&original, &broken, &[("icon.svg", b"bad", 0o4755)]);
+        relabel_system(&broken, "icon.svg", 0);
+        assert!(
+            install(&root, &broken).is_err(),
+            "DOS-labelled setuid bit accepted"
+        );
         fs::write(&broken, b"not zip").unwrap();
         assert!(install(&root, &broken).is_err());
         assert_eq!(fs::read(directory.join("main.js")).unwrap(), old);

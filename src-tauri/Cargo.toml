@@ -13,7 +13,7 @@ edition = "2021"
 bzip2 = "0.4"
 tar = "0.4"
 reqwest = { version = "0.12", features = ["blocking"] }
-zip = "2.2.0"
+zip = "9.3.0"
 sha2 = "0.10"
 serde_json = "1.0"
 espeak-rs-sys = { version = "=0.2.0", features = ["compile-espeak-intonations"] }
@@ -50,7 +50,7 @@ flate2 = "1"
 reqwest_dav = "=0.1.5"
 # 本地离线翻译（可选功能）：内嵌 CTranslate2 源码静态编译，需要 cmake + C++ 工具链
 # sentencepiece 分词（直接吃 OPUS-MT 的 source.spm/target.spm）+ ruy CPU 加速
-zip = "2.2.0"
+zip = "9.3.0"
 bzip2 = "0.4"
 tar = "0.4"
 walkdir = "2.5"

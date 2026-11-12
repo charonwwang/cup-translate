@@ -1029,7 +1029,7 @@ export default function TargetArea(props) {
                 {resultMode !== 'word' && result && speechService && (
                     <button
                         type='button'
-                        className='cup-read-all'
+                        className='cup-read-all cup-result-source-speech'
                         aria-label={sourceWordSpeechLabel}
                         data-active={sourceWordSpeech.status !== 'idle'}
                         onClick={() => speakSourceWord()}
@@ -1050,134 +1050,138 @@ export default function TargetArea(props) {
 
                 {resultMode === 'word' && result && (
                     <>
-                        <div className='cup-word-heading'>
-                            <div>
-                                <h3 className='flex items-center gap-2'>
-                                    {wordEntry.word}
-                                    {speechService && (
+                        <div className='cup-word-summary'>
+                            <div className='cup-word-heading'>
+                                <div>
+                                    <h3 className='flex items-center gap-2'>
+                                        {wordEntry.word}
+                                        {speechService && (
+                                            <button
+                                                type='button'
+                                                className='cup-speak-button'
+                                                aria-label={sourceWordSpeechLabel}
+                                                data-active={sourceWordSpeech.status !== 'idle'}
+                                                onClick={() => speakSourceWord()}
+                                            >
+                                                {sourceWordSpeech.status === 'loading' ? (
+                                                    <LuLoader2
+                                                        className='animate-spin'
+                                                        size={13}
+                                                    />
+                                                ) : sourceWordSpeech.status === 'playing' ? (
+                                                    <LuSquare size={13} />
+                                                ) : (
+                                                    <LuVolume2 size={13} />
+                                                )}
+                                            </button>
+                                        )}
+                                    </h3>
+                                    {pronunciationDetails}
+                                </div>
+                                <span className='cup-word-kind'>
+                                    {t('translate.mode_word')} · {t(`languages.${activeSourceLanguage || 'auto'}`)}
+                                </span>
+                            </div>
+
+                            {result?.metadataSource === 'model' && (
+                                <p className='cup-lexical-note'>{t('models.model_dictionary_note')}</p>
+                            )}
+                            {!wordEntry.pronunciations.some((item) => item.symbol) && !isLoading && (
+                                <div className='cup-dictionary-tools'>
+                                    <span>{t('models.no_phonetics')}</span>
+                                    {['empty', 'failed', 'timeout'].includes(dictionaryStatus) && (
+                                        <span role='status'>{t(`models.dictionary_${dictionaryStatus}`)}</span>
+                                    )}
+                                    {
                                         <button
                                             type='button'
-                                            className='cup-speak-button'
-                                            aria-label={sourceWordSpeechLabel}
-                                            data-active={sourceWordSpeech.status !== 'idle'}
-                                            onClick={() => speakSourceWord()}
-                                        >
-                                            {sourceWordSpeech.status === 'loading' ? (
-                                                <LuLoader2
-                                                    className='animate-spin'
-                                                    size={13}
-                                                />
-                                            ) : sourceWordSpeech.status === 'playing' ? (
-                                                <LuSquare size={13} />
-                                            ) : (
-                                                <LuVolume2 size={13} />
-                                            )}
-                                        </button>
-                                    )}
-                                </h3>
-                                {pronunciationDetails}
-                            </div>
-                            <span className='cup-word-kind'>
-                                {t('translate.mode_word')} · {t(`languages.${activeSourceLanguage || 'auto'}`)}
-                            </span>
-                        </div>
-
-                        {result?.metadataSource === 'model' && (
-                            <p className='cup-lexical-note'>{t('models.model_dictionary_note')}</p>
-                        )}
-                        {!wordEntry.pronunciations.some((item) => item.symbol) && !isLoading && (
-                            <div className='cup-dictionary-tools'>
-                                <span>{t('models.no_phonetics')}</span>
-                                {['empty', 'failed', 'timeout'].includes(dictionaryStatus) && (
-                                    <span role='status'>{t(`models.dictionary_${dictionaryStatus}`)}</span>
-                                )}
-                                {
-                                    <button
-                                        type='button'
-                                        disabled={privacyMode === 'device_only' || dictionaryLoading}
-                                        title={
-                                            privacyMode === 'device_only'
-                                                ? t('models.google_blocked')
-                                                : t('models.dictionary_network_hint')
-                                        }
-                                        onClick={supplementDictionary}
-                                    >
-                                        {dictionaryLoading ? t('models.checking') : t('models.get_google_dictionary')}
-                                    </button>
-                                }
-                                {privacyMode === 'device_only' && <span>{t('models.no_offline_dictionary')}</span>}
-                            </div>
-                        )}
-                        {(dictionarySupplement || result?.dictionarySource) && (
-                            <p className='cup-lexical-note'>
-                                {result?.dictionarySource
-                                    ? t('models.dictionary_source_note')
-                                    : t('models.google_dictionary_note')}
-                            </p>
-                        )}
-                        {wordEntry.senses.length > 0 && (
-                            <>
-                                <div className='cup-section-label'>
-                                    <span>{t('translate.dictionary')}</span>
-                                    <span className='cup-section-count'>
-                                        {t(
-                                            wordEntry.senses.some((sense) => sense.pos)
-                                                ? 'translate.pos_count'
-                                                : 'models.meaning_count',
-                                            {
-                                                count: wordEntry.senses.some((sense) => sense.pos)
-                                                    ? new Set(
-                                                          wordEntry.senses
-                                                              .filter((sense) => sense.pos)
-                                                              .map((sense) => sense.pos)
-                                                      ).size
-                                                    : wordEntry.senses.length,
+                                            disabled={privacyMode === 'device_only' || dictionaryLoading}
+                                            title={
+                                                privacyMode === 'device_only'
+                                                    ? t('models.google_blocked')
+                                                    : t('models.dictionary_network_hint')
                                             }
-                                        )}
-                                    </span>
+                                            onClick={supplementDictionary}
+                                        >
+                                            {dictionaryLoading
+                                                ? t('models.checking')
+                                                : t('models.get_google_dictionary')}
+                                        </button>
+                                    }
+                                    {privacyMode === 'device_only' && <span>{t('models.no_offline_dictionary')}</span>}
                                 </div>
-                                <div className='cup-senses'>
-                                    {wordEntry.senses.map((sense, index) => {
-                                        const speechKey = `sense-${index}`;
-                                        return (
-                                            <div
-                                                className='cup-sense-row'
-                                                key={`${sense.pos}-${index}`}
-                                            >
-                                                <span className='cup-pos'>{sense.pos}</span>
-                                                <div className='cup-meanings select-text'>
-                                                    {sense.meanings.map((meaning, meaningIndex) => (
-                                                        <span
-                                                            className='cup-meaning'
-                                                            key={`${meaning}-${meaningIndex}`}
+                            )}
+                            {(dictionarySupplement || result?.dictionarySource) && (
+                                <p className='cup-lexical-note'>
+                                    {result?.dictionarySource
+                                        ? t('models.dictionary_source_note')
+                                        : t('models.google_dictionary_note')}
+                                </p>
+                            )}
+                            {wordEntry.senses.length > 0 && (
+                                <>
+                                    <div className='cup-section-label'>
+                                        <span>{t('translate.dictionary')}</span>
+                                        <span className='cup-section-count'>
+                                            {t(
+                                                wordEntry.senses.some((sense) => sense.pos)
+                                                    ? 'translate.pos_count'
+                                                    : 'models.meaning_count',
+                                                {
+                                                    count: wordEntry.senses.some((sense) => sense.pos)
+                                                        ? new Set(
+                                                              wordEntry.senses
+                                                                  .filter((sense) => sense.pos)
+                                                                  .map((sense) => sense.pos)
+                                                          ).size
+                                                        : wordEntry.senses.length,
+                                                }
+                                            )}
+                                        </span>
+                                    </div>
+                                    <div className='cup-senses'>
+                                        {wordEntry.senses.map((sense, index) => {
+                                            const speechKey = `sense-${index}`;
+                                            return (
+                                                <div
+                                                    className='cup-sense-row'
+                                                    key={`${sense.pos}-${index}`}
+                                                >
+                                                    <span className='cup-pos'>{sense.pos}</span>
+                                                    <div className='cup-meanings select-text'>
+                                                        {sense.meanings.map((meaning, meaningIndex) => (
+                                                            <span
+                                                                className='cup-meaning'
+                                                                key={`${meaning}-${meaningIndex}`}
+                                                            >
+                                                                {meaning}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                    {speechService && (
+                                                        <button
+                                                            type='button'
+                                                            className='cup-speak-button cup-sense-speak'
+                                                            aria-label={exampleSpeechLabel}
+                                                            data-active={activeExample === speechKey}
+                                                            onClick={() =>
+                                                                speakExample(
+                                                                    sense.meanings.join('；'),
+                                                                    targetLanguage,
+                                                                    speechKey
+                                                                )
+                                                            }
                                                         >
-                                                            {meaning}
-                                                        </span>
-                                                    ))}
+                                                            {detailSpeechIcon(speechKey)}
+                                                        </button>
+                                                    )}
                                                 </div>
-                                                {speechService && (
-                                                    <button
-                                                        type='button'
-                                                        className='cup-speak-button cup-sense-speak'
-                                                        aria-label={exampleSpeechLabel}
-                                                        data-active={activeExample === speechKey}
-                                                        onClick={() =>
-                                                            speakExample(
-                                                                sense.meanings.join('；'),
-                                                                targetLanguage,
-                                                                speechKey
-                                                            )
-                                                        }
-                                                    >
-                                                        {detailSpeechIcon(speechKey)}
-                                                    </button>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </>
-                        )}
+                                            );
+                                        })}
+                                    </div>
+                                </>
+                            )}
+                        </div>
 
                         {wordEntry.examples.length > 0 && (
                             <div className='cup-examples'>
@@ -1362,6 +1366,7 @@ export default function TargetArea(props) {
                                 <button
                                     type='button'
                                     className={paragraphView === 'translation' ? 'on' : ''}
+                                    aria-pressed={paragraphView === 'translation'}
                                     onClick={() => setParagraphView('translation')}
                                 >
                                     {t('translate.translation_view')}
@@ -1369,6 +1374,7 @@ export default function TargetArea(props) {
                                 <button
                                     type='button'
                                     className={paragraphView === 'comparison' ? 'on' : ''}
+                                    aria-pressed={paragraphView === 'comparison'}
                                     onClick={() => setParagraphView('comparison')}
                                 >
                                     {t('translate.comparison_view')}
@@ -1565,7 +1571,7 @@ export default function TargetArea(props) {
                     <Tooltip content={showBack ? t('translate.show_translation') : t('translate.translate_back')}>
                         <button
                             type='button'
-                            className='cup-foot-icon'
+                            className='cup-foot-icon cup-back-button'
                             aria-label={showBack ? t('translate.show_translation') : t('translate.translate_back')}
                             aria-pressed={showBack}
                             disabled={!speechText(result) || backLoading}
@@ -1576,9 +1582,9 @@ export default function TargetArea(props) {
                             ) : (
                                 <LuArrowLeftRight className='text-[14px]' />
                             )}
+                            <span>{t('translate.back_translation')}</span>
                         </button>
                     </Tooltip>
-                    {showBack && <span className='cup-back-label'>{t('translate.back_translation')}</span>}
                     {collectionServiceList?.map((collectionServiceInstanceName) => (
                         <button
                             type='button'

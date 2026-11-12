@@ -1,17 +1,18 @@
 .cup-v4 {
-    --cup4-paper: #ffffff;
-    --cup4-paper-2: #f7f9f7;
+    --cup4-paper: #fcfbf8;
+    --cup4-card: #ffffff;
+    --cup4-paper-2: #f7f8f5;
     --cup4-paper-3: #f0f4f1;
     --cup4-ink: #21332c;
     --cup4-ink-2: #4f6259;
-    --cup4-muted: #7a8981;
-    --cup4-faint: #a3afa8;
-    --cup4-line: #e2e9e4;
+    --cup4-muted: #5e7267;
+    --cup4-faint: #63766c;
+    --cup4-line: #e0e7e1;
     --cup4-line-strong: #cfdad3;
     --cup4-accent: #256d57;
     --cup4-accent-2: #174e3e;
     --cup4-accent-soft: #e8f3ed;
-    --cup4-accent-wash: #f1f8f4;
+    --cup4-accent-wash: #eef6ef;
     --cup4-error-soft: #fdf0ef;
     --cup4-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
         sans-serif;
@@ -24,13 +25,14 @@
 
 .dark .cup-v4,
 .cup-v4.dark {
-    --cup4-paper: #202b26;
+    --cup4-paper: #1e2823;
+    --cup4-card: #242f29;
     --cup4-paper-2: #25312b;
     --cup4-paper-3: #2a3831;
     --cup4-ink: #e5eee9;
     --cup4-ink-2: #bfcec5;
     --cup4-muted: #91a299;
-    --cup4-faint: #697b71;
+    --cup4-faint: #a2b3a9;
     --cup4-line: #35463d;
     --cup4-line-strong: #45594f;
     --cup4-accent: #91d5b7;
@@ -45,14 +47,24 @@
 }
 
 .cup-v4 .translate-titlebar {
+    position: relative;
     border-bottom: 1px solid var(--cup4-line);
-    padding: 0 10px;
+    padding: 0 12px;
+    background: var(--cup4-paper-2);
 }
 
 .cup-v4 .translate-titlebar .window-brand {
-    color: var(--cup4-muted);
-    font-size: 11.5px;
-    padding-left: 8px;
+    color: var(--cup4-ink-2);
+    font-size: 12px;
+    font-weight: 650;
+    padding-left: 4px;
+}
+
+.cup-v4 .translate-titlebar-macos .window-brand {
+    position: absolute;
+    inset-inline: 76px;
+    padding: 0;
+    text-align: center;
 }
 
 .cup-v4 .translate-titlebar button {
@@ -69,17 +81,20 @@
 }
 
 .cup-v4 .translate-scroll {
-    padding: 0 18px 16px;
-    scrollbar-gutter: stable;
+    padding: 0 14px 14px;
+    scrollbar-gutter: stable both-edges;
 }
 
 /* Source */
 .cup-v4 .cup-source-shell {
-    padding-top: 16px;
+    padding-top: 12px;
 }
 
 .cup-v4 .cup-source-panel {
     width: 100%;
+    border: 1px solid var(--cup4-line);
+    border-radius: 12px;
+    background: var(--cup4-card);
 }
 
 .cup-v4 .cup-source-text {
@@ -87,6 +102,7 @@
     width: 100%;
     min-height: 42px;
     max-height: 40vh;
+    padding: 9px 11px;
     resize: none;
     border: 0;
     outline: none;
@@ -116,15 +132,17 @@
 
 .cup-v4 .cup-source-text:focus-visible {
     outline: none;
-    box-shadow: 0 2px var(--cup4-accent);
+    box-shadow: inset 0 -2px var(--cup4-accent);
 }
 
 .cup-v4 .cup-source-tools {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 2px;
-    margin-top: 7px;
-    min-height: 28px;
+    min-height: 34px;
+    padding: 3px 7px;
+    border-top: 1px solid var(--cup4-line);
     color: var(--cup4-muted);
 }
 
@@ -179,7 +197,7 @@
 
 .cup-v4 .cup-source-count {
     margin-left: auto;
-    padding-left: 8px;
+    padding-inline: 5px 2px;
     color: var(--cup4-faint);
     font-size: 10.5px;
     font-variant-numeric: tabular-nums;
@@ -192,25 +210,26 @@
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
     gap: 8px;
-    min-height: 44px;
-    padding: 9px 0 11px;
-    border-top: 1px solid var(--cup4-line);
+    padding: 9px 0;
     color: var(--cup4-muted);
 }
 
 .cup-v4 .cup-language-button {
+    width: 100%;
     min-width: 0;
-    height: 30px;
-    padding: 0;
-    border-radius: 7px;
-    display: inline-flex;
+    min-height: 32px;
+    padding: 4px 9px;
+    border: 1px solid var(--cup4-line);
+    border-radius: 8px;
+    display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 5px;
-    color: var(--cup4-muted);
-    background: transparent;
-    font-size: 11.5px;
-    font-weight: 500;
-    white-space: nowrap;
+    color: var(--cup4-ink-2);
+    background: var(--cup4-card);
+    font-size: 12px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
 }
 
 .cup-v4 .cup-language-button:hover {
@@ -219,8 +238,11 @@
 }
 
 .cup-v4 .cup-language-button.end {
-    justify-self: end;
-    justify-content: flex-end;
+    justify-content: space-between;
+}
+
+.cup-v4 .cup-language-button svg {
+    flex: none;
 }
 
 .cup-v4 .cup-language-swap {
@@ -239,23 +261,21 @@
 
 /* Result shell */
 .cup-v4 .cup-result-card {
-    border: 0;
-    border-top: 1px solid var(--cup4-line);
-    border-radius: 0;
-    background: transparent;
-    box-shadow: none;
-    margin: 0 0 12px;
-    overflow: visible;
+    border: 1px solid var(--cup4-line);
+    border-radius: 12px;
+    background: var(--cup4-card);
+    margin: 0 0 10px;
+    min-width: 0;
 }
 
 .cup-v4 .cup-result-head {
     display: flex;
     align-items: center;
-    gap: 6px;
-    min-height: 48px;
-    padding: 10px 0 8px;
+    gap: 5px;
+    min-height: 38px;
+    padding: 5px 8px;
     color: var(--cup4-ink-2);
-    font-size: 11.5px;
+    font-size: 12px;
 }
 
 .cup-v4 .cup-drag-handle {
@@ -266,7 +286,7 @@
     flex: none;
     color: var(--cup4-faint);
     cursor: grab;
-    opacity: 0.55;
+    opacity: 0.8;
 }
 
 .cup-v4 .cup-result-head:hover .cup-drag-handle {
@@ -284,7 +304,8 @@
     color: var(--cup4-ink-2);
     background: transparent;
     font-size: 11.5px;
-    font-weight: 550;
+    font-weight: 650;
+    overflow-wrap: anywhere;
 }
 
 .cup-v4 .cup-engine-button:hover {
@@ -296,6 +317,7 @@
     width: 16px;
     height: 16px;
     object-fit: contain;
+    flex: none;
     border-radius: 4px;
 }
 
@@ -331,10 +353,15 @@
     width: 25px;
     height: 25px;
     min-width: 25px;
+    margin-inline-start: auto;
     display: grid;
     place-items: center;
     border-radius: 6px;
     color: var(--cup4-muted);
+}
+
+.cup-v4 .cup-result-badge + .cup-collapse-button {
+    margin-inline-start: 0;
 }
 
 .cup-v4 .cup-collapse-button:hover {
@@ -343,7 +370,7 @@
 }
 
 .cup-v4 .cup-result-body {
-    padding: 1px 0 13px;
+    padding: 0 8px 8px;
 }
 
 .cup-v4 .cup-result-body.is-hidden {
@@ -371,17 +398,29 @@
 }
 
 /* Word */
+.cup-v4 .cup-word-summary {
+    min-width: 0;
+    padding: 10px 12px 5px;
+    border: 1px solid var(--cup4-line);
+    border-radius: 10px;
+    background: var(--cup4-accent-wash);
+}
+
+.cup-v4 .cup-word-summary .cup-section-label::after {
+    background: var(--cup4-line-strong);
+}
+
 .cup-v4 .cup-word-heading {
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    padding: 5px 0 14px;
+    padding: 1px 0 9px;
 }
 
 .cup-v4 .cup-word-heading h3 {
     margin: 0;
-    color: var(--cup4-ink);
-    font-size: calc(var(--cup4-base) * 1.125);
+    color: var(--cup4-accent-2);
+    font-size: calc(var(--cup4-base) * 1.25);
     line-height: 1.12;
     font-weight: 680;
     letter-spacing: -0.035em;
@@ -402,16 +441,22 @@
 .cup-v4 .cup-phonetics {
     display: flex;
     flex-wrap: wrap;
-    gap: 5px 12px;
-    margin-top: 7px;
+    gap: 5px 7px;
+    margin-top: 6px;
 }
 
 .cup-v4 .cup-phonetic {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    color: var(--cup4-muted);
-    font: calc(var(--cup4-base) * 0.74) / 1.4 var(--cup4-mono);
+    max-width: 100%;
+    padding: 1px 5px 1px 8px;
+    border: 1px solid var(--cup4-line-strong);
+    border-radius: 8px;
+    color: var(--cup4-ink-2);
+    background: var(--cup4-card);
+    overflow-wrap: anywhere;
+    font: calc(var(--cup4-base) * 0.78) / 1.4 var(--cup4-mono);
 }
 
 .cup-v4 .cup-phonetic-region {
@@ -467,12 +512,18 @@
 }
 
 .cup-v4 .cup-sense-row + .cup-sense-row {
-    border-top: 1px dashed var(--cup4-line);
+    border-top: 1px solid var(--cup4-line);
 }
 
 .cup-v4 .cup-pos {
     color: var(--cup4-muted);
-    font: 550 10.5px/1.6 var(--cup4-mono);
+    width: fit-content;
+    max-width: 100%;
+    padding: 2px 5px;
+    border-radius: 5px;
+    background: var(--cup4-accent-soft);
+    font: 600 10.5px/1.4 var(--cup4-font);
+    overflow-wrap: anywhere;
 }
 
 .cup-v4 .cup-meanings {
@@ -506,9 +557,9 @@
     display: inline-grid;
     place-items: center;
     border: 1px solid var(--cup4-line);
-    border-radius: 99px;
+    border-radius: 7px;
     color: var(--cup4-muted);
-    background: transparent;
+    background: var(--cup4-card);
 }
 
 .cup-v4 .cup-speak-button:hover,
@@ -528,7 +579,7 @@
 }
 
 .cup-v4 .cup-example-card {
-    padding: 11px 12px 10px;
+    padding: 7px 9px;
     border: 1px solid var(--cup4-line);
     border-radius: 11px;
     background: var(--cup4-paper-2);
@@ -560,15 +611,17 @@
 .cup-v4 .cup-example-source {
     margin: 0;
     color: var(--cup4-ink);
-    font-size: calc(var(--cup4-base) * 0.78);
-    line-height: 1.55;
+    font-size: calc(var(--cup4-base) * 0.86);
+    line-height: 1.5;
+    overflow-wrap: anywhere;
 }
 
 .cup-v4 .cup-example-target {
     margin: 0;
     color: var(--cup4-ink-2);
-    font-size: calc(var(--cup4-base) * 0.75);
-    line-height: 1.55;
+    font-size: calc(var(--cup4-base) * 0.81);
+    line-height: 1.5;
+    overflow-wrap: anywhere;
 }
 
 .cup-v4 .cup-example-source mark,
@@ -598,10 +651,11 @@
 
 .cup-v4 .cup-phrase-row {
     display: grid;
-    grid-template-columns: 32px minmax(0, 1fr) auto;
+    grid-template-columns: 25px minmax(0, 1fr) auto;
     align-items: center;
     gap: 8px;
-    padding: 12px;
+    padding: 9px 11px;
+    min-height: 57px;
 }
 
 .cup-v4 .cup-phrase-row + .cup-phrase-row {
@@ -621,7 +675,7 @@
     color: var(--cup4-accent-2);
     font-size: calc(var(--cup4-base) * 1.25);
     line-height: 1.6;
-    font-weight: 540;
+    font-weight: 650;
     letter-spacing: -0.01em;
     overflow-wrap: anywhere;
 }
@@ -656,6 +710,7 @@
     color: var(--cup4-ink);
     font-size: calc(var(--cup4-base) * 0.98);
     line-height: 1.55;
+    overflow-wrap: anywhere;
     font-weight: 510;
 }
 
@@ -696,8 +751,9 @@
 .cup-v4 .cup-paragraph-toolbar {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 10px;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 7px;
 }
 
 .cup-v4 .cup-segmented {
@@ -721,7 +777,7 @@
 
 .cup-v4 .cup-segmented button.on {
     color: var(--cup4-ink);
-    background: var(--cup4-paper);
+    background: var(--cup4-card);
     box-shadow: 0 1px 3px rgba(20, 48, 35, 0.11);
 }
 
@@ -740,7 +796,13 @@
 }
 
 .cup-v4 .cup-read-all:hover {
-    background: var(--cup4-accent-soft);
+    background: var(--cup4-accent-wash);
+}
+
+.cup-v4 .cup-result-source-speech {
+    margin: 0 0 7px;
+    border: 1px solid var(--cup4-line);
+    background: var(--cup4-card);
 }
 
 .cup-v4 .cup-paragraph-meta {
@@ -761,17 +823,18 @@
 }
 
 .cup-v4 .cup-paragraph-reading {
-    padding: 15px 14px;
+    padding: 12px 14px;
     border: 1px solid var(--cup4-line);
     border-radius: 12px;
-    background: var(--cup4-paper-2);
+    background: var(--cup4-accent-wash);
 }
 
 .cup-v4 .cup-paragraph-reading p {
     margin: 0;
     color: var(--cup4-ink);
     font-size: calc(var(--cup4-base) * 1.25);
-    line-height: 1.9;
+    line-height: 1.72;
+    overflow-wrap: anywhere;
     font-weight: 510;
     letter-spacing: -0.008em;
     white-space: pre-wrap;
@@ -788,7 +851,7 @@
     grid-template-columns: 22px minmax(0, 1fr) 24px;
     gap: 8px;
     padding: 11px 12px;
-    background: var(--cup4-paper);
+    background: var(--cup4-card);
 }
 
 .cup-v4 .cup-sentence + .cup-sentence {
@@ -796,7 +859,7 @@
 }
 
 .cup-v4 .cup-sentence:nth-child(even) {
-    background: var(--cup4-paper-2);
+    background: var(--cup4-accent-wash);
 }
 
 .cup-v4 .cup-sentence-index {
@@ -808,6 +871,7 @@
 .cup-v4 .cup-sentence-source,
 .cup-v4 .cup-sentence-target {
     margin: 0;
+    overflow-wrap: anywhere;
     white-space: pre-wrap;
 }
 
@@ -828,14 +892,15 @@
 
 /* Footer */
 .cup-v4 .cup-result-foot {
-    min-height: 45px;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 7px;
-    padding: 8px 0 0;
+    gap: 4px 6px;
+    min-height: 41px;
+    padding: 5px 8px;
     border-top: 1px solid var(--cup4-line);
     color: var(--cup4-muted);
-    font-size: 10px;
+    font-size: 11px;
 }
 
 .cup-v4 .cup-result-foot.is-hidden {
@@ -869,8 +934,10 @@
 
 .cup-v4 .cup-foot-actions {
     display: flex;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 1px;
+    gap: 2px;
 }
 
 .cup-v4 .cup-foot-icon {
@@ -907,10 +974,26 @@
     background: var(--cup4-accent-soft);
 }
 
-.cup-v4 .cup-back-label {
-    color: var(--cup4-accent);
-    font-size: 9.5px;
-    white-space: nowrap;
+.cup-v4 .cup-back-button {
+    display: inline-flex;
+    width: auto;
+    min-height: 28px;
+    height: auto;
+    gap: 4px;
+    padding: 3px 5px;
+    font-weight: 550;
+}
+
+.cup-v4 .cup-back-button[aria-pressed='true'] {
+    color: var(--cup4-accent-2);
+    background: var(--cup4-accent-soft);
+}
+
+.cup-v4 .cup-result-card button:focus-visible,
+.cup-v4 .cup-source-tool:focus-visible,
+.cup-v4 .cup-language-row button:focus-visible {
+    outline: 2px solid var(--cup4-accent);
+    outline-offset: 1px;
 }
 
 /* Status */
@@ -980,7 +1063,7 @@
 
 @media (max-width: 380px) {
     .cup-v4 .translate-scroll {
-        padding-inline: 14px;
+        padding-inline: 9px;
     }
 
     .cup-v4 .cup-word-heading h3 {
@@ -990,10 +1073,6 @@
     .cup-v4 .cup-sense-row {
         grid-template-columns: 34px minmax(0, 1fr) 24px;
         gap: 7px;
-    }
-
-    .cup-v4 .cup-meaning {
-        font-size: calc(var(--cup4-base) * 1.25);
     }
 
     .cup-v4 .cup-foot-engine {

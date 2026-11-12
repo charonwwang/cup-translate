@@ -5,6 +5,7 @@
 - `/tests/visual/index.html?view=translate`：词典（默认关闭所有 TTS，覆盖空列表）。
 - `?view=translate&scenario=phrase`：短语结果，只显示译文。
 - `?view=translate&scenario=paragraph`：段落整段译文，可切换逐句对照。
+- 在以上翻译场景追加 `&speech=1&collection=1`：启用静音朗读和内存 Anki 夹具，可检查朗读对象、收藏入口和成功反馈。
 - `?view=translate&width=350`：默认窄窗布局。
 - `?view=translate&source=en&detect=it`：手动源语言覆盖旧的自动识别结果。
 - `?view=translate&theme=dark&font=20`：深色、大字号。

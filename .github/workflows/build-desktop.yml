@@ -1,4 +1,4 @@
-name: Verify Windows and Linux builds
+name: Verify desktop builds
 on:
     push:
         branches: [master]
@@ -22,6 +22,43 @@ concurrency:
     group: desktop-build-${{ github.ref }}
     cancel-in-progress: true
 jobs:
+    macos:
+        runs-on: ${{ matrix.os }}
+        timeout-minutes: 60
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - target: aarch64-apple-darwin
+                      os: macos-15
+                    - target: x86_64-apple-darwin
+                      os: macos-15-intel
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  persist-credentials: false
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+            - uses: pnpm/action-setup@v4
+              with:
+                  version: 12.10.1
+            - uses: dtolnay/rust-toolchain@stable
+              with:
+                  targets: ${{ matrix.target }}
+            - run: pnpm install --frozen-lockfile
+            - run: pnpm test
+            - name: Build app without publishing
+              env:
+                  BUILD_TARGET: ${{ matrix.target }}
+              run: |
+                  pnpm tauri build --target "$BUILD_TARGET" --bundles app
+                  ditto -c -k --keepParent "src-tauri/target/$BUILD_TARGET/release/bundle/macos/cup-translate.app" "verify-$BUILD_TARGET.zip"
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: verify-macos-${{ matrix.target }}
+                  path: verify-${{ matrix.target }}.zip
+                  if-no-files-found: error
     windows:
         runs-on: windows-latest
         timeout-minutes: 60
@@ -36,7 +73,7 @@ jobs:
                   node-version: 22
             - uses: pnpm/action-setup@v4
               with:
-                  version: 9
+                  version: 12.10.1
             - uses: dtolnay/rust-toolchain@stable
               with:
                   targets: ${{ matrix.target }}
@@ -64,8 +101,6 @@ jobs:
                       os: ubuntu-latest
                     - target: aarch64-unknown-linux-gnu
                       os: ubuntu-24.04-arm
-                    - target: armv7-unknown-linux-gnueabihf
-                      os: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
             - name: Build Debian and RPM packages without publishing

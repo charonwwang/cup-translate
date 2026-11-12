@@ -302,10 +302,15 @@ export async function supplement(result, from, to, options = {}) {
             options.signal
         );
         assertActive(options.signal);
-        enriched.sentence = sentence.map((example, index) => ({
-            ...example,
-            target: enriched.sentence[index]?.target || example.target,
-        }));
+        // The source-only entry has already been rendered. Publish a new
+        // result so React refreshes the bilingual examples and their controls.
+        return {
+            ...enriched,
+            sentence: sentence.map((example, index) => ({
+                ...example,
+                target: enriched.sentence[index]?.target || example.target,
+            })),
+        };
     }
     return enriched;
 }

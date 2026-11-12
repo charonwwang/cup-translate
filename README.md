@@ -108,7 +108,7 @@ cup-translate                                # 启动
 - Linux: WebKit2GTK、GTK-3；Windows: WebView2；macOS: 系统 WebKit
 
 ```bash
-# 1. 安装前端依赖（pnpm 12 需放行 esbuild，仓库已配置）
+# 1. 安装前端依赖（使用 packageManager 固定的 pnpm 12.10.1；已放行 esbuild）
 pnpm install --frozen-lockfile
 
 # 2. 开发模式运行（自动拉起 Tauri）

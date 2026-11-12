@@ -85,7 +85,7 @@ fn restore_archive<R: Read + Seek>(
     }
 
     for index in 0..archive.len() {
-        let entry = archive.by_index(index)?;
+        let mut entry = archive.by_index(index)?;
         let path = entry
             .enclosed_name()
             .ok_or_else(|| Error::Error("Backup contains an unsafe path".into()))?;
@@ -104,6 +104,19 @@ fn restore_archive<R: Read + Seek>(
             .is_some_and(|mode| mode & 0o170000 == 0o120000)
         {
             return Err(Error::Error("Backup contains a symbolic link".into()));
+        }
+        // 恢复后应用会直接以 SQLite 打开 history.db，因此在解压前检查文件头。
+        // 这是纵深防御：通过文件头的恶意数据库仍会进入 libsqlite3 解析，
+        // 不能替代升级 SQLite（见 docs/reviews/dependency-audit-2026-11-04.md）。
+        // 空文件视为可接受（SQLite 将其当作新库）。
+        if normalized == Path::new("history.db") {
+            let mut header = Vec::new();
+            entry.by_ref().take(16).read_to_end(&mut header)?;
+            if !header.is_empty() && header.as_slice() != b"SQLite format 3\0" {
+                return Err(Error::Error(
+                    "Backup history.db is not a SQLite database".into(),
+                ));
+            }
         }
         // 与 cmd.rs::install_plugin 对称：zip 会把条目的 unix_mode 原样
         // set_permissions 落盘（实测 0o4755 -> 磁盘 4755），
@@ -528,7 +541,7 @@ mod tests {
         let names: Vec<String> = ZipArchive::new(Cursor::new(data.clone()))
             .unwrap()
             .file_names()
-            .map(str::to_owned)
+            .map(|name| name.unwrap().into_owned())
             .collect();
         assert!(
             names
@@ -570,7 +583,7 @@ mod tests {
         let names: Vec<String> = ZipArchive::new(Cursor::new(data))
             .unwrap()
             .file_names()
-            .map(str::to_owned)
+            .map(|name| name.unwrap().into_owned())
             .collect();
         assert!(
             !names.iter().any(|n| n.ends_with('/')),
@@ -593,7 +606,7 @@ mod tests {
         let names: Vec<String> = ZipArchive::new(Cursor::new(data))
             .unwrap()
             .file_names()
-            .map(str::to_owned)
+            .map(|name| name.unwrap().into_owned())
             .collect();
         assert_eq!(
             names,
@@ -630,7 +643,8 @@ mod tests {
         let restored = base.join("restored");
         std::fs::create_dir_all(&source).unwrap();
         std::fs::write(source.join("config.json"), r#"{"app_language":"en"}"#).unwrap();
-        std::fs::write(source.join("history.db"), b"history bytes").unwrap();
+        let history = b"SQLite format 3\0history bytes";
+        std::fs::write(source.join("history.db"), history).unwrap();
 
         let data = make_archive(Cursor::new(Vec::new()), &source)
             .unwrap()
@@ -640,11 +654,33 @@ mod tests {
             std::fs::read_to_string(restored.join("config.json")).unwrap(),
             r#"{"app_language":"en"}"#
         );
-        assert_eq!(
-            std::fs::read(restored.join("history.db")).unwrap(),
-            b"history bytes"
-        );
+        assert_eq!(std::fs::read(restored.join("history.db")).unwrap(), history);
         std::fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn rejects_history_db_that_is_not_a_sqlite_file_before_extracting() {
+        let destination = std::env::temp_dir().join(format!(
+            "cup-translate-backup-history-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let not_sqlite = archive(&[
+            ("config.json", br#"{"app_language":"en"}"#),
+            ("history.db", b"plain text, not a database"),
+        ]);
+        assert!(restore_archive(not_sqlite, &destination).is_err());
+        assert!(!destination.join("history.db").exists());
+        // 空文件仍允许（SQLite 视为新库）
+        let empty = archive(&[
+            ("config.json", br#"{"app_language":"en"}"#),
+            ("history.db", b""),
+        ]);
+        restore_archive(empty, &destination).unwrap();
+        std::fs::remove_dir_all(destination).ok();
     }
 
     #[test]

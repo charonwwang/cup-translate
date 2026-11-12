@@ -165,8 +165,9 @@ fn embed_onnx_runtime(asset: &serde_json::Value) {
     let mut count = 0;
     for i in 0..zip.len() {
         let mut file = zip.by_index(i).unwrap();
-        let name = file.name().rsplit('/').next().unwrap().to_string();
-        if !file.name().starts_with("onnxruntime/capi/")
+        let archive_name = file.name().expect("valid zip entry name");
+        let name = archive_name.rsplit('/').next().unwrap().to_string();
+        if !archive_name.starts_with("onnxruntime/capi/")
             || !(name.starts_with("libonnxruntime")
                 || name == "onnxruntime.dll"
                 || name == "onnxruntime_providers_shared.dll")
