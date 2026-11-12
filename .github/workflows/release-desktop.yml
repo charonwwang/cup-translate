@@ -278,6 +278,8 @@ jobs:
               with:
                   target: ${{ matrix.target }}
                   toolchain: ${{ matrix.toolchain }}
+            - name: Install and launch release RPM on Fedora 44
+              run: bash packaging/verify-fedora-rpm.sh src-tauri/target/${{ matrix.target }}/release/bundle/rpm/*.rpm
             - name: Normalize Linux asset names
               run: |
                   version="${RELEASE_TAG#v}"

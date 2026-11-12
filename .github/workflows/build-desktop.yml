@@ -12,8 +12,14 @@ on:
             - 'package.json'
             - 'pnpm-lock.yaml'
             - '.github/actions/**'
+            - 'packaging/**'
             - '.github/workflows/build-desktop.yml'
     workflow_dispatch:
+        inputs:
+            fedora_only:
+                description: 'Build only Linux x64/ARM64 and verify the RPMs on Fedora 44'
+                type: boolean
+                default: false
 env:
     ESPEAK_STATIC_CRT: '1'
 permissions:
@@ -23,6 +29,7 @@ concurrency:
     cancel-in-progress: true
 jobs:
     macos:
+        if: ${{ !inputs.fedora_only }}
         runs-on: ${{ matrix.os }}
         timeout-minutes: 60
         strategy:
@@ -60,6 +67,7 @@ jobs:
                   path: verify-${{ matrix.target }}.zip
                   if-no-files-found: error
     windows:
+        if: ${{ !inputs.fedora_only }}
         runs-on: windows-latest
         timeout-minutes: 60
         strategy:
@@ -94,13 +102,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                include:
-                    - target: x86_64-unknown-linux-gnu
-                      os: ubuntu-latest
-                    - target: i686-unknown-linux-gnu
-                      os: ubuntu-latest
-                    - target: aarch64-unknown-linux-gnu
-                      os: ubuntu-24.04-arm
+                include: ${{ fromJSON(inputs.fedora_only && '[{"target":"x86_64-unknown-linux-gnu","os":"ubuntu-latest"},{"target":"aarch64-unknown-linux-gnu","os":"ubuntu-24.04-arm"}]' || '[{"target":"x86_64-unknown-linux-gnu","os":"ubuntu-latest"},{"target":"i686-unknown-linux-gnu","os":"ubuntu-latest"},{"target":"aarch64-unknown-linux-gnu","os":"ubuntu-24.04-arm"}]') }}
         steps:
             - uses: actions/checkout@v4
             - name: Build Debian and RPM packages without publishing
@@ -110,10 +112,14 @@ jobs:
               with:
                   target: ${{ matrix.target }}
                   toolchain: stable
+            - name: Install and launch RPM on Fedora 44
+              if: matrix.target != 'i686-unknown-linux-gnu'
+              run: bash packaging/verify-fedora-rpm.sh src-tauri/target/${{ matrix.target }}/release/bundle/rpm/*.rpm
             - uses: actions/upload-artifact@v4
               with:
                   name: verify-linux-${{ matrix.target }}
                   path: |
                       src-tauri/target/${{ matrix.target }}/release/bundle/deb/*.deb
                       src-tauri/target/${{ matrix.target }}/release/bundle/rpm/*.rpm
+                      src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
                   if-no-files-found: error
