@@ -39,38 +39,33 @@ jobs:
                   if-no-files-found: error
     linux:
         runs-on: ${{ matrix.os }}
-        container: rust:bookworm
         timeout-minutes: 30
         strategy:
             fail-fast: false
             matrix:
                 include:
-                    - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
-                    - { os: ubuntu-latest, target: i686-unknown-linux-gnu }
-                    - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
+                    - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu, platform: linux/amd64 }
+                    - { os: ubuntu-latest, target: i686-unknown-linux-gnu, platform: linux/386 }
+                    - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, platform: linux/arm64 }
         env:
             TARGET: ${{ matrix.target }}
+            PLATFORM: ${{ matrix.platform }}
         steps:
             - uses: actions/checkout@v4
               with:
                   persist-credentials: false
-            - name: Install WebKitGTK 4.1 for the build target
+            - name: Build with native Debian WebKitGTK 4.1 packages
               shell: bash
               run: |
-                  if [ "$TARGET" = i686-unknown-linux-gnu ]; then
-                      dpkg --add-architecture i386
-                      apt-get -o APT::Update::Error-Mode=any update
-                      apt-get install -y --no-install-recommends gcc-multilib pkg-config libwebkit2gtk-4.1-dev:i386
-                      {
-                          echo PKG_CONFIG_ALLOW_CROSS=1
-                          echo PKG_CONFIG_LIBDIR=/usr/lib/i386-linux-gnu/pkgconfig:/usr/share/pkgconfig
-                      } >> "$GITHUB_ENV"
-                  else
-                      apt-get -o APT::Update::Error-Mode=any update
-                      apt-get install -y --no-install-recommends pkg-config libwebkit2gtk-4.1-dev
-                  fi
-            - run: rustup target add "$TARGET"
-            - run: cargo build --locked --release --manifest-path migration/tauri2-smoke/Cargo.toml --target "$TARGET"
+                  # Run checkout on the host; the i386 compiler runs in a native 32-bit userspace.
+                  docker run --rm --platform "$PLATFORM" \
+                      -v "$GITHUB_WORKSPACE:/work" -w /work -e TARGET \
+                      rust:bookworm bash -euo pipefail -c '
+                          test "$(rustc -vV | sed -n "s/^host: //p")" = "$TARGET"
+                          apt-get -o APT::Update::Error-Mode=any update
+                          apt-get install -y --no-install-recommends pkg-config libwebkit2gtk-4.1-dev
+                          cargo build --locked --release --manifest-path migration/tauri2-smoke/Cargo.toml --target "$TARGET"
+                      '
             - uses: actions/upload-artifact@v4
               with:
                   name: tauri2-smoke-${{ matrix.target }}
