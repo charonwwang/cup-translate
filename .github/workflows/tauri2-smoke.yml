@@ -58,11 +58,11 @@ jobs:
               shell: bash
               run: |
                   # Run checkout on the host; the i386 compiler runs in a native 32-bit userspace.
-                  docker run --rm --platform "$PLATFORM" \
+                  docker run --rm --platform "$PLATFORM" --network host \
                       -v "$GITHUB_WORKSPACE:/work" -w /work -e TARGET \
                       rust:bookworm bash -euo pipefail -c '
                           test "$(rustc -vV | sed -n "s/^host: //p")" = "$TARGET"
-                          apt-get -o APT::Update::Error-Mode=any update
+                          apt-get -o APT::Update::Error-Mode=any -o Acquire::Retries=3 update
                           apt-get install -y --no-install-recommends pkg-config libwebkit2gtk-4.1-dev
                           cargo build --locked --release --manifest-path migration/tauri2-smoke/Cargo.toml --target "$TARGET"
                       '
