@@ -1,6 +1,6 @@
 # Tauri 2.x 迁移计划（立项草案）
 
-登记日期：2026-11-11。2026-11-12 更新：**维护基线正在验证，迁移实现待开始**。从构建验证通过的维护提交建立独立迁移分支。
+登记日期：2026-11-11。2026-11-12 更新：**阶段 A 已在 Apple Silicon 编译并启动**。迁移分支 `codex/tauri2-migration` 从 [已通过八目标构建的维护提交](DESKTOP-BUILD-VERIFICATION.md) `2bbda49` 建立。阶段结果见 [Tauri 2 启动探针](../../migration/tauri2-smoke/README.md)。
 
 ## 1. 为什么要迁移
 
@@ -77,3 +77,10 @@
 
 - 不在本计划中承诺时间表。立项需要维护者确认优先级与人力。
 - 不在 3.0.x 分支上混入迁移代码。
+
+## 7. 阶段 A 证据（2026-11-12）
+
+- Apple Silicon：Tauri 2.12.5 的 debug 和 release 锁定构建均通过；以内嵌页面从隔离 WebView 启动。两个窗口执行同一条 IPC 命令：`smoke` 收到 Rust 返回值，`unprivileged` 收到 ACL 拒绝。运行输出确认应用标识为 `com.cup-translate.app`。这没有加载日常配置、历史、钥匙串或更新器。
+- [首次探针构建](https://github.com/charonwwang/cup-translate/actions/runs/43149950711)：Linux i686 在 Debian amd64 容器混装 i386 开发包时，`gobject-introspection:i386` 的 Python 与构建工具依赖无法解析。后续改为各目标原生的 Debian 用户空间，已触发 [八目标复跑](https://github.com/charonwwang/cup-translate/actions/runs/43150184408)（`d909683`）。
+- 使用相同 RustSec 数据库快照 `fd6f39814c4d3c359fdbe223d0280dec4933f78f` 对比两个锁文件，命令为 `cargo audit --no-fetch --no-yanked --file <Cargo.lock> --json`。探针的 8 条基线公告均未出现；另有 `proc-macro-error 1.0.4` 无维护警告和 `glib 0.18.5` soundness 警告。实际应用锁文件仍有全部 8 条基线漏洞告警，**实际消除 0/8**。探针尚未引入完整应用依赖，不能据此认为升级已经解决这些问题。
+- 现有应用仍使用 Tauri 1。下一阶段先将实际页面的 IPC 按窗口迁移并验证允许/拒绝，然后处理托盘、全局热键和动态窗口，再接回存储、历史、其余插件与更新器。Linux WebKitGTK 4.1 的 amd64、i386、arm64 开发包可在 [Debian Bookworm](https://packages.debian.org/bookworm/libwebkit2gtk-4.1-dev) 获取；纯 Wayland 和应用内升级仍须单独做实机验收。
