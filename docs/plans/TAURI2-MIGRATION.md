@@ -80,7 +80,7 @@
 
 ## 7. 阶段 A 证据（2026-11-12）
 
-- Apple Silicon：Tauri 2.12.5 的 debug 和 release 锁定构建均通过；以内嵌页面从隔离 WebView 启动。两个窗口执行同一条 IPC 命令：`smoke` 收到 Rust 返回值，`unprivileged` 收到 ACL 拒绝。运行输出确认应用标识为 `com.cup-translate.app`。这没有加载日常配置、历史、钥匙串或更新器。
-- [首次探针构建](https://github.com/charonwwang/cup-translate/actions/runs/43149950711)：Linux i686 在 Debian amd64 容器混装 i386 开发包时，`gobject-introspection:i386` 的 Python 与构建工具依赖无法解析。后续改为各目标原生的 Debian 用户空间，已触发 [八目标复跑](https://github.com/charonwwang/cup-translate/actions/runs/43150184408)（`d909683`）。
+- Apple Silicon：Tauri 2.12.5 的 debug 和 release 锁定构建均通过；以内嵌页面从隔离 WebView 启动。两个窗口执行同一条 IPC 命令：`smoke` 收到 Rust 返回值，`unprivileged` 收到 ACL 拒绝。运行输出确认应用标识为 `com.cup-translate.app`。复现：`python3 scripts/verify-tauri2-smoke.py migration/tauri2-smoke/target/release/cup-tauri2-smoke`。脚本在临时 `HOME` 下预置合成的 v1 `config.json` 与两条历史，启动前后两个文件的 SHA-256 一致。探针不加载历史，这只验证启动没有改写测试数据；读取与升级兼容性仍待存储阶段。
+- [首次探针构建](https://github.com/charonwwang/cup-translate/actions/runs/43149950711)：Linux i686 在 Debian amd64 容器混装 i386 开发包时，`gobject-introspection:i386` 的 Python 与构建工具依赖无法解析。[第二轮](https://github.com/charonwwang/cup-translate/actions/runs/43150184408)改用原生 Debian 用户空间，Linux i686 容器在 apt 下载前无法解析 `deb.debian.org`；[第三轮](https://github.com/charonwwang/cup-translate/actions/runs/43150421852)改用 runner 网络后仍能复现。[第四轮](https://github.com/charonwwang/cup-translate/actions/runs/43150645751)仅对 i386 容器兼容旧版 libc 的网络调用（`eceeb38`）。
 - 使用相同 RustSec 数据库快照 `fd6f39814c4d3c359fdbe223d0280dec4933f78f` 对比两个锁文件，命令为 `cargo audit --no-fetch --no-yanked --file <Cargo.lock> --json`。探针的 8 条基线公告均未出现；另有 `proc-macro-error 1.0.4` 无维护警告和 `glib 0.18.5` soundness 警告。实际应用锁文件仍有全部 8 条基线漏洞告警，**实际消除 0/8**。探针尚未引入完整应用依赖，不能据此认为升级已经解决这些问题。
 - 现有应用仍使用 Tauri 1。下一阶段先将实际页面的 IPC 按窗口迁移并验证允许/拒绝，然后处理托盘、全局热键和动态窗口，再接回存储、历史、其余插件与更新器。Linux WebKitGTK 4.1 的 amd64、i386、arm64 开发包可在 [Debian Bookworm](https://packages.debian.org/bookworm/libwebkit2gtk-4.1-dev) 获取；纯 Wayland 和应用内升级仍须单独做实机验收。
