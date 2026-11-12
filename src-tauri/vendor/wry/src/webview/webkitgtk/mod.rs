@@ -17,7 +17,7 @@ use std::{
 use url::Url;
 use webkit2gtk::{
   LoadEvent, NavigationPolicyDecision, NavigationPolicyDecisionExt, PolicyDecisionType,
-  SettingsExt, URIRequest, UserContentInjectedFrames, UserContentManager,
+  SettingsExt, URIRequest, URIRequestExt, UserContentInjectedFrames, UserContentManager,
   UserContentManagerExt, UserScript, UserScriptInjectionTime, WebView, WebViewBuilder, WebViewExt,
 };
 use webkit2gtk_sys::{
@@ -43,7 +43,6 @@ compile_error!("linux-headers requires a separate libsoup 3 custom-protocol port
 fn append_request_headers(req: &URIRequest, headers: &http::HeaderMap) {
   #[cfg(not(feature = "webkitgtk-4-1"))]
   {
-    use webkit2gtk::URIRequestExt;
     if let Some(ref mut request_headers) = req.http_headers() {
       for (name, value) in headers {
         request_headers.append(name.as_str(), value.to_str().unwrap_or_default());

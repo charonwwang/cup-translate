@@ -21,7 +21,7 @@ use std::{
 };
 use url::Url;
 use webkit2gtk::{
-  ApplicationInfo, CookiePersistentStorage, LoadEvent, URIRequest, WebContext,
+  ApplicationInfo, CookiePersistentStorage, LoadEvent, URIRequest, URIRequestExt, WebContext,
   WebContextBuilder, WebView, WebViewExt, WebsiteDataManagerBuilder,
 };
 
