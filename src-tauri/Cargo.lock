@@ -1499,7 +1499,7 @@ dependencies = [
 
 [[package]]
 name = "cup-translate"
-version = "3.0.14"
+version = "3.0.15"
 dependencies = [
  "accessibility-ng",
  "arboard",
