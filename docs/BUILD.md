@@ -204,7 +204,7 @@ allowBuilds:
 
 ```bash
 cd src-tauri
-cargo build --release --features custom-protocol    # 首次约 900 个 crate，耗时较长
+cargo build --release --features custom-protocol,linux-webkitgtk-4-1    # 使用本页 4.1 兼容层
 ```
 
 产物：`src-tauri/target/release/cup-translate`
@@ -269,6 +269,16 @@ ldd  target/release/cup-translate | grep -i "not found"   # 应无输出
 ---
 
 ## 6. 打包与安装（.deb / AppImage）
+
+GitHub Actions 自 3.0.15 起使用 WebKitGTK 4.1。Tauri 1 的 4.0 探测名仅在构建容器内映射到 4.1；Wry 的 Linux 请求头适配同时切换到 libsoup 3；CI 用 ELF 检查拒绝 4.0 和 libsoup 2.4 的直接依赖。CI 仍以实际二进制修正 DEB 元数据，并在 RPM 中替换 Tauri 1 硬编码的旧 SONAME。不能用跳过依赖检查的方式安装旧 RPM。
+
+复验候选 RPM（Docker 的 Linux 架构须与安装包一致）：
+
+```bash
+bash packaging/verify-fedora-rpm.sh /path/to/cup-translate.rpm
+```
+
+脚本在 Fedora 44 中用 DNF 安装，核对动态库，并在隔离的 Xvfb 会话中启动应用、打开设置窗口。它不替代真实桌面、Wayland 或应用内升级验收。
 
 ### 6.1 打包（**请用封装脚本**）
 
