@@ -18,8 +18,11 @@ npm install -g pnpm@12.10.1
 INPUT_TARGET="${INPUT_TARGET:-${1:?Rust target is required}}"
 INPUT_TOOLCHAIN="${INPUT_TOOLCHAIN:-${2:?Rust toolchain is required}}"
 export INPUT_TARGET INPUT_TOOLCHAIN
-rustup target add "$INPUT_TARGET"
-rustup toolchain install --force-non-host "$INPUT_TOOLCHAIN"
+# Cargo 1.100 changed build-script output layout. The Tauri 1 eSpeak
+# embedder uses the layout from 1.99; pin Linux packaging until it is ported.
+export RUSTUP_TOOLCHAIN=1.99.1
+rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
+rustup target add --toolchain "$RUSTUP_TOOLCHAIN" "$INPUT_TARGET"
 
 # Fail if indexes cannot refresh; do not install from stale cached lists.
 rm -rf /var/lib/apt/lists/*
