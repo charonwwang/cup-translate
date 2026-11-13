@@ -50,7 +50,7 @@ jobs:
             - uses: pnpm/action-setup@v4
               with:
                   version: 12.10.1
-            - uses: dtolnay/rust-toolchain@stable
+            - uses: dtolnay/rust-toolchain@1.99.1
               with:
                   targets: ${{ matrix.target }}
             - run: pnpm install --frozen-lockfile
@@ -82,7 +82,7 @@ jobs:
             - uses: pnpm/action-setup@v4
               with:
                   version: 12.10.1
-            - uses: dtolnay/rust-toolchain@stable
+            - uses: dtolnay/rust-toolchain@1.99.1
               with:
                   targets: ${{ matrix.target }}
             - run: pnpm install --frozen-lockfile

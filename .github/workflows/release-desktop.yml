@@ -67,7 +67,7 @@ jobs:
                   node-version: 22
             - name: Verify C++ engines can link with the static MSVC runtime
               run: node packaging/check-msvc-crt.mjs --verify-regression
-            - uses: dtolnay/rust-toolchain@stable
+            - uses: dtolnay/rust-toolchain@1.99.1
             - name: Verify portable backup entry names on Windows
               shell: pwsh
               run: |
@@ -108,7 +108,7 @@ jobs:
             - uses: pnpm/action-setup@v4
               with:
                   version: 12.10.1
-            - uses: dtolnay/rust-toolchain@stable
+            - uses: dtolnay/rust-toolchain@1.99.1
               with:
                   targets: ${{ matrix.target }}
             - name: Install build dependencies
@@ -207,7 +207,7 @@ jobs:
             - uses: pnpm/action-setup@v4
               with:
                   version: 12.10.1
-            - uses: dtolnay/rust-toolchain@stable
+            - uses: dtolnay/rust-toolchain@1.99.1
               with:
                   targets: ${{ matrix.target }}
             - run: pnpm install --frozen-lockfile
