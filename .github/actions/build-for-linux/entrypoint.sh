@@ -24,7 +24,7 @@ rustup toolchain install --force-non-host "$INPUT_TOOLCHAIN"
 # Fail if indexes cannot refresh; do not install from stale cached lists.
 rm -rf /var/lib/apt/lists/*
 apt-get -o APT::Update::Error-Mode=any -o Acquire::Retries=3 update
-apt-get install -y --no-install-recommends cmake pkg-config file clang libclang-dev rpm cpio
+apt-get install -y --no-install-recommends cmake pkg-config file clang libclang-dev rpm libarchive-tools
 
 if [ "$INPUT_TARGET" = "x86_64-unknown-linux-gnu" ]; then
     apt-get -o APT::Update::Error-Mode=any -o Acquire::Retries=3 update

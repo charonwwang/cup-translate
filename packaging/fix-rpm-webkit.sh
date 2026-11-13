@@ -14,7 +14,8 @@ package="$(realpath "$1")"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 mkdir "$tmp/payload"
-rpm2cpio "$package" | (cd "$tmp/payload" && cpio -idm --quiet --no-absolute-filenames)
+rpm -K "$package"
+bsdtar -xf "$package" -C "$tmp/payload"
 read -r name version release arch license < <(rpm -qp --qf '%{NAME} %{VERSION} %{RELEASE} %{ARCH} %{LICENSE}\n' "$package")
 test "$name" = cup-translate
 case "$arch" in
