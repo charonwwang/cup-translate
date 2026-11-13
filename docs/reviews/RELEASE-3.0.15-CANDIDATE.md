@@ -22,3 +22,9 @@
 - 2026-11-13 本地 Fedora 44 ARM64 容器：从完整 Tauri 候选 RPM 重打包后，DNF 成功安装 `cup-translate-3.0.15-1.aarch64`；`ldd` 解析到 `libwebkit2gtk-4.1.so.0`，普通用户在无网络 Xvfb 环境启动并显示设置窗口。
 - [第四轮](https://github.com/charonwwang/cup-translate/actions/runs/43350035654)使用新发布的 Rust 1.100，其 Cargo 构建脚本目录变化使 eSpeak 字典嵌入失败。Linux 容器和桌面候选及发布工作流固定到验证过的 Rust 1.99.1。
 - 最终专项在 `bbffb4d` 通过：[Fedora 44 x64](https://github.com/charonwwang/cup-translate/actions/runs/43351543727/job/131643721362)、[Fedora 44 ARM64](https://github.com/charonwwang/cup-translate/actions/runs/43351543727/job/131643721535) 均安装成功并显示设置窗口。随后触发同提交的[完整八目标构建](https://github.com/charonwwang/cup-translate/actions/runs/43353935261)。
+
+## 公开发布（2026-11-13）
+
+- 同一提交 `bbffb4d` 的[完整矩阵](https://github.com/charonwwang/cup-translate/actions/runs/43353935261) 8/8 通过。
+- [正式发布流水线](https://github.com/charonwwang/cup-translate/actions/runs/43356477054)通过，最终发行的 x64 和 ARM64 RPM 均再次通过 Fedora 44 安装及启动。主 [Release](https://github.com/charonwwang/cup-translate/releases/tag/v3.0.15) 为正式发布，含 16 个资产；签名载荷另有 12 个资产。公开更新清单返回 3.0.15，含 6 个平台条目。
+- Tauri 2 迁移分支仍在 `55c4a2e`，未进入发布标签。Fedora 检查使用容器的 Xvfb，实机与 Wayland 验收仍单独跟踪。
